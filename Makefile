@@ -15,7 +15,7 @@ CXX = g++ -std=c++0x
 # C compiler
 CC = gcc
 
-URL = http://127.0.0.1:8081/test.html
+URL = http://127.0.0.1:8081/index.html
 
 BROWSER = /home/mikola/Apps/chrome-linux/chrome --enable-webgl
 

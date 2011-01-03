@@ -7,14 +7,14 @@
 #include <unistd.h>
 #include <pthread.h>
 
-
+#include "misc.h"
 #include "login.h"
 
 using namespace std;
 
 namespace Login
 {
-const int PASSWORD_HASH_LEN = 33;
+const int PASSWORD_HASH_LEN = 64;
 const int USERNAME_MAX_LEN = 20;
 const int USERNAME_MIN_LEN = 3;
 
@@ -34,18 +34,6 @@ static map<string, LoginData>	login_table;
 
 typedef map<string, LoginData>::iterator login_iter;
 
-struct LoginReadLock
-{
-	LoginReadLock()  { pthread_rwlock_rdlock(&login_lock); }
-	~LoginReadLock() { pthread_rwlock_unlock(&login_lock); }
-};
-
-struct LoginWriteLock
-{
-	LoginWriteLock()  { pthread_rwlock_wrlock(&login_lock); }
-	~LoginWriteLock() { pthread_rwlock_unlock(&login_lock); }
-};
-
 
 //Initializes the login table
 void init_login()
@@ -64,7 +52,7 @@ void init_login()
 void checkpoint_login()
 {
 	{	ofstream data("data/login.tmp.dat");
-		LoginReadLock L;
+		ReadLock L(&login_lock);
 	
 		for(login_iter it = login_table.begin();
 			it != login_table.end();
@@ -85,8 +73,8 @@ bool verify_user_name(const string& name, const string& password_hash)
 {
 	bool valid = false;
 
-	{	LoginReadLock L;
-	
+	{	ReadLock L(&login_lock);
+
 		login_iter row = login_table.find(name);
 		if(row != login_table.end())
 		{
@@ -146,7 +134,7 @@ bool create_account(const string& name, const string& password_hash)
 	//Insert user into table
 	bool success = true;
 	
-	{	LoginWriteLock L;
+	{	WriteLock L(&login_lock);
 	
 		if(login_table.find(name) == login_table.end())
 		{	login_table[name] = login;

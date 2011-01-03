@@ -18,6 +18,12 @@ static const char *options[] = {
   NULL
 };
 
+static const char *ajax_reply_start =
+  "HTTP/1.1 200 OK\r\n"
+  "Cache: no-cache\r\n"
+  "Content-Type: application/x-javascript\r\n"
+  "\r\n";
+
 //Server initialization
 void init()
 {
@@ -25,24 +31,26 @@ void init()
 	init_sessions();
 }
 
-//Retrieves the session variable associated to a given http request
-Session* get_session(mg_connection * conn)
+//Retrieves the session id
+bool get_session_id(const mg_request_info* request_info, SessionID& res)
 {
-	char session_str[64];
-	mg_get_cookie(conn, "S", session_str, sizeof(session_str));
+	char session_id_str[128];
 	
-	stringstream ss(session_str);
-	SessionID key;
-	ss >> key;
+	const char* qs = request_info->query_string;
+	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	return lookup_session(key);
-}
-
-//Create an account
-void do_register(
-	mg_connection* conn, 
-	const mg_request_info* request_info)
-{
+	mg_get_var(qs, qs_len, "k", session_id_str, 127);
+	
+	if(session_id_str[0] == '\0')
+		return false;
+	
+	stringstream ss(session_id_str);
+	ss >> res;
+	
+	if(valid_session_id(res))
+		return true;
+	
+	return true;
 }
 
 //Handle a user login
@@ -50,14 +58,70 @@ void do_login(
 	mg_connection* conn, 
 	const mg_request_info* request_info)
 {
+	char user_name[65];
+	char password_hash[65];
+	
+	const char* qs = request_info->query_string;
+	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
+	
+	mg_get_var(qs, qs_len, "n", user_name, 64);
+	mg_get_var(qs, qs_len, "p", password_hash, 64);
+	
+	SessionID key;
+	
+	if(verify_user_name(user_name, password_hash) && create_session(user_name, key))
+	{
+		stringstream ss;
+		ss << key;
+	
+		mg_printf(conn, "%s\r\nOk\r\nSession: %s\r\n", ajax_reply_start, ss.str().c_str());
+	}
+	else
+	{
+		mg_printf(conn, "%s\r\nFail\r\nCould not log in\r\n", ajax_reply_start);
+	}
+}
+
+//Create an account
+void do_register(
+	mg_connection* conn, 
+	const mg_request_info* request_info)
+{
+	char user_name[65];
+	char password_hash[65];
+	
+	const char* qs = request_info->query_string;
+	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
+	
+	mg_get_var(qs, qs_len, "n", user_name, 64);
+	mg_get_var(qs, qs_len, "p", password_hash, 64);
+	
+	if(user_name[0] == '\0' ||
+		password_hash[0] == '\0')
+	{
+		mg_printf(conn, "%sFail\r\nMissing username/password\r\n", ajax_reply_start);
+	}
+	else if(create_account(string(user_name), string(password_hash)))
+	{
+		do_login(conn, request_info);
+	}
+	else
+	{
+		mg_printf(conn, "%sFail\r\nUser name already in use\r\n", ajax_reply_start);	
+	}
 }
 
 //Handle user log out
 void do_logout(
-	Session* session,
 	mg_connection* conn, 
 	const mg_request_info* request_info)
 {
+	SessionID session_id;
+	if(get_session_id(request_info, session_id))
+	{
+		delete_session(session_id);
+	}
+	mg_printf(conn, "%s\r\nOk", ajax_reply_start);
 }
 
 
@@ -66,41 +130,28 @@ static void *event_handler(enum mg_event event,
                            struct mg_connection *conn,
                            const struct mg_request_info *request_info)
 {
-	const char *processed = "yes";
 
 	if (event == MG_NEW_REQUEST)
 	{
-		cout << "Got event: " << request_info->uri << endl;
+		cout << "Got request: " << request_info->uri << endl;
 	
-		//Retrieve session cookie
-		Session* session = get_session(conn);
-		
-		//Not logged in
-		if(session == NULL)
-		{
-			if(strcmp(request_info->uri, "/l") == 0)
-			{ do_login(conn, request_info);
-			}
-			else if(strcmp(request_info->uri, "/r") == 0)
-			{ do_register(conn, request_info);
-			}
-			else
-			{ processed = NULL;
-			}
+		if(strcmp(request_info->uri, "/l") == 0)
+		{ do_login(conn, request_info);
 		}
-		//User logged in
+		else if(strcmp(request_info->uri, "/r") == 0)
+		{ do_register(conn, request_info);
+		}
+		else if(strcmp(request_info->uri, "/q")	 == 0)
+		{ do_logout(conn, request_info);
+		}
 		else
-		{
-			if(strcmp(request_info->uri, "/q")	 == 0)
-			{ do_logout(session, conn, request_info);
-			}
-			else
-			{ processed = NULL;
-			}
+		{ return NULL;
 		}
+		
+		return (void*)"yes";
 	}
-
-	return (void*)processed;
+	
+	return NULL;
 }
 
 

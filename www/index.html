@@ -1,3 +1,80 @@
 <html>
-Foo.
+
+<head>
+	<title>Test Game</title>
+	<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+	<script type="text/javascript" src="sha256.js"></script>
+	<script type="text/javascript" src="login.js"></script>
+</head>
+
+<body onUnload="javascript:Session.logout();">
+
+<script type="text/javascript">
+
+set_error = function(msg)
+{
+	alert(msg);
+}
+
+set_logged_in = function()
+{
+	var loginElem = document.getElementById('loginElem');
+	var appElem = document.getElementById('appElem');
+	
+	loginElem.style.visibility = 'hidden';
+	appElem.style.visibility   = 'visible';
+}
+
+do_register = function()
+{
+	var user_txt = document.getElementById('userName');
+	var pass_txt = document.getElementById('password');
+	
+	var res = Session.register(user_txt.value, pass_txt.value);
+	
+	if(res == 'ok')
+	{	set_logged_in();
+	}
+	else
+	{	set_error(res);
+	}
+}
+
+do_login = function()
+{
+	var user_txt = document.getElementById('userName');
+	var pass_txt = document.getElementById('password');
+	
+	var res = Session.login(user_txt.value, pass_txt.value);
+	
+	if(res == 'ok')
+	{	set_logged_in();
+	}
+	else
+	{	set_error(res);
+	}
+}
+
+do_logout = function()
+{
+	Session.logout();
+	location.reload(true);
+}
+
+</script>
+
+
+<div id="loginElem">
+<input type="text" id="userName" width="20" /> <br/>
+<input type="password" id="password" width="20" /> <br/>
+
+<input type="button" value="Login" onclick="javascript:do_login();">
+<input type="button" value="Create Account" onclick="javascript:do_register();">
+</div>
+
+<div id="appElem" style.visibility='hidden'>
+<input type="button" value="Logout" onclick="javascript:do_logout();">
+</div>
+
+</body>
 </html>
