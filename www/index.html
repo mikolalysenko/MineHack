@@ -6,6 +6,7 @@
 	<link rel="stylesheet" href="main.css" type="text/css"/>
 	<script type="text/javascript" src="sha256.js"></script>
 	<script type="text/javascript" src="session.js"></script>
+	<script type="text/javascript" src="render.js"></script>
 </head>
 
 <body onUnload="javascript:Session.logout();">
@@ -24,6 +25,17 @@ set_logged_in = function()
 	
 	loginElem.style.display = 'none';
 	appElem.style.display   = 'block';
+	
+	var res = Render.init(document.getElementById('canvas'));
+	
+	if(res != 'Ok')
+	{
+		appElem.style.display = 'none';
+		noGL = document.getElementById('noWebGL');
+		noGLerr = document.getElementById('noWebGLReason');
+		noGL.style.display = 'block';
+		noGLerr.innerHTML = res;
+	}
 }
 
 do_register = function()
@@ -57,17 +69,12 @@ do_login = function()
 	{	set_error(res);
 	}
 }
-
-do_logout = function()
-{
-	location.reload(true);
-}
 </script>
 
 
-<div id="loginElem">
-<input type="text" id="userName" width="20" /> <br/>
-<input type="password" id="password" width="20" /> <br/>
+<div id="loginElem" align=center>
+<input type="text" id="userName" width="20" value=""/> <br/>
+<input type="password" id="password" width="20" value="" /> <br/>
 
 <input type="button" value="Login" onclick="javascript:do_login();">
 <input type="button" value="Create Account" onclick="javascript:do_register();">
@@ -76,7 +83,12 @@ do_logout = function()
 </div>
 
 <div id="appElem" style="display:none;">
-<input type="button" value="Logout" onclick="javascript:do_logout();">
+<canvas id="canvas" width=500 height=500></canvas><br/>
+</div>
+
+<div id="noWebGL" style="display:none; background-color:red; color:black;">
+<h1> <tt> WEBGL NOT SUPPORTED.  ABORT. <br/>
+REASON: <div id="noWebGLReason"></div> </tt> </h1>
 </div>
 
 </body>
