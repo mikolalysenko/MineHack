@@ -19,10 +19,10 @@ static const char *options[] = {
 };
 
 static const char *ajax_reply_start =
-  "HTTP/1.1 200 OK\r\n"
-  "Cache: no-cache\r\n"
-  "Content-Type: application/x-javascript\r\n"
-  "\r\n";
+  "HTTP/1.1 200 OK\n"
+  "Cache: no-cache\n"
+  "Content-Type: application/x-javascript\n"
+  "\n";
 
 //Server initialization
 void init()
@@ -58,27 +58,29 @@ void do_login(
 	mg_connection* conn, 
 	const mg_request_info* request_info)
 {
-	char user_name[65];
-	char password_hash[65];
+	char user_name[256];
+	char password_hash[256];
 	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, "n", user_name, 64);
-	mg_get_var(qs, qs_len, "p", password_hash, 64);
+	mg_get_var(qs, qs_len, "n", user_name, 256);
+	mg_get_var(qs, qs_len, "p", password_hash, 256);
 	
 	SessionID key;
+	
+	cout << "got login: " << user_name << ", pwd hash = " << password_hash << endl;
 	
 	if(verify_user_name(user_name, password_hash) && create_session(user_name, key))
 	{
 		stringstream ss;
 		ss << key;
 	
-		mg_printf(conn, "%s\r\nOk\r\nSession: %s\r\n", ajax_reply_start, ss.str().c_str());
+		mg_printf(conn, "%sOk\n%s", ajax_reply_start, ss.str().c_str());
 	}
 	else
 	{
-		mg_printf(conn, "%s\r\nFail\r\nCould not log in\r\n", ajax_reply_start);
+		mg_printf(conn, "%sFail\nCould not log in", ajax_reply_start);
 	}
 }
 
@@ -87,19 +89,19 @@ void do_register(
 	mg_connection* conn, 
 	const mg_request_info* request_info)
 {
-	char user_name[65];
-	char password_hash[65];
+	char user_name[256];
+	char password_hash[256];
 	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, "n", user_name, 64);
-	mg_get_var(qs, qs_len, "p", password_hash, 64);
+	mg_get_var(qs, qs_len, "n", user_name, 256);
+	mg_get_var(qs, qs_len, "p", password_hash, 256);
 	
 	if(user_name[0] == '\0' ||
 		password_hash[0] == '\0')
 	{
-		mg_printf(conn, "%sFail\r\nMissing username/password\r\n", ajax_reply_start);
+		mg_printf(conn, "%sFail\nMissing username/password", ajax_reply_start);
 	}
 	else if(create_account(string(user_name), string(password_hash)))
 	{
@@ -107,7 +109,7 @@ void do_register(
 	}
 	else
 	{
-		mg_printf(conn, "%sFail\r\nUser name already in use\r\n", ajax_reply_start);	
+		mg_printf(conn, "%sFail\nUser name already in use", ajax_reply_start);	
 	}
 }
 
@@ -121,7 +123,7 @@ void do_logout(
 	{
 		delete_session(session_id);
 	}
-	mg_printf(conn, "%s\r\nOk", ajax_reply_start);
+	mg_printf(conn, "%s\nOk", ajax_reply_start);
 }
 
 

@@ -68,7 +68,7 @@ bool create_session(const string& name, SessionID& key)
 	{	WriteLock L(&session_lock);
 		
 		auto iter = session_table.find(key);
-		if(iter == session_table.end())
+		if(iter != session_table.end())
 			return false;
 		
 		session_table[key] = s;

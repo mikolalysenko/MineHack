@@ -14,7 +14,7 @@
 
 set_error = function(msg)
 {
-	alert(msg);
+	document.getElementById('errMsg').innerHTML = msg;
 }
 
 set_logged_in = function()
@@ -22,8 +22,8 @@ set_logged_in = function()
 	var loginElem = document.getElementById('loginElem');
 	var appElem = document.getElementById('appElem');
 	
-	loginElem.style.visibility = 'collapse';
-	appElem.style.visibility   = 'visible';
+	loginElem.style.display = 'none';
+	appElem.style.display   = 'block';
 }
 
 do_register = function()
@@ -32,6 +32,7 @@ do_register = function()
 	var pass_txt = document.getElementById('password');
 	
 	var res = Session.register(user_txt.value, pass_txt.value);
+	pass_txt.value = "";
 	
 	if(res == 'ok')
 	{	set_logged_in();
@@ -47,6 +48,7 @@ do_login = function()
 	var pass_txt = document.getElementById('password');
 	
 	var res = Session.login(user_txt.value, pass_txt.value);
+	pass_txt.value = "";
 	
 	if(res == 'ok')
 	{	set_logged_in();
@@ -58,10 +60,8 @@ do_login = function()
 
 do_logout = function()
 {
-	Session.logout();
 	location.reload(true);
 }
-
 </script>
 
 
@@ -71,9 +71,11 @@ do_logout = function()
 
 <input type="button" value="Login" onclick="javascript:do_login();">
 <input type="button" value="Create Account" onclick="javascript:do_register();">
+
+<div id="errMsg" style="color:red;"> </div>
 </div>
 
-<div id="appElem">
+<div id="appElem" style="display:none;">
 <input type="button" value="Logout" onclick="javascript:do_logout();">
 </div>
 

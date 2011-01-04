@@ -54,7 +54,7 @@ void checkpoint_login()
 	{	ofstream data("data/login.tmp.dat");
 		ReadLock L(&login_lock);
 	
-		for(login_iter it = login_table.begin();
+		for(auto it = login_table.begin();
 			it != login_table.end();
 			++it)
 		{
