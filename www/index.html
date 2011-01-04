@@ -3,8 +3,9 @@
 <head>
 	<title>Test Game</title>
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+	<link rel="stylesheet" href="main.css" type="text/css"/>
 	<script type="text/javascript" src="sha256.js"></script>
-	<script type="text/javascript" src="login.js"></script>
+	<script type="text/javascript" src="session.js"></script>
 </head>
 
 <body onUnload="javascript:Session.logout();">
@@ -21,7 +22,7 @@ set_logged_in = function()
 	var loginElem = document.getElementById('loginElem');
 	var appElem = document.getElementById('appElem');
 	
-	loginElem.style.visibility = 'hidden';
+	loginElem.style.visibility = 'collapse';
 	appElem.style.visibility   = 'visible';
 }
 
@@ -72,7 +73,7 @@ do_logout = function()
 <input type="button" value="Create Account" onclick="javascript:do_register();">
 </div>
 
-<div id="appElem" style.visibility='hidden'>
+<div id="appElem">
 <input type="button" value="Logout" onclick="javascript:do_logout();">
 </div>
 
