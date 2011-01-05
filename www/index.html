@@ -26,10 +26,7 @@ set_logged_in = function()
 	loginElem.style.display = 'none';
 	appElem.style.display   = 'block';
 	
-	var res = Render.init(document.getElementById('canvas'));
-	
-	alert(res);
-	
+	var res = Game.init(document.getElementById('canvas'));
 	if(res != 'Ok')
 	{
 		appElem.style.display = 'none';
@@ -89,7 +86,7 @@ do_login = function()
 </div>
 
 <div id="noWebGL" style="display:none; background-color:red; color:black;">
-<h1> <tt> WEBGL NOT SUPPORTED.  ABORT. <br/>
+<h1> <tt> !!!ABORT!!! <br/>
 REASON: <div id="noWebGLReason"></div> </tt> </h1>
 </div>
 
