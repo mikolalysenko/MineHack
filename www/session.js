@@ -18,8 +18,8 @@ Session.handle_login = function(XHR)
 	lines = response.split('\n');
 	if(lines.length == 2 && lines[0] == 'Ok')
 	{
-		logged_in = true;
-		session_id = lines[1];
+		Session.logged_in = true;
+		Session.session_id = lines[1];
 		return 'ok';
 	}
 	else if(lines.length == 2)
@@ -59,14 +59,14 @@ Session.login = function(username, password)
 
 Session.logout = function()
 {
-	if(logged_in)
+	if(Session.logged_in)
 	{		
 		var XHR = new XMLHttpRequest();
 		XHR.open("GET", "q?k="+session_id, false);
 		XHR.send(null);
 		
-		logged_in = false;
-		session_id = false;	
+		Session.logged_in = false;
+		Session.session_id = false;	
 	}
 }
 

@@ -4,9 +4,11 @@
 	<title>Test Game</title>
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
 	<link rel="stylesheet" href="main.css" type="text/css"/>
+	<script type="text/javascript" src="misc.js"></script>
 	<script type="text/javascript" src="sha256.js"></script>
 	<script type="text/javascript" src="session.js"></script>
-	<script type="text/javascript" src="render.js"></script>
+	<script type="text/javascript" src="game.js"></script>
+	<script type="text/javascript" src="map.js"></script>
 </head>
 
 <body onUnload="javascript:Session.logout();">
@@ -15,7 +17,25 @@
 
 set_error = function(msg)
 {
-	document.getElementById('errMsg').innerHTML = msg;
+	//Scrub message
+	msg = msg.replace(/\&/g, "&amp;")
+			 .replace(/\</g, "&lt;")
+			 .replace(/\>/g, "&gt;")
+			 .replace(/\n/g, "\<br\/\>");
+
+	if(!Session.logged_in)
+	{
+		document.getElementById('errMsg').innerHTML = msg;
+	}
+	else
+	{
+		var appElem = document.getElementById('appElem');
+		appElem.style.display = 'none';
+		var noGL = document.getElementById('noWebGL');
+		var noGLerr = document.getElementById('noWebGLReason');
+		noGL.style.display = 'block';
+		noGLerr.innerHTML = msg;
+	}
 }
 
 set_logged_in = function()
@@ -29,11 +49,11 @@ set_logged_in = function()
 	var res = Game.init(document.getElementById('canvas'));
 	if(res != 'Ok')
 	{
-		appElem.style.display = 'none';
-		noGL = document.getElementById('noWebGL');
-		noGLerr = document.getElementById('noWebGLReason');
-		noGL.style.display = 'block';
-		noGLerr.innerHTML = res;
+		set_error(res);
+	}
+	else
+	{
+		Game.draw();
 	}
 }
 
