@@ -66,8 +66,8 @@ Game.proj_matrix = function()
 	var Y = 2 * znear / (ymax - ymin);
 	var A = (xmax + xmin) / (xmax - xmin);
 	var B = (ymax + ymin) / (ymax - ymin);
-	var C = -(zfar + znear) / (zfar - znear);
-	var D = -2*zfar*znear / (zfar - znear);
+	var C = (zfar + znear) / (zfar - znear);
+	var D = 2*zfar*znear / (zfar - znear);
 
 	return new Float32Array([X, 0, A, 0,
 							 0, Y, B, 0,
@@ -81,7 +81,6 @@ Game.draw = function()
 	gl.viewport(0, 0, Game.width, Game.height);
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.clear(gl.COLOR_BUFFER_BIT |gl.DEPTH_BUFFER_BIT);
-
 
 	Map.draw(gl, Game.proj_matrix);
 	

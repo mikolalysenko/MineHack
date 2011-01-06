@@ -115,7 +115,7 @@ Chunk.prototype.gen_vb = function(gl)
 		}
 	}
 
-	this.num_elements = n_elements;
+	this.num_tris = n_elements;
 	this.vb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
@@ -185,7 +185,13 @@ Map.draw = function(gl, camera)
 	gl.useProgram(Map.chunk_shader);
 	gl.enableVertexAttribArray(Map.pos_attr);
 	
-	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);
+	var pm = new Float32Array([1,0,0,0,
+							   0,1,0,0,
+							   0,0,1,0,
+							   0,0,0,1]);
+	
+	debugger;
+	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, pm);
 	
 	for(var i=0; i<Map.chunks.length; i++)
 	{
