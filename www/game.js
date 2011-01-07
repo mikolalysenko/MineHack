@@ -3,7 +3,7 @@ Game =
 	crashed : false,
 	running : false,
 	
-	update_rate : 40,
+	update_rate : 30,
 
 	znear : 1.0,
 	zfar  : 1000.0,

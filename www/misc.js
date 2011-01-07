@@ -76,6 +76,27 @@ getTexture = function(gl, url)
 	return ["Ok", tex];	
 }
 
+asyncGetBinary = function(url, handler)
+{
+	var XHR = new XMLHttpRequest();
+	XHR.open("GET", url, true);
+	XHR.onreadystatechange = function()
+	{
+		if(XHR.readyState == 4)
+		{
+			if(XHR.status == 200 || XHR.status == 304)
+			{
+				handler(["Ok", new Uint8Array(XHR.responseText)]);
+			}
+			else
+			{
+				handler(["Fail", XHR.statusText]);
+			}
+		}
+	}
+	XHR.send(null);
+}
+
 mmult = function(A, B)
 {
 	var C = new Float32Array(16);
