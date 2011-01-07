@@ -42,9 +42,10 @@ Game.init = function(canvas)
 	for(var i=0; i<data.length; i++)
 	{
 		data[i] = 0;
-	}
-	data[data.length/2] = 1;
-	
+		
+		if(Math.random() < 0.01)
+			data[i] = 1;
+	}	
 	
 	//Add the chunk to the map
 	Map.add_chunk(new Chunk(0, 0, 0, data));
