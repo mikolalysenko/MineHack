@@ -9,6 +9,11 @@ BlockType =
 	"Log"
 ];
 
+//Storage format:
+// 0 = top
+// 1 = side
+// 2 = bottom
+//Like minecraft, blocks can have 3 different special labels
 BlockTexCoords =
 [
 	[ [0,0], [0,0], [0,0] ], //Air

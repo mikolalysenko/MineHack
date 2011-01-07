@@ -2,14 +2,12 @@ Game =
 {
 	crashed : false,
 	running : false,
+	
+	update_rate : 40,
 
 	znear : 1.0,
 	zfar  : 1000.0,
 	fov   : 45.0,
-	
-	cam_pos   : [16.0, 16.0, 40.0],
-	cam_pitch : 0.0,
-	cam_yaw   : 0.0,
 	
 	enable_ao : true
 };
@@ -56,8 +54,14 @@ Game.init = function(canvas)
 		return res;
 	}
 	
+	res = Player.init();
+	if(res != "Ok")
+	{
+		return res;
+	}
+	
 	//TESTING CODE:  create a random chunk and stick it in the map
-	var data = new Array(34*34*34);
+	var data = new Uint8Array(34*34*34);
 	
 	for(var i=0; i<data.length; i++)
 	{
@@ -72,9 +76,11 @@ Game.init = function(canvas)
 	//Add the chunk to the map
 	Map.add_chunk(new Chunk(0, 0, 0, data));
 	
-	Game.running = true;
-	
 	Game.resize();
+	
+	//Start running the game
+	Game.running = true;	
+	Game.interval = setInterval(Game.tick, Game.update_rate);
 	
 	return 'Ok';
 }
@@ -107,16 +113,16 @@ Game.proj_matrix = function()
 //Create view matrix
 Game.view_matrix = function()
 {
-	var cp = Math.cos(Game.cam_pitch * Math.PI / 180.0);
+	var cp = Math.cos(Player.pitch * Math.PI / 180.0);
 	var sp = Math.sqrt(1.0 - cp*cp);
-	var cy = Math.cos(Game.cam_yaw * Math.PI / 180.0);
+	var cy = Math.cos(Player.yaw * Math.PI / 180.0);
 	var sy = Math.sqrt(1.0 - cy*cy);
 	
 	return new Float32Array([
 		 cy*cp,  sy,  cy*sp, 0,
 		-sy*cp,  cy, -sy*sp, 0,
 		-sp,     0,   cp,    0,
-		-Game.cam_pos[0], -Game.cam_pos[1], -Game.cam_pos[2], 1]);
+		-Player.pos[0], -Player.pos[1], -Player.pos[2], 1]);
 }
 
 //Creates the total cmera matrix
@@ -131,7 +137,7 @@ Game.draw = function()
 	var cam = Game.camera_matrix();
 	
 	gl.viewport(0, 0, Game.width, Game.height);
-	gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clearColor(0.4, 0.64, 0.9, 1.0);
 	gl.clear(gl.COLOR_BUFFER_BIT |gl.DEPTH_BUFFER_BIT);
 	
 	gl.enable(gl.DEPTH_TEST);
@@ -140,4 +146,22 @@ Game.draw = function()
 	Map.draw(gl, cam);
 	
 	gl.flush();
+}
+
+Game.stop = function()
+{
+	if(Game.running)
+	{
+		Game.running = false;
+		clearInterval(Game.interval);
+	}
+}
+
+Game.tick = function()
+{
+	//Update game state
+	Player.tick();
+	
+	//Redraw
+	Game.draw();
 }
