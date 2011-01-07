@@ -66,3 +66,22 @@ getProgram = function(gl, fs_url, vs_url)
 	
 	return ["Ok", fs, vs, prog];
 }
+
+mmult = function(A, B)
+{
+	var C = new Float32Array(16);
+	
+	for(var i=0; i<4; i++)
+	{
+		for(var j=0; j<4; j++)
+		{
+			x = 0.0
+			for(var k=0; k<4; k++)
+			{
+				x += A[i + 4*k] * B[k + 4*j];
+			}
+			C[i + 4*j] = x;
+		}
+	}
+	return C;
+}

@@ -2,7 +2,11 @@ Game =
 {
 	znear : 1.0,
 	zfar  : 1000.0,
-	fov   : 45.0
+	fov   : 45.0,
+	
+	cam_pos   : [16.0, 16.0, 40.0],
+	cam_pitch : 0.0,
+	cam_yaw   : 0.0
 };
 
 Game.init = function(canvas)
@@ -31,7 +35,7 @@ Game.init = function(canvas)
 	
 	//Initialize the map
 	var res = Map.init(gl);
-	if(res != 'Ok')
+	if(res != "Ok")
 	{
 		return res;
 	}
@@ -60,7 +64,7 @@ Game.proj_matrix = function()
 	var znear = Game.znear;
 	var zfar = Game.zfar;
 	
-	var ymax = znear * Math.tan(Game.fov * Math.PI / 360.0);
+	var ymax = znear * Math.tan(Game.fov * Math.PI / 180.0);
 	var ymin = -ymax;
 	var xmin = ymin * aspect;
 	var xmax = ymax * aspect;
@@ -78,9 +82,33 @@ Game.proj_matrix = function()
 							 0, 0, -1, 0]);
 }
 
+//Create view matrix
+Game.view_matrix = function()
+{
+	var cp = Math.cos(Game.cam_pitch * Math.PI / 180.0);
+	var sp = Math.sqrt(1.0 - cp*cp);
+	var cy = Math.cos(Game.cam_yaw * Math.PI / 180.0);
+	var sy = Math.sqrt(1.0 - cy*cy);
+	
+	return new Float32Array([
+		 cy*cp,  sy,  cy*sp, 0,
+		-sy*cp,  cy, -sy*sp, 0,
+		-sp,     0,   cp,    0,
+		-Game.cam_pos[0], -Game.cam_pos[1], -Game.cam_pos[2], 1]);
+}
+
+//Creates the total cmera matrix
+Game.camera_matrix = function()
+{
+	return mmult(Game.proj_matrix(), Game.view_matrix());
+}
+
 Game.draw = function()
 {
+	debugger;
 	var gl = Game.gl;
+	var cam = Game.camera_matrix();
+	
 	gl.viewport(0, 0, Game.width, Game.height);
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.clear(gl.COLOR_BUFFER_BIT |gl.DEPTH_BUFFER_BIT);
@@ -88,7 +116,7 @@ Game.draw = function()
 	gl.disable(gl.DEPTH_TEST);
 	gl.disable(gl.CULL_FACE);
 
-	Map.draw(gl, Game.proj_matrix());
+	Map.draw(gl, cam);
 	
 	gl.flush();
 }

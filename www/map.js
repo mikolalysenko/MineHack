@@ -133,9 +133,7 @@ Chunk.prototype.draw = function(gl, chunk_shader)
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
-								this.x*this.DIMS[0], this.y*this.DIMS[1], this.z*this.DIMS[2] - 100.0, 1]);
-	
-	debugger;
+								this.x*this.DIMS[0], this.y*this.DIMS[1], this.z*this.DIMS[2], 1]);
 	
 	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);

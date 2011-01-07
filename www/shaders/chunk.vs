@@ -5,7 +5,7 @@ precision highp float;
 attribute vec3 pos;
 
 uniform mat4 proj;
-uniform vec3 cube_loc;
+uniform mat4 view;
 
 void main(void)
 {
