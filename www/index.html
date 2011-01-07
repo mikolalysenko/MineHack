@@ -4,6 +4,7 @@
 	<title>Test Game</title>
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
 	<link rel="stylesheet" href="main.css" type="text/css"/>
+	<script type="text/javascript" src="loader.js"></script>
 	<script type="text/javascript" src="misc.js"></script>
 	<script type="text/javascript" src="sha256.js"></script>
 	<script type="text/javascript" src="session.js"></script>
@@ -11,7 +12,7 @@
 	<script type="text/javascript" src="map.js"></script>
 </head>
 
-<body onUnload="javascript:Session.logout();" onLoad="javascript:set_logged_in();">
+<body onUnload="javascript:Session.logout();" onLoad="javascript:Loader.start(update_progress, set_error);">
 
 <script type="text/javascript">
 
@@ -22,7 +23,7 @@ set_error = function(msg)
 			 .replace(/\</g, "&lt;")
 			 .replace(/\>/g, "&gt;")
 			 .replace(/\n/g, "\<br\/\>");
-
+			 
 	if(!Session.logged_in)
 	{
 		document.getElementById('errMsg').innerHTML = msg;
@@ -38,11 +39,13 @@ set_error = function(msg)
 	}
 }
 
-set_logged_in = function()
+start_game = function()
 {
 	var loginElem = document.getElementById('loginElem');
+	var progElem = document.getElementById('progress');
 	var appElem = document.getElementById('appElem');
 	
+	progElem.style.display = 'none';
 	loginElem.style.display = 'none';
 	appElem.style.display   = 'block';
 	
@@ -54,6 +57,39 @@ set_logged_in = function()
 	else
 	{
 		Game.draw();
+	}
+}
+
+update_progress = function(url)
+{
+	var prog_txt = document.getElementById('progress');
+	prog_txt.innerHTML = "Loaded: " + url + "<br\/\>%" + Loader.pct_loaded * 100.0 + " Complete";
+	
+	if(Loader.finished && Session.logged_in)
+	{
+		start_game();
+	}
+}
+
+set_logged_in = function()
+{
+	if(Loader.failed)
+	{
+		set_error("FAILED TO LOAD RESOURCES");
+	}
+	else if(Loader.finished)
+	{
+		start_game();
+	}
+	else
+	{
+		var loginElem = document.getElementById('loginElem');
+		var progElem = document.getElementById('progress');
+		var appElem = document.getElementById('appElem');
+	
+		progElem.style.display = 'block';
+		loginElem.style.display = 'none';
+		appElem.style.display   = 'none';	
 	}
 }
 
@@ -90,6 +126,7 @@ do_login = function()
 }
 </script>
 
+<div onload="javascript:set_logged_in();"></div>
 
 <div id="loginElem" align=center>
 <input type="text" id="userName" width="20" value=""/> <br/>
@@ -103,6 +140,9 @@ do_login = function()
 
 <div id="appElem" style="display:none;">
 <canvas id="canvas" width=500 height=500></canvas><br/>
+</div>
+
+<div id="progress" style="display:none;" align=center>
 </div>
 
 <div id="noWebGL" style="display:none; background-color:red; color:black;">

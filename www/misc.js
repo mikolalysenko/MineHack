@@ -1,14 +1,6 @@
-getDocument = function(url)
-{
-	XHR = new XMLHttpRequest();
-	XHR.open("GET", url, false);
-	XHR.send(null);
-	return XHR.responseText;
-}
-
 getShader = function(gl, url)
 {
-	var script = getDocument(url);
+	var script = Loader.data[url];
 	if(!script)
 		return ["Fail", "Error requesting document"];
 	
@@ -65,6 +57,24 @@ getProgram = function(gl, fs_url, vs_url)
 	}
 	
 	return ["Ok", fs, vs, prog];
+}
+
+getTexture = function(gl, url)
+{
+	var img = Loader.data[url];
+	if(!img)
+	{
+		return ["Fail", "Could not load image " + url];
+	}
+
+	var tex = gl.createTexture();
+	gl.bindTexture(gl.TEXTURE_2D, tex);
+	//gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+	
+	return ["Ok", tex];	
 }
 
 mmult = function(A, B)

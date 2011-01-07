@@ -1,5 +1,7 @@
 Game = 
 {
+	crashed : false,
+
 	znear : 1.0,
 	zfar  : 1000.0,
 	fov   : 45.0,
