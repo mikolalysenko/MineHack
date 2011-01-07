@@ -1,6 +1,7 @@
 Game = 
 {
 	crashed : false,
+	running : false,
 
 	znear : 1.0,
 	zfar  : 1000.0,
@@ -12,6 +13,17 @@ Game =
 	
 	enable_ao : true
 };
+
+Game.resize = function()
+{
+	Game.canvas.width = window.innerWidth;
+	Game.canvas.height = window.innerHeight;
+	
+	Game.width = Game.canvas.width;
+	Game.height = Game.canvas.height;
+	
+	Game.draw();
+}
 
 Game.init = function(canvas)
 {
@@ -52,11 +64,17 @@ Game.init = function(canvas)
 		data[i] = 0;
 		
 		if(Math.random() < 0.01)
-			data[i] = 1;
+		{
+			data[i] = 3;
+		}
 	}	
 	
 	//Add the chunk to the map
 	Map.add_chunk(new Chunk(0, 0, 0, data));
+	
+	Game.running = true;
+	
+	Game.resize();
 	
 	return 'Ok';
 }
@@ -68,7 +86,7 @@ Game.proj_matrix = function()
 	var znear = Game.znear;
 	var zfar = Game.zfar;
 	
-	var ymax = znear * Math.tan(Game.fov * Math.PI / 180.0);
+	var ymax = znear * Math.tan(Game.fov * Math.PI / 360.0);
 	var ymin = -ymax;
 	var xmin = ymin * aspect;
 	var xmax = ymax * aspect;
@@ -109,7 +127,6 @@ Game.camera_matrix = function()
 
 Game.draw = function()
 {
-	debugger;
 	var gl = Game.gl;
 	var cam = Game.camera_matrix();
 	
@@ -117,7 +134,7 @@ Game.draw = function()
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
 	gl.clear(gl.COLOR_BUFFER_BIT |gl.DEPTH_BUFFER_BIT);
 	
-	gl.disable(gl.DEPTH_TEST);
+	gl.enable(gl.DEPTH_TEST);
 	gl.disable(gl.CULL_FACE);
 
 	Map.draw(gl, cam);

@@ -16,6 +16,14 @@
 
 <script type="text/javascript">
 
+window.onresize = function(event)
+{
+	if(Game.running)
+	{
+		Game.resize();
+	}
+}
+
 set_error = function(msg)
 {
 	//Scrub message
@@ -139,7 +147,7 @@ do_login = function()
 </div>
 
 <div id="appElem" style="display:none;">
-<canvas id="canvas" width=500 height=500></canvas><br/>
+<canvas id="canvas" width=500 height=500 style="position:absolute; top:0px; left:0px;"></canvas><br/>
 </div>
 
 <div id="progress" style="display:none;" align=center>

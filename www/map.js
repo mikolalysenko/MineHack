@@ -95,21 +95,24 @@ Chunk.prototype.gen_vb = function(gl)
 	{
 		tc = BlockTexCoords[block_t][dir];
 		
-		tx = tc[1] / 16.0 + 1.0 / 256.0;
-		ty = tc[0] / 16.0 + 1.0 / 256.0;
-		dt = 1.0 / 16.0 - 1.0 / 256.0;
+		tx = tc[1] / 16.0;
+		ty = tc[0] / 16.0;
+		dt = 1.0 / 16.0;
 		
+
+		tex_coords.push(tx);
+		tex_coords.push(ty+dt);
+
 		tex_coords.push(tx);
 		tex_coords.push(ty);
-		
+
 		tex_coords.push(tx+dt);
 		tex_coords.push(ty);
-		
+
+
 		tex_coords.push(tx+dt);
 		tex_coords.push(ty+dt);
 		
-		tex_coords.push(tx);
-		tex_coords.push(ty+dt);
 	}
 	
 	for(var x=1; x<=this.DIMS[0]; ++x)
@@ -142,9 +145,10 @@ Chunk.prototype.gen_vb = function(gl)
 			
 			appendv([
 				[x+1,y,  z  ],
-				[x+1,y,  z+1],			
+				[x+1,y+1,z  ],
 				[x+1,y+1,z+1],
-				[x+1,y+1,z  ]]);
+				[x+1,y,  z+1]
+				]);
 				
 			add_tex_coord(block_id, 1);
 		}
@@ -174,7 +178,7 @@ Chunk.prototype.gen_vb = function(gl)
 				[x+1,y+1,  z+1],
 				[x,  y+1,  z+1]]);
 				
-			add_tex_coord(block_id, 2);
+			add_tex_coord(block_id, 0);
 		}
 		
 		if(this.block(x,y,z-1) == 0)
@@ -183,10 +187,10 @@ Chunk.prototype.gen_vb = function(gl)
 			add_face();
 			
 			appendv([
+				[x,  y+1,z],
 				[x,  y,  z],
 				[x+1,y,  z],
-				[x+1,y+1,z],
-				[x,  y+1,z]]);
+				[x+1,y+1,z]]);
 				
 			add_tex_coord(block_id, 1);
 		}
@@ -207,8 +211,6 @@ Chunk.prototype.gen_vb = function(gl)
 	}
 
 	this.num_elements = indices.length;
-	
-	debugger;
 	
 	this.vb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);	
