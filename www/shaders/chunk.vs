@@ -5,8 +5,6 @@ uniform mat4 view;
 
 void main(void)
 {
-	mat4 k = proj * view;
-
-	gl_Position = k * 0.1 * vec4(pos, 1.0);
+	gl_Position = proj * view * vec4(pos.x, pos.y, pos.z, 1.0);
 }
 

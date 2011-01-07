@@ -28,97 +28,112 @@ Chunk.prototype.gen_vb = function(gl)
 	var vertices = new Array();
 	var n_elements = 0;
 	
+	var append = function(v)
+	{
+		for(var i=0; i<v.length; i++)
+		{
+			vertices.push(v[i][0]);
+			vertices.push(v[i][1]);
+			vertices.push(v[i][2]);
+		}
+	}
+	
 	for(var x=1; x<=this.DIMS[0]; ++x)
 	for(var y=1; y<=this.DIMS[1]; ++y)
 	for(var z=1; z<=this.DIMS[2]; ++z)
 	{
 		if(this.block(x,y,z) == 0)
 			continue;
-			
+		
+		debugger;
+		
 		if(this.block(x-1,y,z) == 0)
 		{
 			//Add -x face
-			vertices.concat( [
+			append( [
 				[x,y  ,z  ],
 				[x,y+1,z  ],
 				[x,y+1,z+1],
 				[x,y,  z  ],
 				[x,y+1,z+1],
 				[x,y,  z+1]]);
-				
-			n_elements += 2;
 		}
 		
 		if(this.block(x+1,y,z) == 0)
 		{
 			//Add +x face
-			vertices.concat([
+			append([
 				[x+1,y,  z+1],			
 				[x+1,y+1,z+1],
 				[x+1,y,  z  ],
 				[x+1,y+1,z+1],
 				[x+1,y+1,z  ],
 				[x+1,y  ,z  ]]);
-			n_elements += 2;
 		}
 		
 		if(this.block(x,y-1,z) == 0)
 		{
 			//Add -y face
-			vertices.concat([
+			append([
 				[x,  y,  z  ],
 				[x,  y,  z+1],
 				[x+1,y,  z+1],
 				[x,  y,  z  ],
 				[x+1,y,  z+1],
 				[x+1,y,  z  ]]);
-			n_elements += 2;
 		}
 		
 		if(this.block(x,y+1,z) == 0)
 		{
 			//Add +y face
-			vertices.concat([
+			append([
 				[x+1,y+1,  z  ],
 				[x+1,y+1,  z+1],
 				[x,  y+1,  z  ],
 				[x+1,y+1,  z+1],
 				[x,  y+1,  z+1],
 				[x,  y+1,  z  ]]);
-			n_elements += 2;
 		}
 		
 		if(this.block(x,y,z-1) == 0)
 		{
 			//Add -z face
-			vertices.concat([
+			append([
 				[x+1,y,  z],
 				[x,  y,  z],
 				[x,  y+1,z],
 				[x+1,y,  z],
 				[x,  y+1,z],
 				[x+1,y+1,z]]);
-			n_elements += 2;
 		}
 		
 		if(this.block(x,y,z+1) == 0)
 		{
 			//Add +z face
-			vertices.concat([
+			append([
 				[x+1,y+1,z+1],
 				[x,  y+1,z+1],
 				[x+1,y,  z+1],
 				[x,  y+1,z+1],
 				[x,  y,  z+1],
 				[x+1,y,  z+1]]);
-			n_elements += 2;
 		}
 	}
 
-	this.num_tris = n_elements;
+	this.num_elements = vertices.length / 3;
 	this.vb = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
+	
+	debugger;
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);	
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+	/*
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, -3,
+													 1.0, -1.0, -3,
+													 1.0,  1.0, -3]), gl.STATIC_DRAW);
+													 
+	this.num_tris = 1;
+	*/
 }
 
 Chunk.prototype.draw = function(gl, chunk_shader)
@@ -128,13 +143,15 @@ Chunk.prototype.draw = function(gl, chunk_shader)
 
 	var pos = new Float32Array([1, 0, 0, this.x*this.DIMS[0],
 								0, 1, 0, this.y*this.DIMS[1],
-								0, 0, 1, this.z*this.DIMS[2],
+								0, 0, -1, this.z*this.DIMS[2],
 								0, 0, 0, 1]);
+	
+	debugger;
 	
 	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	gl.vertexAttribPointer(chunk_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
-	gl.drawArrays(gl.TRIANGLES, 0, this.num_tris);
+	gl.drawArrays(gl.TRIANGLES, 0, this.num_elements);
 }
 
 Chunk.prototype.release = function(gl)
@@ -168,7 +185,7 @@ Map.init = function(gl)
 	Map.chunk_shader.proj_mat = gl.getUniformLocation(Map.chunk_shader, "proj");
 	if(Map.chunk_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
-		
+	
 	Map.chunk_shader.view_mat = gl.getUniformLocation(Map.chunk_shader, "view");
 	if(Map.chunk_shader.view_mat == null)
 		return "Could not locate view matrix uniform";
@@ -184,14 +201,7 @@ Map.draw = function(gl, camera)
 {
 	gl.useProgram(Map.chunk_shader);
 	gl.enableVertexAttribArray(Map.pos_attr);
-	
-	var pm = new Float32Array([1,0,0,0,
-							   0,1,0,0,
-							   0,0,1,0,
-							   0,0,0,1]);
-	
-	debugger;
-	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, pm);
+	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);
 	
 	for(var i=0; i<Map.chunks.length; i++)
 	{
