@@ -45,8 +45,6 @@ Chunk.prototype.gen_vb = function(gl)
 		if(this.block(x,y,z) == 0)
 			continue;
 		
-		debugger;
-		
 		if(this.block(x-1,y,z) == 0)
 		{
 			//Add -x face
@@ -123,17 +121,8 @@ Chunk.prototype.gen_vb = function(gl)
 	this.num_elements = vertices.length / 3;
 	this.vb = gl.createBuffer();
 	
-	debugger;
-	
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);	
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-	/*
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1.0, -1.0, -3,
-													 1.0, -1.0, -3,
-													 1.0,  1.0, -3]), gl.STATIC_DRAW);
-													 
-	this.num_tris = 1;
-	*/
 }
 
 Chunk.prototype.draw = function(gl, chunk_shader)
@@ -141,10 +130,10 @@ Chunk.prototype.draw = function(gl, chunk_shader)
 	if(this.vb == null)
 		this.gen_vb(gl);
 
-	var pos = new Float32Array([1, 0, 0, this.x*this.DIMS[0],
-								0, 1, 0, this.y*this.DIMS[1],
-								0, 0, -1, this.z*this.DIMS[2],
-								0, 0, 0, 1]);
+	var pos = new Float32Array([1, 0, 0, 0,
+								0, 1, 0, 0,
+								0, 0, 1, 0,
+								this.x*this.DIMS[0], this.y*this.DIMS[1], this.z*this.DIMS[2] - 100.0, 1]);
 	
 	debugger;
 	

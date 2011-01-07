@@ -1,7 +1,11 @@
+#ifdef GL_ES
+precision highp float;
+#endif
+
 attribute vec3 pos;
 
 uniform mat4 proj;
-uniform mat4 view;
+uniform vec3 cube_loc;
 
 void main(void)
 {
