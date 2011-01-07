@@ -19,7 +19,22 @@ Chunk.prototype.DIMS = [32, 32, 32];
 
 Chunk.prototype.block = function(x, y, z)
 {
-	return this.data[x + this.DIMS[0]*(y + this.DIMS[1]*z)];
+	if(x < 0 || y < 0 || z < 0 ||
+		x >= this.DIMS[0]+2 || 
+		y >= this.DIMS[1]+2 || 
+		z >= this.DIMS[2]+2)
+		return 0;
+
+	return this.data[x + (this.DIMS[0]+2)*(y + (this.DIMS[1]+2)*z) ];
+}
+
+Chunk.prototype.calc_ao = function(x, y, z, nx, ny, nz)
+{
+	if(!Game.calc_ao)
+		return 1.0;
+		
+	//Calculate ambient occlusion
+	return 1.0;
 }
 
 //Construct vertex buffer for this chunk
@@ -32,9 +47,10 @@ Chunk.prototype.gen_vb = function(gl)
 	{
 		for(var i=0; i<v.length; i++)
 		{
-			vertices.push(v[i][0]);
-			vertices.push(v[i][1]);
-			vertices.push(v[i][2]);
+			vertices.push(v[i][0] - 0.5
+			);
+			vertices.push(v[i][1] - 0.5);
+			vertices.push(v[i][2] - 0.5);
 		}
 	}
 	

@@ -6,7 +6,9 @@ Game =
 	
 	cam_pos   : [16.0, 16.0, 40.0],
 	cam_pitch : 0.0,
-	cam_yaw   : 0.0
+	cam_yaw   : 0.0,
+	
+	enable_ao : true
 };
 
 Game.init = function(canvas)
