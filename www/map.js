@@ -43,17 +43,23 @@ function Chunk(x, y, z, data)
 	this.num_elements = null;
 }
 
+
+
 Chunk.prototype.DIMS = [32, 32, 32];
 
 Chunk.prototype.block = function(x, y, z)
 {
+	//If out of bounds, do a look up globally
 	if(x < 0 || y < 0 || z < 0 ||
 		x >= this.DIMS[0]+2 || 
 		y >= this.DIMS[1]+2 || 
 		z >= this.DIMS[2]+2)
-		return 0;
+		return Map.get_block(
+			this.x * this.DIMS[0] + x,
+			this.y * this.DIMS[1] + y,
+			this.z * this.DIMS[2] + z);
 
-	return this.data[x + (this.DIMS[0]+2)*(y + (this.DIMS[1]+2)*z) ];
+	return this.data[x + this.DIMS[0]*(y + this.DIMS[1]*z) ];
 }
 
 Chunk.prototype.calc_ao = function(x, y, z, nx, ny, nz)
@@ -120,9 +126,9 @@ Chunk.prototype.gen_vb = function(gl)
 		
 	}
 	
-	for(var x=1; x<=this.DIMS[0]; ++x)
-	for(var y=1; y<=this.DIMS[1]; ++y)
-	for(var z=1; z<=this.DIMS[2]; ++z)
+	for(var x=0; x<this.DIMS[0]; ++x)
+	for(var y=0; y<this.DIMS[1]; ++y)
+	for(var z=0; z<this.DIMS[2]; ++z)
 	{
 		var block_id = this.block(x,y,z);
 		
@@ -260,6 +266,7 @@ Chunk.prototype.release = function(gl)
 var Map =
 {
 	chunks : [],
+	index : {},
 	terrain_tex : null
 };
 
@@ -335,14 +342,80 @@ Map.draw = function(gl, camera)
 	}
 }
 
+Map.decompress_chunk = function(arr)
+{
+	if(arr.length == 0)
+		return null;
+
+	var data = new Uint8Array(32*32*32);
+	var i = 0;
+	for(var k=0; k<arr.length; )
+	{
+		var n = arr[k];
+		++k;
+
+		if(n == 0xff)
+		{
+			var n = arr[k] + (arr[k+1] << 8);
+			k += 2;
+		}
+		
+		var c = arr[k];
+		++k;
+		
+		for(var j=0; j<n; ++j)
+		{
+			data[i++] = c;
+		}
+	}
+	
+	return data;
+}
+
+Map.fetch_chunk = function(x, y, z)
+{
+	//If chunk is already stored, don't get it
+
+	asyncGetBinary("g?x="+x+"&y="+y+"&z="+z, function(arr)
+	{
+		var d = Map.decompress_chunk(arr);
+		if(d)
+		{
+			Map.add_chunk(new Chunk(x, y, z, d));
+		}
+	});
+}
+
+Map.index2str = function(x, y, z)
+{
+	return x + ":" + y + ":" + z;
+}
+
 //Adds a chunk to the list
 Map.add_chunk = function(chunk)
 {
+	var str = Map.index2str(chunk.x, chunk.y, chunk.z);
+	Map.index[str] = chunk;
 	Map.chunks.push(chunk);
 }
 
-//Returns the block type for the give position
-Map.get_block = function(pos)
+//Hash look up in map
+Map.lookup_chunk = function(x, y, z)
 {
-	return 0;
+	var str = Map.index2str(x, y, z);
+	return Map.index[str];
 }
+
+//Returns the block type for the give position
+Map.get_block = function(x, y, z)
+{
+	var cx = (x >> 5), cy = (y >> 5), cz = (z >> 5);
+	var c = Map.lookup_chunk(cx, cy, cz);
+	
+	if(!c)
+		return -1;
+	
+	var bx = (x & 31), by = (y & 31), bz = (z & 31);
+	return c.block(bx, by, bz);
+}
+

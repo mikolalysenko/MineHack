@@ -24,7 +24,7 @@ var Player =
 	},
 	
 	//Player coordinates
-	pos : [(1<<20), (1<<20), (1<<20)],
+	pos : [(1<<20), (1<<20) + 64, (1<<20)],
 	pitch : 0,
 	yaw : 0	
 };

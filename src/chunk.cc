@@ -46,22 +46,36 @@ int Chunk::compress(void* buffer, size_t len)
 		size_t l;
 		for(l=1; 
 			i+l<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z) && 
-			data_ptr[l] == cur;)
+			data_ptr[l] == cur; ++l)
 		{
-			if(l >= 256)
-				break;
-			++l;
 		}
 		
 		i += l;
 		data_ptr += l;
-		n += 2;
 		
-		if(n >= len)
-			return -1;
+		//Runs < 256 long get single byte encoded
+		if(l < 256)
+		{
+			n += 2;
+			if(n >= len)
+				return -1;
 			
-		*(buf_ptr++) = (uint8_t)(l-1);
-		*(buf_ptr++) = (uint8_t)cur;
+			*(buf_ptr++) = (uint8_t)(l-1);
+			*(buf_ptr++) = (uint8_t)cur;
+			
+		}
+		//Runs >= 256 get 2-byte encoded
+		else
+		{
+			n += 4;
+			if(n >= len)
+				return -1;
+				
+			*(buf_ptr++) = 0xff;
+			*(buf_ptr++) = (uint8_t)(l&0xff);
+			*(buf_ptr++) = (uint8_t)(l>>8);
+			*(buf_ptr++) = (uint8_t)cur;
+		}
 	}
 	
 	return n;

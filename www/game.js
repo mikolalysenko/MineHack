@@ -78,6 +78,13 @@ Game.init = function(canvas)
 	Map.add_chunk(new Chunk(0, 0, 0, data));
 	*/
 	
+	for(var i=(Player.pos[0]>>5) - 3; i<=(Player.pos[0]>>5) + 3; i++)
+	for(var j=(Player.pos[1]>>5) - 3; j<=(Player.pos[1]>>5) + 3; j++)
+	for(var k=(Player.pos[2]>>5) - 3; k<=(Player.pos[2]>>5) + 3; k++)
+	{
+		Map.fetch_chunk(i, j, k);
+	}
+	
 	Game.resize();
 	
 	//Start running the game
