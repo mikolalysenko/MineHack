@@ -3,7 +3,9 @@ Game =
 	crashed : false,
 	running : false,
 	
-	update_rate : 30,
+	tick_count : 0,
+	
+	update_rate : 40,
 
 	znear : 1.0,
 	zfar  : 1000.0,
@@ -60,31 +62,10 @@ Game.init = function(canvas)
 		return res;
 	}
 	
-	/*
-	//TESTING CODE:  create a random chunk and stick it in the map
-	var data = new Uint8Array(34*34*34);
+	//Update the chunks
+	Map.update_cache();
 	
-	for(var i=0; i<data.length; i++)
-	{
-		data[i] = 0;
-		
-		if(Math.random() < 0.01)
-		{
-			data[i] = 3;
-		}
-	}	
-	
-	//Add the chunk to the map
-	Map.add_chunk(new Chunk(0, 0, 0, data));
-	*/
-	
-	for(var i=(Player.pos[0]>>5) - 3; i<=(Player.pos[0]>>5) + 3; i++)
-	for(var j=(Player.pos[1]>>5) - 3; j<=(Player.pos[1]>>5) + 3; j++)
-	for(var k=(Player.pos[2]>>5) - 3; k<=(Player.pos[2]>>5) + 3; k++)
-	{
-		Map.fetch_chunk(i, j, k);
-	}
-	
+	//Initialize screen
 	Game.resize();
 	
 	//Start running the game
@@ -168,8 +149,13 @@ Game.stop = function()
 
 Game.tick = function()
 {
+	++Game.tick_count;
+
 	//Update game state
 	Player.tick();
+
+	//Update cache
+	Map.update_cache();
 	
 	//Redraw
 	Game.draw();

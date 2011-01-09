@@ -25,60 +25,40 @@ BlockTexCoords =
 	[ [1,5], [1,4], [1,5] ]  //Log
 ];
 
-
-//The chunk data type
-function Chunk(x, y, z, data)
+function ChunkVB(p, 
+	x_min, y_min, z_min,
+	x_max, y_max, z_max)
 {
-	//Set chunk data
-	this.data = data;
-	
-	//Set position
-	this.x = x;
-	this.y = y;
-	this.z = z;
-	
-	//Leave vertex buffer currently empty for now
 	this.vb = null;
 	this.ib = null;
-	this.num_elements = null;
+	this.tb = null;
+	this.num_elements = 0;
+	this.p 		 = p;
+	this.x_min   = x_min;
+	this.y_min   = y_min;
+	this.z_min   = z_min;
+	this.x_max	 = x_max;
+	this.y_max	 = y_max;
+	this.z_max	 = z_max;
+	this.dirty   = true;
 }
 
-
-
-Chunk.prototype.DIMS = [32, 32, 32];
-
-Chunk.prototype.block = function(x, y, z)
+//Sets the vb to dirty, will regenerate as needed
+ChunkVB.prototype.set_dirty = function(gl)
 {
-	//If out of bounds, do a look up globally
-	if(x < 0 || y < 0 || z < 0 ||
-		x >= this.DIMS[0]+2 || 
-		y >= this.DIMS[1]+2 || 
-		z >= this.DIMS[2]+2)
-		return Map.get_block(
-			this.x * this.DIMS[0] + x,
-			this.y * this.DIMS[1] + y,
-			this.z * this.DIMS[2] + z);
-
-	return this.data[x + this.DIMS[0]*(y + this.DIMS[1]*z) ];
+	this.dirty = true;
 }
 
-Chunk.prototype.calc_ao = function(x, y, z, nx, ny, nz)
-{
-	if(!Game.calc_ao)
-		return 1.0;
-		
-	//Calculate ambient occlusion (not implemented yet)
-	return 1.0;
-}
 
 //Construct vertex buffer for this chunk
-Chunk.prototype.gen_vb = function(gl)
+ChunkVB.prototype.gen_vb = function(gl)
 {
 	var vertices = new Array();
 	var indices  = new Array();
 	var tex_coords = new Array();
 	var n_elements = 0;
 	var nv = 0;
+	var p = this.p;
 	
 	var appendv = function(v)
 	{
@@ -108,9 +88,8 @@ Chunk.prototype.gen_vb = function(gl)
 		
 		tx = tc[1] / 16.0;
 		ty = tc[0] / 16.0;
-		dt = 1.0 / 16.0;
+		dt = 1.0 / 16.0 - 1.0/256.0;
 		
-
 		tex_coords.push(tx);
 		tex_coords.push(ty+dt);
 
@@ -121,20 +100,42 @@ Chunk.prototype.gen_vb = function(gl)
 		tex_coords.push(ty);
 
 		tex_coords.push(tx+dt);
-		tex_coords.push(ty+dt);
-		
+		tex_coords.push(ty+dt);	
 	}
 	
-	for(var x=0; x<this.DIMS[0]; ++x)
-	for(var y=0; y<this.DIMS[1]; ++y)
-	for(var z=0; z<this.DIMS[2]; ++z)
+	var data = p.data;
+	
+	var left	= Map.lookup_chunk(p.x-1, p.y, p.z),
+		right	= Map.lookup_chunk(p.x+1, p.y, p.z),
+		bottom	= Map.lookup_chunk(p.x, p.y-1, p.z),
+		top 	= Map.lookup_chunk(p.x, p.y+1, p.z),
+		front	= Map.lookup_chunk(p.x, p.y, p.z-1),
+		back	= Map.lookup_chunk(p.x, p.y, p.z+1);
+		
+	var d_lx = null, d_ux = null,
+		d_ly = null, d_uy = null,
+		d_lz = null, d_uz = null;
+		
+	if(left)	d_lx = left.data;
+	if(right)	d_ux = right.data;
+	if(bottom)	d_ly = bottom.data;
+	if(top)		d_uy = top.data;
+	if(front)	d_lz = front.data;
+	if(back)	d_uz = back.data;
+	
+	for(var x=this.x_min; x<this.x_max; ++x)
+	for(var y=this.y_min; y<this.y_max; ++y)
+	for(var z=this.z_min; z<this.z_max; ++z)
 	{
-		var block_id = this.block(x,y,z);
+		var idx = x + ((y + (z<<5)) << 5);
+		var block_id = data[idx];
 		
 		if(block_id == 0)
 			continue;
 		
-		if(this.block(x-1,y,z) == 0)
+		if(	(x == 0 && d_lx != null && 
+				d_lx[31 + ((y + (z<<5))<<5)] == 0) ||
+			(x > 0 && data[idx-1] == 0) )
 		{
 			//Add -x face
 			add_face();
@@ -148,7 +149,9 @@ Chunk.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(this.block(x+1,y,z) == 0)
+		if(	(x == 31 && d_ux != null && 
+				d_ux[((y + (z<<5))<<5)] == 0) ||
+			(x < 32 && data[idx+1] == 0) )
 		{
 			//Add +x face
 			add_face();
@@ -163,7 +166,9 @@ Chunk.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(this.block(x,y-1,z) == 0)
+		if(	(y == 0 && d_ly != null && 
+				d_ly[x + (31<<5) + (z<<10)] == 0) ||
+			(y > 0 && data[idx-32] == 0) )
 		{
 			//Add -y face
 			add_face();
@@ -177,7 +182,9 @@ Chunk.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 2);
 		}
 		
-		if(this.block(x,y+1,z) == 0)
+		if(	(y == 31 && d_uy != null && 
+				d_uy[x + (z<<10)] == 0) ||
+			(y < 32 && data[idx+32] == 0) )
 		{
 			//Add +y face
 			add_face();
@@ -191,7 +198,9 @@ Chunk.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 0);
 		}
 		
-		if(this.block(x,y,z-1) == 0)
+		if(	(z == 0 && d_lz != null && 
+				d_lz[x + (y<<5) + (31<<10)] == 0) ||
+			(z > 0 && data[idx-1024] == 0) )
 		{
 			//Add -z face
 			add_face();
@@ -206,7 +215,9 @@ Chunk.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(this.block(x,y,z+1) == 0)
+		if(	(z == 31 && d_uz != null && 
+				d_uz[x + (y<<5)] == 0) ||
+			(z < 32 && data[idx+1024] == 0) )
 		{
 			//Add +z face
 			add_face();
@@ -237,19 +248,22 @@ Chunk.prototype.gen_vb = function(gl)
 		this.tb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(tex_coords), gl.STATIC_DRAW);
+	
+	//Clean up temporary data
+	delete vertices;
+	delete indices;
+	delete tex_coords;
+	
+	//No longer need to generate
+	this.dirty = false;
 }
 
-Chunk.prototype.draw = function(gl, chunk_shader)
+
+ChunkVB.prototype.draw = function(gl, chunk_shader)
 {
-	if(this.vb == null)
+	if(this.dirty)
 		this.gen_vb(gl);
 
-	var pos = new Float32Array([1, 0, 0, 0,
-								0, 1, 0, 0,
-								0, 0, 1, 0,
-								this.x*this.DIMS[0], this.y*this.DIMS[1], this.z*this.DIMS[2], 1]);
-	
-	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	gl.vertexAttribPointer(chunk_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
 	
@@ -260,19 +274,260 @@ Chunk.prototype.draw = function(gl, chunk_shader)
 	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
 }
 
+ChunkVB.prototype.release = function(gl)
+{
+	if(this.vb)
+		gl.deleteBuffer(this.vb);
+	if(this.ib)
+		gl.deleteBuffer(this.ib);
+	if(this.tb)
+		gl.deleteBuffer(this.tb);
+		
+	delete this.vb;
+	delete this.ib;
+	delete this.tb;
+}
+
+//The chunk data type
+function Chunk(x, y, z, data)
+{
+	//Set chunk data
+	this.data = data;
+	
+	//Update last tick
+	this.last_tick = Game.tick_count;
+	
+	//Set position
+	this.x = x;
+	this.y = y;
+	this.z = z;
+	
+	//Create vertex buffers for facets
+	this.int_vb = new ChunkVB(this, 
+		1, 1, 1,
+		this.DIMS[0]-1, this.DIMS[1]-1, this.DIMS[2]-1);
+		
+	this.left_vb = new ChunkVB(this, 
+		0, 1, 1,
+		1, this.DIMS[1]-1, this.DIMS[2]-1);
+		
+	this.right_vb = new ChunkVB(this, 
+		this.DIMS[0]-1, 1, 1,
+		this.DIMS[0], this.DIMS[1]-1, this.DIMS[2]-1);
+
+	this.bottom_vb = new ChunkVB(this, 
+		1, 0, 1,
+		this.DIMS[0]-1, 1, this.DIMS[2]-1);
+		
+	this.top_vb = new ChunkVB(this, 
+		1, this.DIMS[1]-1, 1,
+		this.DIMS[0]-1, this.DIMS[1], this.DIMS[2]-1);
+		
+	this.front_vb = new ChunkVB(this, 
+		1, 1, 0,
+		this.DIMS[0]-1, this.DIMS[1]-1, 1);
+		
+	this.back_vb = new ChunkVB(this, 
+		1, 1, this.DIMS[2]-1,
+		this.DIMS[0]-1, this.DIMS[1]-1, this.DIMS[2]);
+	
+	this.corner_vbs = [
+	
+		new ChunkVB(this,
+			0,            this.DIMS[1]-1, this.DIMS[2]-1,
+			this.DIMS[0], this.DIMS[1],   this.DIMS[2]),
+
+		new ChunkVB(this,
+			0,            this.DIMS[1]-1, 0,
+			this.DIMS[0], this.DIMS[1],   1),
+
+		new ChunkVB(this,
+			0,              this.DIMS[1]-1, 1,
+			1,              this.DIMS[1],   this.DIMS[2]-1),
+	
+		new ChunkVB(this,
+			this.DIMS[0]-1, this.DIMS[1]-1, 1,
+			this.DIMS[0],   this.DIMS[1],   this.DIMS[2]-1),
+
+		new ChunkVB(this,
+			0,              0,             0,
+			this.DIMS[0],   1,             1),
+
+		new ChunkVB(this,
+			0,              0,             this.DIMS[2]-1,
+			this.DIMS[0],   1,             this.DIMS[2]),			
+
+		new ChunkVB(this,
+			0,			    0,			  1,
+			1,			    1,			  this.DIMS[2]-1),
+			
+		new ChunkVB(this,
+			this.DIMS[0]-1, 0,			  1,
+			this.DIMS[0],   1,			  this.DIMS[2]-1),
+
+		new ChunkVB(this,
+			this.DIMS[0]-1, 1,                0,
+			this.DIMS[0],   this.DIMS[1] - 1, 1),
+
+		new ChunkVB(this,
+			this.DIMS[0]-1, 1,                this.DIMS[2]-1,
+			this.DIMS[0],   this.DIMS[1] - 1, this.DIMS[2]),
+			
+		new ChunkVB(this,
+			0, 1,                0,
+			1, this.DIMS[1] - 1, 1),
+
+		new ChunkVB(this,
+			0, 1,                this.DIMS[2]-1,
+			1, this.DIMS[1] - 1, this.DIMS[2])
+	];
+}
+
+
+Chunk.prototype.DIMS = [32, 32, 32];
+
+
+Chunk.prototype.in_frustum = function(mat)
+{
+	return true;
+}
+
+Chunk.prototype.block = function(x, y, z)
+{
+	//If out of bounds, do a look up globally
+	if(x < 0 || y < 0 || z < 0 ||
+		x >= this.DIMS[0] || 
+		y >= this.DIMS[1] || 
+		z >= this.DIMS[2])
+		return Map.get_block(
+			this.x * this.DIMS[0] + x,
+			this.y * this.DIMS[1] + y,
+			this.z * this.DIMS[2] + z);
+
+	return this.data[x + this.DIMS[0]*(y + this.DIMS[1]*z) ];
+}
+
+
+//Sets the block type and updates vertex buffers as needed
+Chunk.prototype.set_block = function(x, y, z, b)
+{
+	this.data[x + this.DIMS[0]*(y + this.DIMS[1]*z) ] = b;
+	this.int_vb.set_dirty();
+
+	var corner = (x < 1 || x >= this.DIMS[0] - 1 ||
+				  y < 1 || y >= this.DIMS[1] - 1 ||
+				  z < 1 || z >= this.DIMS[2] - 1);
+	if(corner)
+	{
+		this.dirty_corners(Game.gl);
+	}
+
+
+	if(x < 2)
+	{
+		this.left_vb.set_dirty();
+		if(x < 1)
+		{
+			var c = Map.lookup_chunk(this.x-1, this.y, this.z);
+			c.right_vb.set_dirty();
+			if(corner)
+				c.dirty_corners();
+		}
+	}
+	if(x >= this.DIMS[0] - 2)
+	{
+		this.right_vb.set_dirty();
+		if(x >= this.DIMS[0] - 1)
+		{
+			var c = Map.lookup_chunk(this.x+1, this.y, this.z);
+			c.left_vb.set_dirty();
+			if(corner)
+				c.set_dirty();
+		}
+	}
+
+
+	//TODO: add cases for y,z
+
+}
+
+
+Chunk.prototype.dirty_corners = function()
+{
+	for(var i=0; i<12; i++)
+		this.corner_vbs[i].set_dirty();
+}
+
+Chunk.prototype.dirty_vbs = function()
+{
+	this.int_vb.set_dirty();
+	this.top_vb.set_dirty();
+	this.bottom_vb.set_dirty();
+	this.left_vb.set_dirty();
+	this.right_vb.set_dirty();
+	this.front_vb.set_dirty();
+	this.back_vb.set_dirty();
+	this.dirty_corners();
+}
+
+Chunk.prototype.draw = function(gl, chunk_shader, cam)
+{
+	if(!this.in_frustum(cam))
+		return;
+		
+	this.last_tick = Game.tick_count;
+
+	var pos = new Float32Array([1, 0, 0, 0,
+								0, 1, 0, 0,
+								0, 0, 1, 0,
+								this.x*this.DIMS[0], this.y*this.DIMS[1], this.z*this.DIMS[2], 1]);
+	
+	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
+	
+	this.int_vb.draw(gl, chunk_shader);
+	this.top_vb.draw(gl, chunk_shader);
+	this.bottom_vb.draw(gl, chunk_shader);
+	this.left_vb.draw(gl, chunk_shader);
+	this.right_vb.draw(gl, chunk_shader);
+	this.front_vb.draw(gl, chunk_shader);
+	this.back_vb.draw(gl, chunk_shader);
+	
+	for(var i=0; i<12; ++i)
+		this.corner_vbs[i].draw(gl, chunk_shader);
+}
+
 Chunk.prototype.release = function(gl)
 {
-	//Release chunk here
-	gl.deleteBuffer(this.vb);
-	gl.deleteBuffer(this.ib);
-	gl.deleteBuffer(this.tb);
+	this.int_vb.release(gl);
+	delete this.int_vb;
+	this.left_vb.release(gl);
+	delete this.left_vb;
+	this.right_vb.release(gl);
+	delete this.right_vb;
+	this.bottom_vb.release(gl);
+	delete this.bottom_vb;
+	this.top_vb.release(gl);
+	delete this.top_vb;
+	this.front_vb.release(gl);
+	delete this.front_vb;
+	this.back_vb.release(gl);
+	delete this.back_vb;
+	
+	for(var i=0; i<12; i++)
+	{
+		this.corner_vbs[i].release(gl);
+		delete this.corner_vbs[i];
+	}
+	
+	delete this.data;
 }
 
 var Map =
 {
-	chunks : [],
 	index : {},
-	terrain_tex : null
+	terrain_tex : null,
+	max_chunks : 1024,
+	chunk_count : 0
 };
 
 Map.init = function(gl)
@@ -320,6 +575,24 @@ Map.init = function(gl)
 	return "Ok";
 }
 
+//Updates the cache of chunks
+Map.update_cache = function()
+{
+	//Grab all the chunks near the player
+	for(var i=(Player.pos[0]>>5) - 3; i<=(Player.pos[0]>>5) + 3; i++)
+	for(var j=(Player.pos[1]>>5) - 3; j<=(Player.pos[1]>>5) + 3; j++)
+	for(var k=(Player.pos[2]>>5) - 3; k<=(Player.pos[2]>>5) + 3; k++)
+	{
+		Map.fetch_chunk(i, j, k);
+	}
+	
+	//Remove old chunks
+	if(Map.chunk_count > Map.max_chunks)
+	{
+		//TODO: Purge old chunks
+	}
+}
+
 //Draws the map
 // Input:
 //  gl - the open gl rendering context
@@ -340,19 +613,18 @@ Map.draw = function(gl, camera)
 	gl.bindTexture(gl.TEXTURE_2D, Map.terrain_tex);
 	gl.uniform1i(Map.chunk_shader.tex_samp, 0);
 	
-	for(var i=0; i<Map.chunks.length; i++)
+	//Draw all the chunks
+	for(c in Map.index)
 	{
-		var c = Map.chunks[i];
-		c.draw(gl, Map.chunk_shader);
+		Map.index[c].draw(gl, Map.chunk_shader, camera);
 	}
 }
 
-Map.decompress_chunk = function(arr)
+Map.decompress_chunk = function(arr, data)
 {
 	if(arr.length == 0)
 		return null;
 
-	var data = new Uint8Array(32*32*32);
 	var i = 0;
 	for(var k=0; k<arr.length; )
 	{
@@ -380,17 +652,66 @@ Map.decompress_chunk = function(arr)
 Map.fetch_chunk = function(x, y, z)
 {
 	//If chunk is already stored, don't get it
+	if(Map.lookup_chunk(x,y,z))
+		return;
+
+	//Add new chunk, though leave it empty
+	var chunk = new Chunk(x, y, z, new Uint8Array(32*32*32));
+	Map.add_chunk(chunk);
 
 	asyncGetBinary("g?x="+x+"&y="+y+"&z="+z, function(arr)
 	{
-		var d = Map.decompress_chunk(arr);
-		if(d)
+		if(arr.length == 0)
+			Map.remove_chunk(chunk);
+		
+		//Make sure chunk hasn't been unloaded
+		if(Map.lookup_chunk(x,y,z))
 		{
-			Map.add_chunk(new Chunk(x, y, z, d));
+			Map.decompress_chunk(arr, chunk.data);
+			chunk.dirty_vbs()
+			
+			//Regenerate vertex buffers for neighboring chunks
+			var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
+			if(c)
+			{
+				c.right_vb.set_dirty();
+				c.dirty_corners();
+			}
+			c = Map.lookup_chunk(chunk.x+1, chunk.y, chunk.z);
+			if(c)
+			{
+				c.left_vb.set_dirty();
+				c.dirty_corners();
+			}
+			c = Map.lookup_chunk(chunk.x, chunk.y-1, chunk.z);
+			if(c)
+			{
+				c.top_vb.set_dirty();
+				c.dirty_corners();
+			}
+			c = Map.lookup_chunk(chunk.x, chunk.y+1, chunk.z);
+			if(c)
+			{
+				c.bottom_vb.set_dirty();
+				c.dirty_corners(Game.gl);
+			}
+			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z-1);
+			if(c)
+			{
+				c.back_vb.set_dirty();
+				c.dirty_corners(Game.gl);
+			}
+			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
+			if(c)
+			{
+				c.front_vb.set_dirty();
+				c.dirty_corners(Game.gl);
+			}
 		}
 	});
 }
 
+//Converts a block index into an indexable string
 Map.index2str = function(x, y, z)
 {
 	return x + ":" + y + ":" + z;
@@ -401,29 +722,7 @@ Map.add_chunk = function(chunk)
 {
 	var str = Map.index2str(chunk.x, chunk.y, chunk.z);
 	Map.index[str] = chunk;
-	Map.chunks.push(chunk);
-	
-	/*
-	//Regenerate vertex buffers for neighboring chunks
-	var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
-	if(c)
-		c.gen_vb(Game.gl);
-	c = Map.lookup_chunk(chunk.x+1, chunk.y, chunk.z);
-	if(c)
-		c.gen_vb(Game.gl);
-	c = Map.lookup_chunk(chunk.x, chunk.y-1, chunk.z);
-	if(c)
-		c.gen_vb(Game.gl);
-	c = Map.lookup_chunk(chunk.x, chunk.y+1, chunk.z);
-	if(c)
-		c.gen_vb(Game.gl);
-	c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z-1);
-	if(c)
-		c.gen_vb(Game.gl);
-	c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
-	if(c)
-		c.gen_vb(Game.gl);
-	*/
+	++Map.chunk_count;
 }
 
 //Hash look up in map
@@ -433,16 +732,40 @@ Map.lookup_chunk = function(x, y, z)
 	return Map.index[str];
 }
 
+//Just removes the chunk from the list
+Map.remove_chunk = function(chunk)
+{
+	if(Map.lookup_chunk)
+	{
+		--Map.chunk_count;
+		chunk.release(Game.gl);
+		var str = Map.index2str(chunk.x, chunk.y, chunk.z);
+		delete Map.index[str];
+	}
+}
+
 //Returns the block type for the give position
 Map.get_block = function(x, y, z)
 {
 	var cx = (x >> 5), cy = (y >> 5), cz = (z >> 5);
-	var c = Map.lookup_chunk(cx, cy, cz);
-	
+	var c = Map.lookup_chunk(cx, cy, cz);		
 	if(!c)
-		return 0;
+		return -1;
 	
 	var bx = (x & 31), by = (y & 31), bz = (z & 31);
-	return c.block(bx, by, bz);
+	return c.data[bx + ((by + (bz<<5))<<5)];
 }
+
+//Sets a block in the map to the given type
+Map.set_block = function(x, y, z, b)
+{
+	var cx = (x >> 5), cy = (y >> 5), cz = (z >> 5);
+	var c = Map.lookup_chunk(cx, cy, cz);		
+	if(!c)
+		return;
+	
+	var bx = (x & 31), by = (y & 31), bz = (z & 31);
+	return c.set_block(bx, by, bz, b);
+}
+
 
