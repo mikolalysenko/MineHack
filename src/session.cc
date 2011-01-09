@@ -9,7 +9,7 @@
 
 using namespace std;
 
-namespace Sessions
+namespace Server
 {
 
 //Information associated to a particular session

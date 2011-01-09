@@ -12,7 +12,7 @@
 
 using namespace std;
 
-namespace Login
+namespace Server
 {
 const int PASSWORD_HASH_LEN = 64;
 const int USERNAME_MAX_LEN = 20;

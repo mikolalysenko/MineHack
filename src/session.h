@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string>
 
-namespace Sessions
+namespace Server
 {
 	struct SessionID
 	{

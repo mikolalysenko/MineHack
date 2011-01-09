@@ -1,7 +1,9 @@
 
 var Session = 
 {
-	logged_in: true,
+	//logged_in: true,
+	
+	logged_in: false,
 	session_id: ""
 };
 

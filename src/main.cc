@@ -6,10 +6,12 @@
 #include "mongoose.h"
 #include "login.h"
 #include "session.h"
+#include "misc.h"
+#include "world.h"
 
 using namespace std;
-using namespace Login;
-using namespace Sessions;
+using namespace Server;
+using namespace Game;
 
 static const char *options[] = {
   "document_root", "www",
@@ -24,11 +26,48 @@ static const char *ajax_reply_start =
   "Content-Type: application/x-javascript\n"
   "\n";
 
+
+
+World * game_instance = NULL;
+
 //Server initialization
 void init()
 {
 	init_login();
 	init_sessions();
+	
+	game_instance = new World();
+}
+
+int get_int(const char* id, const mg_request_info *req)
+{
+	char str[16];
+	
+	const char* qs = req->query_string;
+	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
+	
+	mg_get_var(qs, qs_len, id, str, 16);
+	
+	stringstream ss(str);
+	int res;
+	ss >> res;
+	
+	return res;
+}
+
+
+void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
+{
+	mg_printf(conn,
+	  "HTTP/1.1 200 OK\n"
+	  "Cache: no-cache\n"
+	  "Content-Type: application/octet-stream; charset=utf-8\n"
+	  "Content-Transfer-Encoding: binary\n"
+	  "Content-Length: %d\n"
+	  "\n", len);
+
+	mg_write(conn, buf, len);	
+
 }
 
 //Retrieves the session id
@@ -127,6 +166,43 @@ void do_logout(
 }
 
 
+//Retrieves a chunk
+void do_get_chunk(
+	mg_connection* conn,
+	const mg_request_info* request_info)
+{
+	//Check session id here
+	
+	//Extract the chunk index here
+	ChunkId idx;
+	idx.x = get_int("x", request_info);
+	idx.y = get_int("y", request_info);
+	idx.z = get_int("z", request_info);
+	
+	cout << "chunk index = " << idx.x << "," << idx.y << "," << idx.z << endl;
+	auto chunk = game_instance->game_map->get_chunk(idx);	
+	printf("chunk = %08x\n", chunk);
+	
+	if(chunk == NULL)
+	{
+		mg_printf(conn, "%s", ajax_reply_start);
+		return;
+	}
+
+	const int BUF_LEN = 32*32*32*2;
+	uint8_t chunk_buf[BUF_LEN];
+	int len = chunk->compress(chunk_buf, BUF_LEN);
+	
+	printf("len = %d\n", len);
+	if(len < 0)
+	{
+		mg_printf(conn, "%s", ajax_reply_start);
+		return;
+	}
+	
+	ajax_send_binary(conn, (const void*)chunk_buf, len);	
+}
+
 //Event dispatch
 static void *event_handler(enum mg_event event,
                            struct mg_connection *conn,
@@ -146,6 +222,9 @@ static void *event_handler(enum mg_event event,
 		else if(strcmp(request_info->uri, "/q")	 == 0)
 		{ do_logout(conn, request_info);
 		}
+		else if(strcmp(request_info->uri, "/g") == 0)
+		{ do_get_chunk(conn, request_info);
+		}
 		else
 		{ return NULL;
 		}
@@ -159,6 +238,8 @@ static void *event_handler(enum mg_event event,
 
 int main(int argc, char** argv)
 {
+	init();
+
 	mg_context *context = mg_start(&event_handler, options);
 	assert(context != NULL);
 

@@ -60,6 +60,7 @@ Game.init = function(canvas)
 		return res;
 	}
 	
+	/*
 	//TESTING CODE:  create a random chunk and stick it in the map
 	var data = new Uint8Array(34*34*34);
 	
@@ -75,6 +76,7 @@ Game.init = function(canvas)
 	
 	//Add the chunk to the map
 	Map.add_chunk(new Chunk(0, 0, 0, data));
+	*/
 	
 	Game.resize();
 	

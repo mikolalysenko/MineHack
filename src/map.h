@@ -1,49 +1,25 @@
 #ifndef MAP_H
 #define MAP_H
 
-#include <iostream>
-#include <cstdlib>
-#include <cstdint>
+#include <map>
+#include "chunk.h"
+#include "worldgen.h"
 
-#define CHUNK_X 32
-#define CHUNK_Y 32
-#define CHUNK_Z 32
-
-namespace MapData
+namespace Game
 {
-	enum class Block : std::uint8_t
-	{
-		Air,
-		Stone,
-		Dirt,
-		Grass,
-		Cobblestone,
-		Wood,
-		Log
-	};
 
-	struct ChunkIndex
-	{
-		std::int32_t x, y, z;
-	};
-
-	struct Chunk
-	{
-		ChunkIndex idx;
-		Block data[CHUNK_X+2][CHUNK_Y+2][CHUNK_Z+2];
-		
-		//Compress this chunk into the target buffer
-		//Returns the length of the encoded chunk, or -1 if it failed
-		int compress(void* target, size_t len);
-	};
-	
+	//This is basically a data structure which implements a caching/indexing system for chunks
 	struct Map
 	{
 		//Map constructor
-		Map();
+		Map(WorldGen *w) : world_gen(w) {}
 		
-		//
-		Chunk* get_chunk(ChunkIndex);
+		//Retrieves the specific chunk
+		Chunk* get_chunk(const ChunkId&);
+		
+	private:
+		std::map<std::uint64_t, Chunk*>  chunks;
+		WorldGen* world_gen;
 	};
 };
 

@@ -1,30 +1,28 @@
 #include "map.h"
 
 using namespace std;
-using namespace MapData;
 
 
-int Chunk::compress(void* buffer, size_t len)
+namespace Game
 {
-	auto data_ptr = data[0][0];
-	auto buf_ptr = (uint8_t*) buffer;
-	auto eof_ptr = buf_ptr + len;
+
+//Retrieves a particular chunk from the map
+Chunk* Map::get_chunk(const ChunkId& idx)
+{
+	uint64_t hash = idx.hash();
 	
-	for(size_t i=0; i<(CHUNK_X+2)*(CHUNK_Y+2)*(CHUNK_Z+2); )
+	//Check if contained in map
+	auto iter = chunks.find(hash);
+	
+	if(iter == chunks.end())
 	{
-		Block cur = *data_ptr;
-		
-		size_t l;
-		for(l=1; 
-			l<256 && 
-			i+l<(CHUNK_X+2)*(CHUNK_Y+2)*(CHUNK_Z+2) && 
-			data_ptr[l] == cur; ++l)
-		{
-		}
-		
-		i += l;
-		data_ptr += l;
+		auto nchunk = world_gen->generate_chunk(idx);
+		chunks[hash] = nchunk;
+		return nchunk;
 	}
+	
+	return (*iter).second;
 }
 
 
+};

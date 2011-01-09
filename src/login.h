@@ -3,7 +3,7 @@
 
 #include <string>
 
-namespace Login
+namespace Server
 {
 	void init_login();
 	

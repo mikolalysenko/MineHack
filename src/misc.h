@@ -3,6 +3,9 @@
 
 #include <pthread.h>
 
+#include "mongoose.h"
+
+
 struct ReadLock
 {
 	pthread_rwlock_t *lock;
