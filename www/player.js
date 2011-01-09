@@ -87,3 +87,12 @@ Player.tick = function()
 		move(up, -Player.speed);
 		
 }
+
+Player.chunk = function()
+{
+	return [
+		Math.floor(Player.pos[0]) >> 5,
+		Math.floor(Player.pos[1]) >> 5,
+		Math.floor(Player.pos[2]) >> 5 ];
+}
+

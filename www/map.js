@@ -49,7 +49,6 @@ ChunkVB.prototype.set_dirty = function(gl)
 	this.dirty = true;
 }
 
-
 //Construct vertex buffer for this chunk
 ChunkVB.prototype.gen_vb = function(gl)
 {
@@ -237,17 +236,17 @@ ChunkVB.prototype.gen_vb = function(gl)
 	if(this.vb == null)
 		this.vb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);	
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.DYNAMIC_DRAW);
 	
 	if(this.ib == null)
 		this.ib = gl.createBuffer();
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.DYNAMIC_DRAW);
 	
 	if(this.tb == null)
 		this.tb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(tex_coords), gl.STATIC_DRAW);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(tex_coords), gl.DYNAMIC_DRAW);
 	
 	//Clean up temporary data
 	delete vertices;
@@ -258,7 +257,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 	this.dirty = false;
 }
 
-
+//Draws a chunk
 ChunkVB.prototype.draw = function(gl, chunk_shader)
 {
 	if(this.dirty)
@@ -274,6 +273,7 @@ ChunkVB.prototype.draw = function(gl, chunk_shader)
 	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
 }
 
+//Releases the resources associated to a chunk
 ChunkVB.prototype.release = function(gl)
 {
 	if(this.vb)
@@ -383,30 +383,15 @@ function Chunk(x, y, z, data)
 	];
 }
 
-
+//The dimensions of a chunk
 Chunk.prototype.DIMS = [32, 32, 32];
 
-
+//Returns true of the chunk is in the frustum
 Chunk.prototype.in_frustum = function(mat)
 {
+	//TODO: Implement frustum test here
 	return true;
 }
-
-Chunk.prototype.block = function(x, y, z)
-{
-	//If out of bounds, do a look up globally
-	if(x < 0 || y < 0 || z < 0 ||
-		x >= this.DIMS[0] || 
-		y >= this.DIMS[1] || 
-		z >= this.DIMS[2])
-		return Map.get_block(
-			this.x * this.DIMS[0] + x,
-			this.y * this.DIMS[1] + y,
-			this.z * this.DIMS[2] + z);
-
-	return this.data[x + this.DIMS[0]*(y + this.DIMS[1]*z) ];
-}
-
 
 //Sets the block type and updates vertex buffers as needed
 Chunk.prototype.set_block = function(x, y, z, b)
@@ -422,16 +407,18 @@ Chunk.prototype.set_block = function(x, y, z, b)
 		this.dirty_corners(Game.gl);
 	}
 
-
 	if(x < 2)
 	{
 		this.left_vb.set_dirty();
 		if(x < 1)
 		{
 			var c = Map.lookup_chunk(this.x-1, this.y, this.z);
-			c.right_vb.set_dirty();
-			if(corner)
-				c.dirty_corners();
+			if(c)
+			{
+				c.right_vb.set_dirty();
+				if(corner)
+					c.dirty_corners();
+			}
 		}
 	}
 	if(x >= this.DIMS[0] - 2)
@@ -440,18 +427,70 @@ Chunk.prototype.set_block = function(x, y, z, b)
 		if(x >= this.DIMS[0] - 1)
 		{
 			var c = Map.lookup_chunk(this.x+1, this.y, this.z);
-			c.left_vb.set_dirty();
-			if(corner)
-				c.set_dirty();
+			if(c)
+			{
+				c.left_vb.set_dirty();
+				if(corner)
+					c.dirty_corners();
+			}
 		}
 	}
 
 
-	//TODO: add cases for y,z
+	if(y < 2)
+	{
+		this.bottom_vb.set_dirty();
+		if(y < 1)
+		{
+			var c = Map.lookup_chunk(this.x, this.y-1, this.z);
+			c.top_vb.set_dirty();
+			if(corner)
+				c.dirty_corners();
+		}
+	}
+	if(y >= this.DIMS[1] - 2)
+	{
+		this.top_vb.set_dirty();
+		if(y >= this.DIMS[1] - 1)
+		{
+			var c = Map.lookup_chunk(this.x, this.y+1, this.z);
+			if(c)
+			{
+				c.bottom_vb.set_dirty();
+				if(corner)
+					c.dirty_corners();
+			}
+		}
+	}
 
+	if(z < 2)
+	{
+		this.front_vb.set_dirty();
+		if(z < 1)
+		{
+			var c = Map.lookup_chunk(this.x, this.y, this.z-1);
+			c.back_vb.set_dirty();
+			if(corner)
+				c.dirty_corners();
+		}
+	}
+	if(z >= this.DIMS[2] - 2)
+	{
+		this.back_vb.set_dirty();
+		if(z >= this.DIMS[2] - 1)
+		{
+			var c = Map.lookup_chunk(this.x, this.y, this.z+1);
+			if(c)
+			{
+				c.front_vb.set_dirty();
+				if(corner)
+					c.dirty_corners();
+			}
+		}
+	}
 }
 
-
+//Sets the dirty flag on the corners
 Chunk.prototype.dirty_corners = function()
 {
 	for(var i=0; i<12; i++)
@@ -470,6 +509,21 @@ Chunk.prototype.dirty_vbs = function()
 	this.dirty_corners();
 }
 
+//Forces a chunk to regenerate its vbs
+Chunk.prototype.force_regen = function(gl)
+{
+	this.int_vb.gen_vb(gl);
+	this.left_vb.gen_vb(gl);
+	this.right_vb.gen_vb(gl);
+	this.top_vb.gen_vb(gl);
+	this.bottom_vb.gen_vb(gl);
+	this.back_vb.gen_vb(gl);
+	this.front_vb.gen_vb(gl);
+	for(var i=0; i<12; i++)
+		this.corner_vbs[i].gen_vb(gl);
+}
+
+//Draws the chunk
 Chunk.prototype.draw = function(gl, chunk_shader, cam)
 {
 	if(!this.in_frustum(cam))
@@ -496,6 +550,7 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam)
 		this.corner_vbs[i].draw(gl, chunk_shader);
 }
 
+//Releases a chunk and its associated resources
 Chunk.prototype.release = function(gl)
 {
 	this.int_vb.release(gl);
@@ -522,12 +577,14 @@ Chunk.prototype.release = function(gl)
 	delete this.data;
 }
 
+//The map
 var Map =
 {
-	index : {},
-	terrain_tex : null,
-	max_chunks : 1024,
-	chunk_count : 0
+	index			: {},	//The chunk index
+	terrain_tex		: null,
+	max_chunks		: 1024,
+	chunk_count 	: 0,
+	pending_chunks	: 0
 };
 
 Map.init = function(gl)
@@ -579,11 +636,19 @@ Map.init = function(gl)
 Map.update_cache = function()
 {
 	//Grab all the chunks near the player
-	for(var i=(Player.pos[0]>>5) - 3; i<=(Player.pos[0]>>5) + 3; i++)
-	for(var j=(Player.pos[1]>>5) - 3; j<=(Player.pos[1]>>5) + 3; j++)
-	for(var k=(Player.pos[2]>>5) - 3; k<=(Player.pos[2]>>5) + 3; k++)
+	var c = Player.chunk();
+	
+	for(var i=c[0] - 2; i<=c[0] + 2; i++)
+	for(var j=c[1] - 2; j<=c[1] + 2; j++)
+	for(var k=c[2] - 2; k<=c[2] + 2; k++)
 	{
 		Map.fetch_chunk(i, j, k);
+	}
+	
+	//If there are no pending chunks, grab a few random chunks from the boundary
+	if(Map.pending_chunks == 0)
+	{
+		//Precache chunks near player
 	}
 	
 	//Remove old chunks
@@ -655,12 +720,14 @@ Map.fetch_chunk = function(x, y, z)
 	if(Map.lookup_chunk(x,y,z))
 		return;
 
+	++Map.pending_chunks;
+
 	//Add new chunk, though leave it empty
 	var chunk = new Chunk(x, y, z, new Uint8Array(32*32*32));
 	Map.add_chunk(chunk);
 
 	asyncGetBinary("g?x="+x+"&y="+y+"&z="+z, function(arr)
-	{
+	{	
 		if(arr.length == 0)
 			Map.remove_chunk(chunk);
 		
@@ -693,21 +760,25 @@ Map.fetch_chunk = function(x, y, z)
 			if(c)
 			{
 				c.bottom_vb.set_dirty();
-				c.dirty_corners(Game.gl);
+				c.dirty_corners();
 			}
 			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z-1);
 			if(c)
 			{
 				c.back_vb.set_dirty();
-				c.dirty_corners(Game.gl);
+				c.dirty_corners();
 			}
 			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
 			if(c)
 			{
 				c.front_vb.set_dirty();
-				c.dirty_corners(Game.gl);
+				c.dirty_corners();
 			}
+			
+			chunk.force_regen(Game.gl);
 		}
+		
+		--Map.pending_chunks;
 	});
 }
 
@@ -768,4 +839,49 @@ Map.set_block = function(x, y, z, b)
 	return c.set_block(bx, by, bz, b);
 }
 
+//Traces a ray into the map, returns the index of the block hit and its type
+// Meant for UI actions, not particularly fast over long distances
+Map.trace_ray = function(
+	ox, oy, oz,
+	dx, dy, dz,
+	maxd)
+{
+	//Normalize D
+	var ds = Math.sqrt(dx*dx + dy*dy + dz*dz);
+	dx /= ds;
+	dy /= ds;
+	dz /= ds;
+	
+	//Step block-by-bloc along ray
+	var t = 0.0;
+	
+	while(t <= max_d)
+	{
+		var b = Map.get_block(Math.round(ox), Math.round(oy), Math.round(oz));
+		if(b != 0)
+			return [ox, oy, oz, b];
+			
+		var step = 1.0;
+		
+		var fx = ox - Math.floor(ox);
+		var fy = oy - Math.floor(oy);
+		var fz = oz - Math.floor(oz);
+		
+		if(dx < -0.0001)	step = min(step, -fx/dx);
+		if(dx > 0.0001)		step = min(step, (1.0 - fx)/dx);
+		
+		if(dy < -0.0001)	step = min(step, -fy/dy);
+		if(dy > 0.0001)		step = min(step, (1.0 - fy)/dy);
+		
+		if(dz < -0.0001)	step = min(step, -fz/dz);
+		if(dz > 0.0001)		step = min(step, (1.0 - fz)/dz);
+		
+		t += step;
+		ox += dx * step;
+		oy += dy * step;
+		oz += dz * step;
+	}
+	
+	return [];
+}
 
