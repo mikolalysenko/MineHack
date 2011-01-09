@@ -9,6 +9,7 @@ namespace Game
 //Retrieves a particular chunk from the map
 Chunk* Map::get_chunk(const ChunkId& idx)
 {
+/*
 	uint64_t hash = idx.hash();
 	
 	//Check if contained in map
@@ -22,7 +23,8 @@ Chunk* Map::get_chunk(const ChunkId& idx)
 	}
 	
 	return (*iter).second;
+*/
+	return world_gen->generate_chunk(idx);
 }
-
 
 };

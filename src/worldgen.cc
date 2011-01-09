@@ -4,7 +4,7 @@
 using namespace std;
 
 
-#define SURFACE_LEVEL	(1<<20)
+#define SURFACE_LEVEL	(1<<20) + 10
 
 
 namespace Game

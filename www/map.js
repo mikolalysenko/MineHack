@@ -120,7 +120,6 @@ Chunk.prototype.gen_vb = function(gl)
 		tex_coords.push(tx+dt);
 		tex_coords.push(ty);
 
-
 		tex_coords.push(tx+dt);
 		tex_coords.push(ty+dt);
 		
@@ -224,15 +223,18 @@ Chunk.prototype.gen_vb = function(gl)
 
 	this.num_elements = indices.length;
 	
-	this.vb = gl.createBuffer();
+	if(this.vb == null)
+		this.vb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);	
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 	
-	this.ib = gl.createBuffer();
+	if(this.ib == null)
+		this.ib = gl.createBuffer();
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
 	
-	this.tb = gl.createBuffer();
+	if(this.tb == null)
+		this.tb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(tex_coords), gl.STATIC_DRAW);
 }
@@ -261,6 +263,9 @@ Chunk.prototype.draw = function(gl, chunk_shader)
 Chunk.prototype.release = function(gl)
 {
 	//Release chunk here
+	gl.deleteBuffer(this.vb);
+	gl.deleteBuffer(this.ib);
+	gl.deleteBuffer(this.tb);
 }
 
 var Map =
@@ -397,6 +402,28 @@ Map.add_chunk = function(chunk)
 	var str = Map.index2str(chunk.x, chunk.y, chunk.z);
 	Map.index[str] = chunk;
 	Map.chunks.push(chunk);
+	
+	/*
+	//Regenerate vertex buffers for neighboring chunks
+	var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
+	if(c)
+		c.gen_vb(Game.gl);
+	c = Map.lookup_chunk(chunk.x+1, chunk.y, chunk.z);
+	if(c)
+		c.gen_vb(Game.gl);
+	c = Map.lookup_chunk(chunk.x, chunk.y-1, chunk.z);
+	if(c)
+		c.gen_vb(Game.gl);
+	c = Map.lookup_chunk(chunk.x, chunk.y+1, chunk.z);
+	if(c)
+		c.gen_vb(Game.gl);
+	c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z-1);
+	if(c)
+		c.gen_vb(Game.gl);
+	c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
+	if(c)
+		c.gen_vb(Game.gl);
+	*/
 }
 
 //Hash look up in map
@@ -413,7 +440,7 @@ Map.get_block = function(x, y, z)
 	var c = Map.lookup_chunk(cx, cy, cz);
 	
 	if(!c)
-		return -1;
+		return 0;
 	
 	var bx = (x & 31), by = (y & 31), bz = (z & 31);
 	return c.block(bx, by, bz);
