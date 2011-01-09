@@ -34,6 +34,11 @@ Chunk* WorldGen::generate_chunk(const ChunkId& idx)
 		res->data[i][j][k] = generate_block(x, y, z);
 	}
 	
+	for(int i=0; i<256; i++)
+	{
+		res->data[0][0][i] = (Block)i;
+	}
+	
 	return res;
 }
 

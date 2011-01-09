@@ -86,11 +86,19 @@ asyncGetBinary = function(url, handler)
 		{
 			if(XHR.status == 200 || XHR.status == 304)
 			{
-				handler(["Ok", new Uint8Array(XHR.responseText)]);
+				var str = XHR.responseText;
+				var arr = new Uint8Array(str.length);
+				
+				for(var i=0; i<str.length; i++)
+				{
+					arr[i] = str.charCodeAt(i) & 0xff;
+				}
+			
+				handler(arr);
 			}
 			else
 			{
-				handler(["Fail", XHR.statusText]);
+				handler(new Uint8Array(0));
 			}
 		}
 	}

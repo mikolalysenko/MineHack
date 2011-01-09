@@ -61,7 +61,7 @@ void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 	mg_printf(conn,
 	  "HTTP/1.1 200 OK\n"
 	  "Cache: no-cache\n"
-	  "Content-Type: application/octet-stream; charset=utf-8\n"
+	  "Content-Type: application/octet-stream; charset=x-user-defined\n"
 	  "Content-Transfer-Encoding: binary\n"
 	  "Content-Length: %d\n"
 	  "\n", len);
@@ -199,6 +199,13 @@ void do_get_chunk(
 		mg_printf(conn, "%s", ajax_reply_start);
 		return;
 	}
+	
+	printf("buf = ");
+	for(int i=0; i<len; i++)
+	{
+		printf("%d,", chunk_buf[i]);
+	}
+	printf("\n");
 	
 	ajax_send_binary(conn, (const void*)chunk_buf, len);	
 }
