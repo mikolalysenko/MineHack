@@ -389,8 +389,38 @@ Chunk.prototype.DIMS = [32, 32, 32];
 //Returns true of the chunk is in the frustum
 Chunk.prototype.in_frustum = function(mat)
 {
-	//TODO: Implement frustum test here
-	return true;
+	var c = Player.chunk();
+	
+	debugger;
+	
+	var box = [
+		[((this.x-c[0])<<5),    ((this.y-c[1])<<5),    ((this.z-c[2])<<5),    1],
+		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5),    ((this.z-c[2])<<5),    1],
+		[((this.x-c[0])<<5),    ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5),    1],
+		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5),    1],
+		[((this.x-c[0])<<5),    ((this.y-c[1])<<5),    ((this.z-c[2])<<5)+32, 1],
+		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5),    ((this.z-c[2])<<5)+32, 1],
+		[((this.x-c[0])<<5),    ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5)+32, 1],
+		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5)+32, 1]];
+		
+	var in_p = 0;
+	
+	for(var i=0; i<8; i++)
+	{
+		var v = hgmult(mat, box[i]);
+		
+		if(v[0] <  v[3]) in_p |= (1 << 0);
+		if(v[0] > -v[3]) in_p |= (1 << 1);
+		if(v[1] <  v[3]) in_p |= (1 << 2);
+		if(v[1] > -v[3]) in_p |= (1 << 3);
+		if(v[2] <  v[3]) in_p |= (1 << 4);
+		if(v[2] > -v[3]) in_p |= (1 << 5);
+		
+		if(in_p == 63)
+			return true;
+	}
+
+	return false;
 }
 
 //Sets the block type and updates vertex buffers as needed

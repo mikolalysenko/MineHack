@@ -123,3 +123,18 @@ mmult = function(A, B)
 	}
 	return C;
 }
+
+hgmult = function(M, V)
+{
+	var R = [0, 0, 0, 0];
+	
+	for(var j=0; j<4; j++)
+	{
+		for(var i=0; i<4; i++)
+		{
+			R[i] = M[i+4*j] * V[j]
+		}
+	}
+	
+	return R;
+}
