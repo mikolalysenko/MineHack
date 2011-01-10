@@ -843,12 +843,12 @@ Map.set_block = function(x, y, z, b)
 	return c.set_block(bx, by, bz, b);
 }
 
-//Traces a ray into the map, returns the index of the block hit and its type
+//Traces a ray into the map, returns the index of the block hit, its type and the hit normal
 // Meant for UI actions, not particularly fast over long distances
 Map.trace_ray = function(
 	ox, oy, oz,
 	dx, dy, dz,
-	maxd)
+	max_d)
 {
 	//Normalize D
 	var ds = Math.sqrt(dx*dx + dy*dy + dz*dz);
@@ -859,26 +859,86 @@ Map.trace_ray = function(
 	//Step block-by-bloc along ray
 	var t = 0.0;
 	
+	var norm = [0, 0, 0];
+	
 	while(t <= max_d)
 	{
 		var b = Map.get_block(Math.round(ox), Math.round(oy), Math.round(oz));
 		if(b != 0)
-			return [ox, oy, oz, b];
+			return [ox, oy, oz, b, norm[0], norm[1], norm[2]];
 			
 		var step = 1.0;
 		
 		var fx = ox - Math.floor(ox);
 		var fy = oy - Math.floor(oy);
 		var fz = oz - Math.floor(oz);
+				
+		if(dx < -0.0001)
+		{
+			if(fx < 0.0001)
+				fx = 1.0;
 		
-		if(dx < -0.0001)	step = min(step, -fx/dx);
-		if(dx > 0.0001)		step = min(step, (1.0 - fx)/dx);
+			var s = -fx/dx;
+			
+			if(s < step)
+			{
+				norm = [1, 0, 0];
+				step = s;
+			}
+		}
+		if(dx > 0.0001)
+		{
+			var s = (1.0-fx)/dx;
+			if(s < step)
+			{
+				norm = [-1, 0, 0];
+				step = s;
+			}
+		}
 		
-		if(dy < -0.0001)	step = min(step, -fy/dy);
-		if(dy > 0.0001)		step = min(step, (1.0 - fy)/dy);
+		if(dy < -0.0001)
+		{
+			if(fy < 0.0001)
+				fy = 1.0;
+
+			var s = -fy/dy;
+			if(s < step)
+			{
+				norm = [0, 1, 0];
+				step = s;
+			}
+		}
+		if(dy > 0.0001)
+		{
+			var s = (1.0-fy)/dy;
+			if(s < step)
+			{
+				norm = [0, -1, 0];
+				step = s;
+			}
+		}
+
+		if(dz < -0.0001)
+		{
+			if(fz < 0.0001)
+				fz = 1.0;
 		
-		if(dz < -0.0001)	step = min(step, -fz/dz);
-		if(dz > 0.0001)		step = min(step, (1.0 - fz)/dz);
+			var s = -fz/dz;
+			if(s < step)
+			{
+				norm = [0, 0, 1];
+				step = s;
+			}
+		}
+		if(dz > 0.0001)
+		{
+			var s = (1.0-fz)/dz;
+			if(s < step)
+			{
+				norm = [0, 0, -1];
+				step = s;
+			}
+		}
 		
 		t += step;
 		ox += dx * step;

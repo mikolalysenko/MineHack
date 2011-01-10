@@ -10,7 +10,8 @@ var Player =
 		65 : "left",
 		68 : "right",
 		32 : "jump",
-		67 : "crouch"
+		67 : "crouch",
+		66 : "dig"
 	},
 	
 	//Input state
@@ -20,7 +21,8 @@ var Player =
 		"left" : 0,
 		"right" : 0,
 		"jump" : 0,
-		"crouch" : 0
+		"crouch" : 0,
+		"dig" : 0
 	},
 	
 	//
@@ -63,6 +65,16 @@ Player.init = function()
 		Player.dy = (event.y - cy) / Game.canvas.height;
 	};
 	
+	Game.canvas.onmousedown = function(event)
+	{
+		Player.input["dig"] = 1;
+	}
+	
+	Game.canvas.onmouseup = function(event)
+	{
+		Player.input["dig"] = 0;
+	}
+	
 	return "Ok";
 }
 
@@ -96,6 +108,21 @@ Player.tick = function()
 		
 	if(Player.input["crouch"] == 1)
 		move(up, -Player.speed);
+
+	if(Player.input["dig"] == 1)
+	{
+		var R = Player.eye_ray();
+		
+		var hit_rec = Map.trace_ray(
+			R[0][0], R[0][1], R[0][2], 
+			R[1][0], R[1][1], R[1][2],
+			5);
+			
+		if(hit_rec != [])
+		{
+			Map.set_block(hit_rec[0], hit_rec[1], hit_rec[2], 0);
+		}
+	}
 
 
 	Player.yaw -= Player.dx * Player.dx * Player.dx;
@@ -149,8 +176,7 @@ Player.view_matrix = function()
 	c[0] *= 32;
 	c[1] *= 32;
 	c[2] *= 32;
-	
-	
+		
 	var trans = new Float32Array([
 		1, 0, 0, 0,
 		0, 1, 0, 0,
@@ -158,5 +184,13 @@ Player.view_matrix = function()
 		c[0]-Player.pos[0], c[1]-Player.pos[1], c[2]-Player.pos[2], 1])
 	
 	return mmult(rot, trans);
+}
+
+
+Player.eye_ray = function()
+{
+	var view_m = Player.view_matrix();
+	var d = [ view_m[8], view_m[9], -view_m[10] ];
+	return [ Player.pos, d ];
 }
 
