@@ -68,7 +68,7 @@ Player.init = function()
 
 Player.tick = function()
 {
-	front = [ -Math.sin(Player.pitch), 0, -Math.cos(Player.pitch) ];
+	front = [ -Math.sin(Player.yaw), 0, -Math.cos(Player.yaw) ];
 	right = [ -front[2], 0, -front[0]];
 	up = [0, 1, 0];
 
@@ -98,19 +98,20 @@ Player.tick = function()
 		move(up, -Player.speed);
 
 
-	Player.pitch += Player.dx * Player.dx * Player.dx * 4.0;
+	Player.yaw -= Player.dx * Player.dx * Player.dx;
+
+	if(Player.yaw > Math.PI)
+		Player.yaw -= 2.0 * Math.PI;
+	if(Player.yaw < -Math.PI)
+		Player.yaw += 2.0 * Math.PI;
 	
-	if(Player.pitch > 180.0)
-		Player.pitch -= 360.0;
-	if(Player.pitch < -180.0)
-		Player.pitch += 360.0;
-	
-	Player.yaw += Player.dy * Player.dy * Player.dy * 4.0;
-	
-	if(Player.yaw < -45.0)
-		Player.yaw = -45.0;
-	if(Player.yaw > 45.0)
-		Player.yaw = 45.0;
+	Player.pitch += Player.dy * Player.dy * Player.dy;
+
+	if(Player.pitch < -Math.PI/2.0)
+		Player.pitch = -Math.PI/2.0;
+	if(Player.pitch > Math.PI/2.0)
+		Player.pitch = Math.PI/2.0;
+
 }
 
 //Returns the player's chunk
@@ -125,16 +126,24 @@ Player.chunk = function()
 //Create view matrix
 Player.view_matrix = function()
 {
-	var cp = Math.cos(Player.pitch * Math.PI / 180.0);
-	var sp = Math.sqrt(1.0 - cp*cp);
-	var cy = Math.cos(Player.yaw * Math.PI / 180.0);
-	var sy = Math.sqrt(1.0 - cy*cy);
+	var cp = Math.cos(Player.pitch);
+	var sp = Math.sin(Player.pitch);
+	var cy = Math.cos(Player.yaw);
+	var sy = Math.sin(Player.yaw);
 	
-	var rot = new Float32Array([
-		 cy*cp,  sy,  cy*sp, 0,
-		-sy*cp,  cy, -sy*sp, 0,
-		-sp,     0,   cp,    0,
-		0, 0, 0, 1]);
+	var rotp = new Float32Array([
+		 1,   0,  0, 0,
+		 0,  cp, sp, 0,
+		 0, -sp, cp, 0,
+		 0,   0,  0, 1]); 
+		  
+	var roty = new Float32Array([
+		 cy, 0, sy, 0,
+		  0, 1,  0, 0,
+		-sy, 0, cy, 0,
+		  0, 0,  0, 1]);
+	
+	var rot = mmult(rotp, roty);
 		
 	var c = Player.chunk();	
 	c[0] *= 32;
