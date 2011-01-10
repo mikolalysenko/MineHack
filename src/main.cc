@@ -1,3 +1,6 @@
+#include <unistd.h>
+#include <fcntl.h>
+
 #include <iostream>
 #include <sstream>
 #include <cassert>
@@ -25,10 +28,19 @@ static const char *ajax_reply_start =
   "Cache: no-cache\n"
   "Content-Type: application/x-javascript\n"
   "\n";
-
-
+  
 
 World * game_instance = NULL;
+
+void ajax_ok(mg_connection* conn)
+{
+	mg_printf(conn, "%s", ajax_reply_start);
+}
+
+void ajax_error(mg_connection* conn)
+{
+	mg_printf(conn, "HTTP/1.1 403 Forbidden\nCache: no-cache\n\n");
+}
 
 //Server initialization
 void init()
@@ -55,7 +67,7 @@ int get_int(const char* id, const mg_request_info *req)
 	return res;
 }
 
-
+//Pushes a binary message to the client
 void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 {
 	mg_printf(conn,
@@ -89,7 +101,7 @@ bool get_session_id(const mg_request_info* request_info, SessionID& res)
 	if(valid_session_id(res))
 		return true;
 	
-	return true;
+	return false;
 }
 
 //Handle a user login
@@ -97,24 +109,31 @@ void do_login(
 	mg_connection* conn, 
 	const mg_request_info* request_info)
 {
-	char user_name[256];
+	char user_name[32];
 	char password_hash[256];
 	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, "n", user_name, 256);
+	mg_get_var(qs, qs_len, "n", user_name, 32);
 	mg_get_var(qs, qs_len, "p", password_hash, 256);
-	
-	SessionID key;
 	
 	cout << "got login: " << user_name << ", pwd hash = " << password_hash << endl;
 	
+	//Retrieve session id and verify user name
+	SessionID key;
 	if(verify_user_name(user_name, password_hash) && create_session(user_name, key))
 	{
+		//Push login event to server
+		InputEvent ev;
+		ev.type = InputEventType::PlayerJoin;
+		ev.session_id = key;
+		memcpy(ev.join_event.name, user_name, 32);
+		game_instance->add_event(ev);
+	
+		//Send key to client
 		stringstream ss;
 		ss << key;
-	
 		mg_printf(conn, "%sOk\n%s", ajax_reply_start, ss.str().c_str());
 	}
 	else
@@ -161,6 +180,11 @@ void do_logout(
 	if(get_session_id(request_info, session_id))
 	{
 		delete_session(session_id);
+		
+		InputEvent ev;
+		ev.type = InputEventType::PlayerLeave;
+		ev.session_id = session_id;
+		game_instance->add_event(ev);
 	}
 	mg_printf(conn, "%s\nOk", ajax_reply_start);
 }
@@ -172,6 +196,14 @@ void do_get_chunk(
 	const mg_request_info* request_info)
 {
 	//Check session id here
+	SessionID session_id;
+	if(!get_session_id(request_info, session_id))
+	{
+		cout << "Invalid session" << endl;
+	
+		ajax_error(conn);
+		return;
+	}
 	
 	//Extract the chunk index here
 	ChunkId idx;
@@ -179,50 +211,78 @@ void do_get_chunk(
 	idx.y = get_int("y", request_info);
 	idx.z = get_int("z", request_info);
 	
-	cout << "chunk index = " << idx.x << "," << idx.y << "," << idx.z << endl;
-	auto chunk = game_instance->game_map->get_chunk(idx);	
-	printf("chunk = %08x\n", chunk);
-	
-	if(chunk == NULL)
-	{
-		mg_printf(conn, "%s", ajax_reply_start);
-		return;
-	}
-
+	//Extract the chunk
 	const int BUF_LEN = 32*32*32*2;
 	uint8_t chunk_buf[BUF_LEN];
-	int len = chunk->compress(chunk_buf, BUF_LEN);
-	
-	printf("len = %d\n", len);
+	int len = game_instance->get_compressed_chunk(session_id, idx, chunk_buf, BUF_LEN);
+		
 	if(len < 0)
 	{
-		mg_printf(conn, "%s", ajax_reply_start);
-		return;
+		ajax_error(conn);
 	}
-	
-	printf("buf = ");
-	for(int i=0; i<len; i++)
+	else
 	{
-		printf("%d,", chunk_buf[i]);
+		ajax_send_binary(conn, (const void*)chunk_buf, len);	
 	}
-	printf("\n");
-	
-	ajax_send_binary(conn, (const void*)chunk_buf, len);	
 }
 
+//Sets a block
 void do_set_block(
 	mg_connection* conn,
 	const mg_request_info* request_info)
 {
-	//Check session id here
+	//Check session id
+	SessionID session_id;
+	if(!get_session_id(request_info, session_id))
+	{
+		ajax_error(conn);
+		return;
+	}
 	
 	//Extract the chunk index here
 	int block_x = get_int("x", request_info);
 	int block_y = get_int("y", request_info);
 	int block_z = get_int("z", request_info);
 	int block_t = get_int("b", request_info);
+	
+	//Send input event
+	InputEvent ev;
+	ev.type = InputEventType::SetBlock;
+	ev.session_id = session_id;
+	ev.block_event.x = block_x;
+	ev.block_event.y = block_y;
+	ev.block_event.z = block_z;
+	ev.block_event.b = (Block)block_t;
+	game_instance->add_event(ev);
+	
+	ajax_ok(conn);
+}
 
-	mg_printf(conn, "%s", ajax_reply_start);
+//Pulls pending events from client
+void do_heartbeat(
+	mg_connection* conn,
+	const mg_request_info* request_info)
+{
+	//Check session id
+	SessionID session_id;
+	if(!get_session_id(request_info, session_id))
+	{
+		ajax_error(conn);
+		return;
+	}
+
+	const int BUF_LEN = (1<<16);
+	uint8_t msg_buf[BUF_LEN];
+	int len = game_instance->heartbeat(session_id, msg_buf, BUF_LEN);
+	
+	if(len > 0)
+	{
+		ajax_send_binary(conn, msg_buf, len);
+	}
+	else
+	{
+		ajax_error(conn);
+	}
 }
 
 //Event dispatch
@@ -247,6 +307,12 @@ static void *event_handler(enum mg_event event,
 		else if(strcmp(request_info->uri, "/g") == 0)
 		{ do_get_chunk(conn, request_info);
 		}
+		else if(strcmp(request_info->uri, "/s") == 0)
+		{ do_set_block(conn, request_info);
+		}
+		else if(strcmp(request_info->uri, "/h") == 0)
+		{ do_heartbeat(conn, request_info);
+		}
 		else
 		{ return NULL;
 		}
@@ -257,18 +323,70 @@ static void *event_handler(enum mg_event event,
 	return NULL;
 }
 
+//Handles a message from the server command line
+void handle_message(const char* str, size_t len)
+{
+	if(strcmp(str, "q") == 0)
+	{
+		//Quit!
+		game_instance->running = false;
+		cout << "Stopping server" << endl;
+	}
+	else
+	{
+		cout << "Unknown server command." << endl;
+	}
+}
 
+//The main server loop
+void loop()
+{
+	const size_t BUF_LEN = 1024;
+	char msg_buf[BUF_LEN];
+	int buf_ptr = 0;
+	
+	//Set stdin to non-blocking
+	fcntl(0, F_SETFL, O_NONBLOCK);
+	
+	while(game_instance->running)
+	{
+		game_instance->tick();
+		
+		//Need to do this to avoid blocking (is there a better way?)
+		while(true)
+		{
+			int c = getc(stdin);
+			if(c == EOF)
+				break;
+			
+			if(buf_ptr >= BUF_LEN-1 || c == '\n')
+			{
+				msg_buf[buf_ptr] = '\0';
+				handle_message(msg_buf, buf_ptr);
+				buf_ptr = 0;
+			}
+			else
+				msg_buf[buf_ptr++] = c;
+		}
+		
+		usleep(40);
+	}
+}
+
+//Program start point
 int main(int argc, char** argv)
 {
 	init();
-
+	
+	//Start web server
 	mg_context *context = mg_start(&event_handler, options);
 	assert(context != NULL);
-
-	// Wait until enter is pressed, then exit
 	cout << "Server started" << endl;
-	int c;
-	cin >> c;
+	
+	//Run main thread
+	loop();
+	
+	//Stop web server
 	mg_stop(context);
 	cout << "Server stopped" << endl;
 

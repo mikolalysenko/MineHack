@@ -761,7 +761,7 @@ Map.fetch_chunk = function(x, y, z)
 	var chunk = new Chunk(x, y, z, new Uint8Array(32*32*32));
 	Map.add_chunk(chunk);
 
-	asyncGetBinary("g?x="+x+"&y="+y+"&z="+z, function(arr)
+	asyncGetBinary("g?k="+Session.session_id+"&x="+x+"&y="+y+"&z="+z, function(arr)
 	{	
 		if(arr.length == 0)
 			Map.remove_chunk(chunk);

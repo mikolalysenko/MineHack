@@ -38,4 +38,22 @@ Chunk* Map::get_chunk(const ChunkId& idx)
 	return (*iter).second;
 }
 
+//Acquires a read lock for a particular region
+RegionReadLock::RegionReadLock(Map* map, const Region& r)
+{
+}
+
+RegionReadLock::~RegionReadLock()
+{
+}
+	
+//Acquires a write lock for a particular region
+RegionWriteLock::RegionWriteLock(Map* map, const Region& r)
+{
+}
+
+RegionWriteLock::~RegionWriteLock()
+{
+};
+
 };

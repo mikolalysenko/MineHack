@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <cstdint>
 
+#include <Eigen/Core>
+
 #define CHUNK_X 32
 #define CHUNK_Y 32
 #define CHUNK_Z 32
