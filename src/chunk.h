@@ -33,6 +33,9 @@ namespace Game
 		//Chunk coordinates are 21-bit unsigned ints
 		std::uint32_t x, y, z;
 		
+		ChunkId() : x(0), y(0), z(0) {}
+		ChunkId(uint32_t x_, uint32_t y_, uint32_t z_) : x(x_), y(y_), z(z_) {}
+		
 		//Generates a hash for this chunk id (which is actually a unique descriptor in this case)
 		std::uint64_t hash() const;
 	};
