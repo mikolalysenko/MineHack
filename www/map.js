@@ -531,10 +531,14 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam)
 		
 	this.last_tick = Game.tick_count;
 
+	var c = Player.chunk();
+
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
-								this.x*this.DIMS[0], this.y*this.DIMS[1], this.z*this.DIMS[2], 1]);
+								(this.x-c[0])*this.DIMS[0], 
+								(this.y-c[1])*this.DIMS[1], 
+								(this.z-c[2])*this.DIMS[2], 1]);
 	
 	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
 	

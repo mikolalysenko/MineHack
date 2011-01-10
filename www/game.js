@@ -100,25 +100,10 @@ Game.proj_matrix = function()
 							 0, 0, -1, 0]);
 }
 
-//Create view matrix
-Game.view_matrix = function()
-{
-	var cp = Math.cos(Player.pitch * Math.PI / 180.0);
-	var sp = Math.sqrt(1.0 - cp*cp);
-	var cy = Math.cos(Player.yaw * Math.PI / 180.0);
-	var sy = Math.sqrt(1.0 - cy*cy);
-	
-	return new Float32Array([
-		 cy*cp,  sy,  cy*sp, 0,
-		-sy*cp,  cy, -sy*sp, 0,
-		-sp,     0,   cp,    0,
-		-Player.pos[0], -Player.pos[1], -Player.pos[2], 1]);
-}
-
 //Creates the total cmera matrix
 Game.camera_matrix = function()
 {
-	return mmult(Game.proj_matrix(), Game.view_matrix());
+	return mmult(Game.proj_matrix(), Player.view_matrix());
 }
 
 Game.draw = function()
