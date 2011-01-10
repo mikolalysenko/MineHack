@@ -10,6 +10,7 @@ namespace Game
 //Future idea: switch to Hilbert order curve
 uint64_t ChunkId::hash() const
 {
+/*
 	static const uint64_t B[] = 
 	{
 		0xFFFF00000000FFFFULL,
@@ -29,6 +30,11 @@ uint64_t ChunkId::hash() const
 	}
 	
 	return bx | (by << 1) | (bz << 2);
+*/
+
+	return (uint64_t)x |
+		   (((uint64_t)y)<<21) |
+		   (((uint64_t)z)<<42);
 }
 
 

@@ -210,6 +210,21 @@ void do_get_chunk(
 	ajax_send_binary(conn, (const void*)chunk_buf, len);	
 }
 
+void do_set_block(
+	mg_connection* conn,
+	const mg_request_info* request_info)
+{
+	//Check session id here
+	
+	//Extract the chunk index here
+	int block_x = get_int("x", request_info);
+	int block_y = get_int("y", request_info);
+	int block_z = get_int("z", request_info);
+	int block_t = get_int("b", request_info);
+
+	mg_printf(conn, "%s", ajax_reply_start);
+}
+
 //Event dispatch
 static void *event_handler(enum mg_event event,
                            struct mg_connection *conn,

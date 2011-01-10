@@ -17,6 +17,11 @@ namespace Game
 		//Retrieves the specific chunk
 		Chunk* get_chunk(const ChunkId&);
 		
+		//Sets a block
+		void set_block(int x, int y, int z, Block t);
+		
+		Block get_block(int x, int y, int z);
+		
 	private:
 		std::map<std::uint64_t, Chunk*>  chunks;
 		WorldGen* world_gen;
