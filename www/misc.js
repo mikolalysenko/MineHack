@@ -132,7 +132,7 @@ hgmult = function(M, V)
 	{
 		for(var i=0; i<4; i++)
 		{
-			R[i] = M[i+4*j] * V[j]
+			R[i] += M[i+4*j] * V[j]
 		}
 	}
 	

@@ -387,35 +387,36 @@ function Chunk(x, y, z, data)
 Chunk.prototype.DIMS = [32, 32, 32];
 
 //Returns true of the chunk is in the frustum
-Chunk.prototype.in_frustum = function(mat)
+Chunk.prototype.in_frustum = function(m)
 {
 	var c = Player.chunk();
-	
-	debugger;
-	
-	var box = [
-		[((this.x-c[0])<<5),    ((this.y-c[1])<<5),    ((this.z-c[2])<<5),    1],
-		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5),    ((this.z-c[2])<<5),    1],
-		[((this.x-c[0])<<5),    ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5),    1],
-		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5),    1],
-		[((this.x-c[0])<<5),    ((this.y-c[1])<<5),    ((this.z-c[2])<<5)+32, 1],
-		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5),    ((this.z-c[2])<<5)+32, 1],
-		[((this.x-c[0])<<5),    ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5)+32, 1],
-		[((this.x-c[0])<<5)+32, ((this.y-c[1])<<5)+32, ((this.z-c[2])<<5)+32, 1]];
-		
+	var v = [(this.x-c[0])*32,    (this.y-c[1])*32,    (this.z-c[2])*32];
 	var in_p = 0;
 	
-	for(var i=0; i<8; i++)
+	
+	for(var dx=-1; dx<=32; dx+=33)
+	for(var dy=-1; dy<=32; dy+=33)
+	for(var dz=-1; dz<=32; dz+=33)	
 	{
-		var v = hgmult(mat, box[i]);
+		var q = [v[0] + dx, v[1] + dy, v[2] + dz];
 		
-		if(v[0] <  v[3]) in_p |= (1 << 0);
-		if(v[0] > -v[3]) in_p |= (1 << 1);
-		if(v[1] <  v[3]) in_p |= (1 << 2);
-		if(v[1] > -v[3]) in_p |= (1 << 3);
-		if(v[2] <  v[3]) in_p |= (1 << 4);
-		if(v[2] > -v[3]) in_p |= (1 << 5);
+		var w = q[0]*m[3] + q[1]*m[7] + q[2]*m[11] + m[15];
+		var x = q[0]*m[0] + q[1]*m[4] + q[2]*m[8]  + m[12];
 		
+		if(x <=  w) in_p |= 1;
+		if(x >= -w) in_p |= 2;
+		if(in_p == 63)
+			return true;
+		
+		var y = q[0]*m[1] + q[1]*m[5] + q[2]*m[9]  + m[13];
+		if(y <=  w) in_p |= 4;
+		if(y >= -w) in_p |= 8;
+		if(in_p == 63)
+			return true;
+			
+		var z = q[0]*m[2] + q[1]*m[6] + q[2]*m[10] + m[14];
+		if(z <=  w) in_p |= 16;
+		if(z >= -w) in_p |= 32;
 		if(in_p == 63)
 			return true;
 	}
