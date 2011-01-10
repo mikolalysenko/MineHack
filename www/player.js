@@ -190,7 +190,7 @@ Player.view_matrix = function()
 Player.eye_ray = function()
 {
 	var view_m = Player.view_matrix();
-	var d = [ view_m[8], view_m[9], -view_m[10] ];
+	var d = [ -view_m[2], -view_m[6], -view_m[10] ];
 	return [ Player.pos, d ];
 }
 
