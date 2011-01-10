@@ -81,7 +81,7 @@ Player.init = function()
 Player.tick = function()
 {
 	front = [ -Math.sin(Player.yaw), 0, -Math.cos(Player.yaw) ];
-	right = [ -front[2], 0, -front[0]];
+	right = [ -front[2], 0, front[0]];
 	up = [0, 1, 0];
 
 	var move = function(v, s)
