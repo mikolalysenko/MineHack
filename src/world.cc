@@ -71,7 +71,6 @@ int World::heartbeat(
 	//Handle all pending updates
 	auto p = (*piter).second;
 	int l = 0;
-	
 	auto iter = p->updates.begin();
 	for(; iter!=p->updates.end(); ++iter)
 	{

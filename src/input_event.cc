@@ -1,6 +1,59 @@
+#include <cassert>
 #include "input_event.h"
 
 using namespace Game;
+
+
+int DigEvent::extract(void* buf, size_t buf_len)
+{
+	uint8_t *ptr = (uint8_t*)buf;
+
+	if(buf_len < 9)
+		return -1;
+	
+	x = ptr[0] + (ptr[1]<<8) + (ptr[2]<<16);
+	y = ptr[3] + (ptr[4]<<8) + (ptr[5]<<16);
+	z = ptr[6] + (ptr[7]<<8) + (ptr[8]<<16);
+	
+	return 9;
+}
+
+
+int PlayerEvent::extract(void* buf, size_t buf_len)
+{
+	uint8_t *ptr = (uint8_t*)buf;
+
+	if(buf_len < 12)
+		return -1;
+		
+	x = ptr[0] + (ptr[1]<<8) + (ptr[2]<<16);
+	y = ptr[3] + (ptr[4]<<8) + (ptr[5]<<16);
+	z = ptr[6] + (ptr[7]<<8) + (ptr[8]<<16);
+	
+	pitch = ptr[9];
+	yaw = ptr[10];
+	input_state = ptr[11];
+	
+	return 12;
+}
+
+int BlockEvent::extract(void* buf, size_t buf_len)
+{
+	//TODO: Not implemented
+	return 0;
+}
+
+int JoinEvent::extract(void* buf, size_t buf_len)
+{
+	assert(false);	//not network serializable
+	return -1;
+}
+
+int LeaveEvent::extract(void* buf, size_t buf_len)
+{
+	assert(false); //not network serializable
+	return -1;
+}
 
 
 //Extracts an input event from the stream
@@ -12,38 +65,39 @@ int InputEvent::extract(
 		return -1;
 		
 	uint8_t* ptr = (uint8_t*)buf;
-	type = (InputEventType)*ptr;
+	type = (InputEventType)*(ptr++);
+	buf_len--;
 	
-	if(type == InputEventType::DigBlock)
+	int l = -1;
+	
+	//Dispatch block deserialization routine
+	switch(type)
 	{
-		if(buf_len < 10)
-			return -1;
-		
-		dig_event.x = ptr[1] + (ptr[2]<<8) + (ptr[3]<<16);
-		dig_event.y = ptr[4] + (ptr[5]<<8) + (ptr[6]<<16);
-		dig_event.z = ptr[7] + (ptr[8]<<8) + (ptr[9]<<16);
-		
-		return 10;
-	}
-	else if(type == InputEventType::PlayerTick)
-	{
-		if(buf_len < 13)
-			return -1;
-			
-		player_event.x = ptr[1] + (ptr[2]<<8) + (ptr[3]<<16);
-		player_event.y = ptr[4] + (ptr[5]<<8) + (ptr[6]<<16);
-		player_event.z = ptr[7] + (ptr[8]<<8) + (ptr[9]<<16);
-		
-		player_event.pitch = ptr[10];
-		player_event.yaw = ptr[11];
-		player_event.input_state = ptr[12];
-		
-		return 13;
-	}
-	else
-	{
-	}
+		case InputEventType::PlayerTick:
+			l = player_event.extract(ptr, buf_len);
+		break;
 
+		case InputEventType::DigBlock:
+			l = dig_event.extract(ptr, buf_len);
+		break;
 
-	return -1;
+		case InputEventType::PlaceBlock:
+			l = block_event.extract(ptr, buf_len);
+		break;		
+		
+		case InputEventType::PlayerJoin:
+			l = join_event.extract(ptr, buf_len);
+		break;
+		
+		case InputEventType::PlayerLeave:
+			l = leave_event.extract(ptr, buf_len);
+		break;
+		
+		default:
+			return -1;
+	}
+		
+	if(l < 0)
+		return -1;
+	return l+1;
 }

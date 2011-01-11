@@ -174,7 +174,7 @@ Game.heartbeat = function()
 			var res = new Uint8Array(10);
 			var k = 0;
 			
-			res[k++] = 0;						//Event type
+			res[k++] = 2;						//Event type
 			
 			for(var j=0; j<3; j++)
 			{
@@ -198,20 +198,14 @@ Game.heartbeat = function()
 		
 	asyncGetBinary("/h?k="+Session.session_id, function(arr)
 	{
-		if(arr.length <= 0)
-			return;
-			
-		debugger;
-	
 		var i = 0;
-		
 		while(i < arr.length)
 		{
 			var t = arr[i++];
 			
-			if(t == 0)	//SetBlock event
+			if(t == 1)					//SetBlock event
 			{
-				if(i + 13 < arr.length)	//Bad packet, drop
+				if(i + 10 < arr.length)	//Bad packet, drop
 					return;
 			
 				var b = arr[i++];
@@ -227,6 +221,7 @@ Game.heartbeat = function()
 			else
 			{
 				//Unknown event type
+				alert("Unkown packet type?");
 			}
 		}
 	}, bb.getBlob("application/octet-stream"));

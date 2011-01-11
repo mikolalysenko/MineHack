@@ -9,7 +9,7 @@ namespace Game
 {
 	enum class UpdateEventType
 	{
-		SetBlock,
+		SetBlock = 1,
 		Chat
 	};
 	
@@ -17,6 +17,8 @@ namespace Game
 	{
 		int x, y, z;
 		Block b;
+		
+		int write(void* buf, size_t len) const;
 	};
 	
 	struct UpdateEvent
@@ -29,7 +31,7 @@ namespace Game
 		};
 		
 		//Writes output event to buffer
-		int write(void* buf, size_t len);
+		int write(void* buf, size_t len) const;
 	};
 };
 

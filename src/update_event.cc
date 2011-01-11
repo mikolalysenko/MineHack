@@ -2,30 +2,47 @@
 
 using namespace Game;
 
+int UpdateBlockEvent::write(void* bufv, size_t buf_len) const
+{
+	if(buf_len < 10)
+		return -1;
+		
+	uint8_t* buf = (uint8_t*)bufv;
+			
+	buf[0] = (uint8_t)b;
+	buf[1] =  x 	  & 0xff;
+	buf[2] = (x >> 8) & 0xff;
+	buf[3] = (x >> 16)& 0xff;
+	buf[4] =  y 	  & 0xff;
+	buf[5] = (y >> 8) & 0xff;
+	buf[6] = (y >> 16)& 0xff;
+	buf[7] =  z 	  & 0xff;
+	buf[8] = (z >> 8) & 0xff;
+	buf[9] = (z >> 16)& 0xff;
+	
+	return 10;
+}
+
+
+
 //Update event serialization
-int UpdateEvent::write(void* bufv, size_t buf_len)
+int UpdateEvent::write(void* bufv, size_t buf_len) const
 {
 	uint8_t* buf = (uint8_t*)bufv;
 	int l = 0;
 	
+	//Write the type byte
+	if(buf_len < 1)
+		return -1;
+	*(buf++) = (uint8_t)type;
+	buf_len--;
+	
 	if(type == UpdateEventType::SetBlock)
 	{
-		if(buf_len < 11)
+		int r = block_event.write(buf, buf_len);
+		if(r < 0)
 			return -1;
-				
-		buf[l++] = 0;
-		buf[l++] = (uint8_t)block_event.b;
-		buf[l++] =  block_event.x 		& 0xff;
-		buf[l++] = (block_event.x >> 8) & 0xff;
-		buf[l++] = (block_event.x >> 16)& 0xff;
-		buf[l++] =  block_event.y 		& 0xff;
-		buf[l++] = (block_event.y >> 8) & 0xff;
-		buf[l++] = (block_event.y >> 16)& 0xff;
-		buf[l++] =  block_event.z 		& 0xff;
-		buf[l++] = (block_event.z >> 8) & 0xff;
-		buf[l++] = (block_event.z >> 16)& 0xff;
-		
-		return 11;
+		return r+1;
 	}
 	else
 	{

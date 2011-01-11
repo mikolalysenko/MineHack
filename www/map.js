@@ -372,14 +372,14 @@ function Chunk(x, y, z, data)
 		new ChunkVB(this,
 			this.DIMS[0]-1, 1,                this.DIMS[2]-1,
 			this.DIMS[0],   this.DIMS[1] - 1, this.DIMS[2]),
-			
+		
 		new ChunkVB(this,
-			0, 1,                0,
-			1, this.DIMS[1] - 1, 1),
-
+			0, 				1,                0,
+			1, 				this.DIMS[1] - 1, 1),
+		
 		new ChunkVB(this,
-			0, 1,                this.DIMS[2]-1,
-			1, this.DIMS[1] - 1, this.DIMS[2])
+			0,				1,                this.DIMS[2]-1,
+			1, 				this.DIMS[1] - 1, this.DIMS[2])
 	];
 }
 
@@ -670,7 +670,7 @@ Map.init = function(gl)
 //Updates the cache of chunks
 Map.update_cache = function()
 {
-	//Grab all the chunks near the player
+	//Need to grab all the chunks in the 5x5x5 cube around the player
 	var c = Player.chunk();
 	
 	for(var i=c[0] - 2; i<=c[0] + 2; i++)
@@ -680,13 +680,13 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	//If there are no pending chunks, grab a few random chunks from the boundary
+	//If there are no pending chunks, grab a few random chunks from the boundary to help speed up loading
 	if(Map.pending_chunks == 0)
 	{
-		//Precache chunks near player
+		//TODO: Precache chunks near player
 	}
 	
-	//Remove old chunks
+	//If we are over the chunk count, remove old chunks
 	if(Map.chunk_count > Map.max_chunks)
 	{
 		//TODO: Purge old chunks
