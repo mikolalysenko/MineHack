@@ -16,14 +16,14 @@ int InputEvent::extract(
 	
 	if(type == InputEventType::DigBlock)
 	{
-		if(buf_len < 4)
+		if(buf_len < 10)
 			return -1;
-			
-		dig_event.x = (int8_t)ptr[1];
-		dig_event.y = (int8_t)ptr[2];
-		dig_event.z = (int8_t)ptr[3];
 		
-		return 4;
+		dig_event.x = ptr[1] + (ptr[2]<<8) + (ptr[3]<<16);
+		dig_event.y = ptr[4] + (ptr[5]<<8) + (ptr[6]<<16);
+		dig_event.z = ptr[7] + (ptr[8]<<8) + (ptr[9]<<16);
+		
+		return 10;
 	}
 	else if(type == InputEventType::PlayerTick)
 	{

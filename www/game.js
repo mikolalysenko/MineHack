@@ -171,13 +171,19 @@ Game.heartbeat = function()
 		
 		if(ev[0] == "DigBlock")
 		{
-			var res = new Uint8Array(4);
+			var res = new Uint8Array(10);
 			var k = 0;
 			
 			res[k++] = 0;						//Event type
-			res[k++] = ev[1] - Player.pos[0];	//Relative block index
-			res[k++] = ev[2] - Player.pos[1];
-			res[k++] = ev[3] - Player.pos[2];
+			
+			for(var j=0; j<3; j++)
+			{
+				var x = Math.round(ev[j+1]);
+				
+				res[k++] = 	x 		 & 0xff;
+				res[k++] = (x >> 8)  & 0xff;
+				res[k++] = (x >> 16) & 0xff;
+			}
 			
 			bb.append(res.buffer);
 		}

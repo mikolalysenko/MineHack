@@ -31,7 +31,7 @@ Chunk* WorldGen::generate_chunk(ChunkID const& idx)
 			y = idx.y * CHUNK_Y + j,
 			z = idx.z * CHUNK_Z + k;
 		
-		res->data[i][j][k] = generate_block(x, y, z);
+		res->set(i, j, k) = generate_block(x, y, z);
 	}
 	
 	return res;

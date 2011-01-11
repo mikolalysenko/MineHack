@@ -30,7 +30,7 @@ World::World()
 }
 
 //Adds an event to the world
-void World::add_event(InputEvent* ev)
+void World::add_event(InputEvent const& ev)
 {
 	MutexLock lock(&event_lock);
 	pending_events.push_back(ev);
@@ -77,7 +77,7 @@ int World::heartbeat(
 	{
 		auto up = *iter;
 		
-		int q = up->write(buf, buf_len);
+		int q = up.write(buf, buf_len);
 		
 		if(q < 0)
 			break;
@@ -85,7 +85,6 @@ int World::heartbeat(
 		buf += q;
 		buf_len -= q;
 		l += q;
-		delete up;
 	}
 	//erase old updates
 	p->updates.erase(p->updates.begin(), iter);
@@ -95,7 +94,7 @@ int World::heartbeat(
 }
 
 //Broadcasts an event to all players
-void World::broadcast_update(UpdateEvent* up, double x, double y, double z, double radius)
+void World::broadcast_update(UpdateEvent const& up, double x, double y, double z, double radius)
 {
 	for(auto pl=players.begin(); pl!=players.end(); ++pl)
 	{
@@ -112,85 +111,93 @@ void World::broadcast_update(UpdateEvent* up, double x, double y, double z, doub
 	}
 }
 
+//Handle a player join event
 void World::handle_add_player(Server::SessionID const& session_id, JoinEvent const& ev)
 {
-	cout << "Adding player: " << ev.name << ", session id: " << session_id << endl << "-----------------------------------------------------------" << endl;
+	cout << "Adding player: " << ev.name << ", session id: " << session_id << endl 
+		 << "-----------------------------------------------------------" << endl;
 	players[session_id] = new Player(session_id, ev.name);
 }
 
-void World::handle_remove_player(Server::SessionID const& session_id)
+//Handle removing a player
+void World::handle_remove_player(Player* p)
 {
-	cout << "Removing player: " << session_id << endl;
-	auto iter = players.find(session_id);
+	cout << "Removing player: " << p->session_id << endl;
+	auto iter = players.find(p->session_id);
 	if(iter == players.end())
+	{
+		cout << "Player had bad session id?" << endl;
 		return;
+	}
 	players.erase(iter);
 }
 
-
-void World::handle_set_block(Server::SessionID const& session_id,  BlockEvent const& ev)
+//Handle placing a block
+void World::handle_place_block(Player* p,  BlockEvent const& ev)
 {
 	int x = ev.x, y = ev.y, z = ev.z;
 	auto b = ev.b;
 
-	cout << "Setting block: " << x << "," << y << "," << z << " <- " << (uint8_t)b << "; by " << session_id << endl;
+	cout << "Setting block: " << x << "," << y << "," << z << " <- " << (uint8_t)b << "; by " << p->session_id << endl;
 
-	//Check range on x,y,z
-	if(x < 0 || y < 0 || z < 0 ||
-		x >= MAX_MAP_X || y >= MAX_MAP_Y || z >= MAX_MAP_Z)
-		return;
-
-	//Check validity
-	auto iter = players.find(session_id);
-	if(iter == players.end())
-		return;
-	auto p = (*iter).second;
-		
-	//Check block distance
-	auto pos = p->pos;
-	double d = max(max(abs(x - pos[0]), abs(y - pos[1])), abs(z - pos[2]));
-	if(d < p->max_block_distance)
-	{
-		//Set block and broadcast event
-		game_map->set_block(x, y, z, b);
-		
-		UpdateEvent *up = new UpdateEvent();
-		up->type = UpdateEventType::SetBlock;
-		up->block_event.x = x;
-		up->block_event.y = y;
-		up->block_event.z = z;
-		up->block_event.b = b;
-		
-		broadcast_update(up, x, y, z, 256.0);
-	}
+	
+	//TODO: Sanity check event
+	//Future:  This event should take a reference to an inventory stack, not an arbitrary block type
+	
+	//Set block and broadcast event
+	game_map->set_block(x, y, z, b);
+	
+	UpdateEvent up;
+	up.type = UpdateEventType::SetBlock;
+	up.block_event.x = x;
+	up.block_event.y = y;
+	up.block_event.z = z;
+	up.block_event.b = b;
+	
+	broadcast_update(up, x, y, z, 256.0);
 }
 
-void World::handle_dig_block(SessionID const& session_id, DigEvent const& dig)
+void World::handle_player_tick(Player* p, PlayerEvent const& ev)
+{
+	cout << "Got player update" << endl;
+	
+	//TODO: Sanity check input values from client
+	// apply some prediction/filtering to infer new position
+	
+	p->pos[0] = ev.x;
+	p->pos[1] = ev.y;
+	p->pos[2] = ev.z;
+	p->pitch = ev.pitch;
+	p->yaw = ev.yaw;	
+	p->input_state = ev.input_state;
+}
+
+void World::handle_dig_block(Player* p, DigEvent const& dig)
 {
 	cout << "Got dig event: " << dig.x << "," << dig.y << "," << dig.z << endl;
 	
-	auto iter = players.find(session_id);
-	if(iter == players.end())
-		return;
-	auto p = (*iter).second;
-	
-	int x = p->pos[0] + dig.x,
-		y = p->pos[1] + dig.y,
-		z = p->pos[1] + dig.z;
+	int x = dig.x,
+		y = dig.y,
+		z = dig.z;
+		
+		
+	//TODO: Sanity check the dig event
 	
 	//Set block and broadcast event
 	game_map->set_block(x, y, z, Block::Air);
 	
-	UpdateEvent *up = new UpdateEvent();
-	up->type = UpdateEventType::SetBlock;
-	up->block_event.x = x;
-	up->block_event.y = y;
-	up->block_event.z = z;
-	up->block_event.b = Block::Air;
+	UpdateEvent up;
+	up.type = UpdateEventType::SetBlock;
+	up.block_event.x = x;
+	up.block_event.y = y;
+	up.block_event.z = z;
+	up.block_event.b = Block::Air;
 	
 	broadcast_update(up, x, y, z, 128.0);
-	
 }
+
+
+
 
 //Ticks the server
 void World::tick()
@@ -212,29 +219,46 @@ void World::tick()
 	//Handle all events
 	for(auto iter = events.begin(); iter!=events.end(); ++iter)
 	{
+		//Recover event pointer
 		auto ev = *iter;
-		switch(ev->type)
+		
+		cout << "Got event: " << (int)ev.type << endl;
+		
+		//Special case:  Join events don't have a player associated to them
+		if(ev.type == InputEventType::PlayerJoin)
 		{
-			case InputEventType::PlayerJoin:
-				handle_add_player(ev->session_id, ev->join_event);
-			break;
+			handle_add_player(ev.session_id, ev.join_event);
+			continue;
+		}
 		
+		//Check player exists
+		auto iter = players.find(ev.session_id);
+		if(iter == players.end())
+			continue;
+		auto p = (*iter).second;
+		
+		//Dispatch event handler
+		switch(ev.type)
+		{
 			case InputEventType::PlayerLeave:
-				handle_remove_player(ev->session_id);
+				handle_remove_player(p);
 			break;
 		
-			case InputEventType::SetBlock:
-				handle_set_block(ev->session_id, ev->block_event);
+			case InputEventType::PlaceBlock:
+				handle_place_block(p, ev.block_event);
 			break;
 		
 			case InputEventType::DigBlock:
-				handle_dig_block(ev->session_id, ev->dig_event);
+				handle_dig_block(p, ev.dig_event);
+			break;
+			
+			case InputEventType::PlayerTick:
+				handle_player_tick(p, ev.player_event);
 			break;
 		
 			default:
 			break;
 		}
-		delete ev;
 	}
 	
 	//Update map

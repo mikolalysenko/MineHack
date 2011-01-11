@@ -30,6 +30,11 @@ struct MutexLock
 	~MutexLock() { pthread_mutex_unlock(lock); }
 };
 
-
+template<class T> struct ScopeDelete
+{
+	T* ptr;
+	ScopeDelete(T* p) : ptr(p) {}
+	~ScopeDelete() { delete ptr; }
+};
 
 #endif

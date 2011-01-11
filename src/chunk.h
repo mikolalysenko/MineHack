@@ -46,7 +46,18 @@ namespace Game
 	{
 		ChunkID idx;
 		bool dirty;  //If set, this chunk has been modified
-		Block data[CHUNK_X][CHUNK_Y][CHUNK_Z];
+		Block data[CHUNK_X*CHUNK_Y*CHUNK_Z];
+		
+		//Block accessor functions
+		Block get(int x, int y, int z) const
+		{
+			return data[x + (y<<5) + (z<<10)];
+		}
+		
+		Block set(int x, int y, int z, Block b)
+		{
+			return data[x + (y<<5) + (z<<10)] = b;			
+		}
 		
 		//Compress this chunk into the target buffer
 		//Returns the length of the encoded chunk, or -1 if it failed

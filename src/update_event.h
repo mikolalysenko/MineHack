@@ -31,8 +31,6 @@ namespace Game
 		//Writes output event to buffer
 		int write(void* buf, size_t len);
 	};
-	
-
 };
 
 #endif

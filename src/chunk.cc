@@ -33,8 +33,8 @@ uint64_t ChunkID::hash() const
 */
 
 	return (uint64_t)x |
-		   (((uint64_t)y)<<21) |
-		   (((uint64_t)z)<<42);
+		   (((uint64_t)y)<<21ULL) |
+		   (((uint64_t)z)<<42ULL);
 }
 
 

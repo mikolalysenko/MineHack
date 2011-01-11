@@ -127,10 +127,10 @@ void do_login(
 	if(verify_user_name(user_name, password_hash) && create_session(user_name, key))
 	{
 		//Push login event to server
-		InputEvent *ev = new InputEvent();
-		ev->type = InputEventType::PlayerJoin;
-		ev->session_id = key;
-		memcpy(ev->join_event.name, user_name, 32);
+		InputEvent ev;
+		ev.type = InputEventType::PlayerJoin;
+		ev.session_id = key;
+		memcpy(ev.join_event.name, user_name, 32);
 		game_instance->add_event(ev);
 	
 		
@@ -187,9 +187,9 @@ void do_logout(
 	{
 		delete_session(session_id);
 		
-		InputEvent *ev = new InputEvent();
-		ev->type = InputEventType::PlayerLeave;
-		ev->session_id = session_id;
+		InputEvent ev;
+		ev.type = InputEventType::PlayerLeave;
+		ev.session_id = session_id;
 		game_instance->add_event(ev);
 	}
 	mg_printf(conn, "%s\nOk", ajax_reply_start);
@@ -258,24 +258,18 @@ void do_heartbeat(
 	while(true)
 	{
 		//Create event
-		InputEvent * ev = new InputEvent();
-		ev->session_id = session_id;
+		InputEvent ev;
+		ev.session_id = session_id;
 		
-		int d = ev->extract(&msg_buf[p], len);
+		int d = ev.extract(&msg_buf[p], len);
 		if(d < 0)
-		{
-			delete ev;
 			break;
-		}
 		
 		//Add event
 		game_instance->add_event(ev);
 		p += d;
 		len -= d;
 	}
-	
-	//cout << "Heartbeat Input: " << msg_buf << endl;
-	
 	//Generate client response
 	len = game_instance->heartbeat(session_id, msg_buf, BUF_LEN);
 	
@@ -384,8 +378,6 @@ void loop()
 //Program start point
 int main(int argc, char** argv)
 {
-	cout << sizeof(InputEvent) << endl;
-
 	init();
 	
 	//Start web server

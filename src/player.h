@@ -28,8 +28,11 @@ namespace Game
 		//View direction
 		float				pitch, yaw;
 		
+		//Current key presses
+		int 				input_state;
+		
 		//Update events
-		std::vector<UpdateEvent*> updates;
+		std::vector<UpdateEvent> updates;
 		
 		Player(Server::SessionID const& s, std::string const& n) :
 			session_id(s), 

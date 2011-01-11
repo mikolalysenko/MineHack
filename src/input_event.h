@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <string>
+#include <cstdint>
 
 #include "session.h"
 
@@ -11,12 +12,14 @@
 namespace Game
 {
 	//Different input events
-	enum class InputEventType
+	enum class InputEventType : uint16_t
 	{
-		DigBlock,
-		PlayerTick,
-		SetBlock,
-		PlayerJoin,
+		DigBlock	= 0,
+		PlayerTick	= 1,
+		PlaceBlock	= 2,
+		
+		//Internal event types, first 256 values used for network events
+		PlayerJoin	= 0x100,
 		PlayerLeave,
 	};
 	
@@ -47,6 +50,7 @@ namespace Game
 	struct LeaveEvent
 	{
 	};
+	
 		
 	struct InputEvent
 	{

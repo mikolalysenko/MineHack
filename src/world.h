@@ -26,7 +26,7 @@ namespace Game
 		World();
 		
 		//Adds an event to the server
-		void add_event(InputEvent* ev);
+		void add_event(InputEvent const& ev);
 		
 		//Retrieves a compressed chunk from the server
 		int get_compressed_chunk(
@@ -51,16 +51,17 @@ namespace Game
 		std::map<Server::SessionID, Player*> players;
 		pthread_mutex_t players_lock;
 		
-		std::vector<InputEvent*> pending_events, events;
+		std::vector<InputEvent> pending_events, events;
 		pthread_mutex_t event_lock;
 		
 		void handle_add_player(Server::SessionID const&, JoinEvent const&);
-		void handle_remove_player(Server::SessionID const&);
-		void handle_set_block(Server::SessionID const&, BlockEvent const&);
-		void handle_dig_block(Server::SessionID const&, DigEvent const&);
+		void handle_remove_player(Player*);
+		void handle_place_block(Player*, BlockEvent const&);
+		void handle_dig_block(Player*, DigEvent const&);
+		void handle_player_tick(Player*, PlayerEvent const&);
 
 		//Broadcasts an update to all players in radius
-		void broadcast_update(UpdateEvent * ev, double, double, double, double radius);
+		void broadcast_update(UpdateEvent const& ev, double, double, double, double radius);
 
 	};
 };
