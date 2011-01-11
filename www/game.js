@@ -134,6 +134,56 @@ Game.stop = function()
 	}
 }
 
+//Input event serializers
+Game.event_serializers = {
+
+	"DigBlock" : function(ev)
+	{
+		var res = new Uint8Array(10);
+		var k = 0;
+		
+		res[k++] = 2;	//Event type code
+		
+		for(var j=0; j<3; j++)
+		{
+			var x = Math.round(ev[j+1]);
+			
+			res[k++] = 	x 		 & 0xff;
+			res[k++] = (x >> 8)  & 0xff;
+			res[k++] = (x >> 16) & 0xff;
+		}
+		
+		return res.buffer;
+	}
+};
+
+//Update event serializers
+Game.update_handlers = {
+	
+	//Set block event
+	1 : function(arr)
+	{
+		if(arr.length < 10)	//Bad packet, drop
+			return -1;
+			
+		//Parse out event contents
+		var i = 0;
+		var b = arr[i++];
+		var x = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
+		i += 3;
+		var y = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
+		i += 3;
+		var z = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
+		i += 3;
+		
+		//Execute update
+		Map.set_block(x, y, z, b);
+		
+		return 10;
+	}
+};
+
+
 Game.push_event = function(ev)
 {
 	//Bandwidth optimization, avoid sending redundant input events
@@ -168,33 +218,20 @@ Game.heartbeat = function()
 	for(var i=0; i<Game.input_events.length; i++)
 	{
 		var ev = Game.input_events[i];
+		var serializer = Game.event_serializers[ev[0]];
 		
-		if(ev[0] == "DigBlock")
+		if(serializer)
 		{
-			var res = new Uint8Array(10);
-			var k = 0;
-			
-			res[k++] = 2;						//Event type
-			
-			for(var j=0; j<3; j++)
-			{
-				var x = Math.round(ev[j+1]);
-				
-				res[k++] = 	x 		 & 0xff;
-				res[k++] = (x >> 8)  & 0xff;
-				res[k++] = (x >> 16) & 0xff;
-			}
-			
-			bb.append(res.buffer);
+			bb.append(serializer(ev));	
 		}
 		else
 		{
+			alert("Unkown input event type");
 		}
 	}
 	
 	//Clear out input event queue
 	Game.input_events = [];
-	
 		
 	asyncGetBinary("/h?k="+Session.session_id, function(arr)
 	{
@@ -203,29 +240,22 @@ Game.heartbeat = function()
 		{
 			var t = arr[i++];
 			
-			if(t == 1)					//SetBlock event
+			var handler = Game.update_handlers[t];
+			
+			if(handler)
 			{
-				if(i + 10 > arr.length)	//Bad packet, drop
+				var l = handler(arr.slice(1, arr.length));
+				if(l < 0)
 				{
-					debugger;
 					alert("dropping packet");
 					return;
 				}
-			
-				var b = arr[i++];
-				var x = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
-				i += 3;
-				var y = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
-				i += 3;
-				var z = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
-				i += 3;
-				
-				Map.set_block(x, y, z, b);
+				i += l;
 			}
 			else
 			{
-				//Unknown event type
-				alert("Unkown packet type?");
+				alert("bad update type?  dropping packet");
+				return;
 			}
 		}
 	}, bb.getBlob("application/octet-stream"));

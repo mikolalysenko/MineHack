@@ -188,7 +188,7 @@ $(GOAL_PROF):	$(GOAL_EXE)
 
 test: $(exe)
 	(sleep 2; $(BROWSER) $(URL)) &
-	valgrind -v --log-file=valgrind.log ./$(exe)
+	./$(exe)
 
 
 # linking
