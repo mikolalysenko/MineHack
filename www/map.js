@@ -736,6 +736,10 @@ Map.decompress_chunk = function(arr, data)
 			var n = arr[k] + (arr[k+1] << 8);
 			k += 2;
 		}
+		else
+		{
+			n++;
+		}
 		
 		var c = arr[k];
 		++k;
