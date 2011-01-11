@@ -10,7 +10,7 @@ void Map::set_block(int x, int y, int z, Block b)
 {
 	ChunkID idx(x>>5, y>>5, z>>5);
 	Chunk* c = get_chunk(idx);
-	c->set(bx&31, by&31, bz&31, b);
+	c->set(x&31, y&31, z&31, b);
 }
 
 Block Map::get_block(int x, int y, int z)

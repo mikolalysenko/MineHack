@@ -41,8 +41,8 @@ uint64_t ChunkID::hash() const
 //Compresses a chunk for serialization
 int Chunk::compress(void* buffer, size_t len)
 {
-	auto data_ptr = data[0][0];
-	auto buf_ptr = (uint8_t*) buffer;
+	auto data_ptr	= data;
+	auto buf_ptr	= (uint8_t*) buffer;
 	size_t n = 0;
 	
 	for(size_t i=0; i<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z); )
