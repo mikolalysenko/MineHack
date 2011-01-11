@@ -9,11 +9,11 @@ namespace Server
 	
 	void checkpoint_login();
 
-	bool verify_user_name(const std::string& name, const std::string& password_hash);
+	bool verify_user_name(std::string const& name, std::string const& password_hash);
 
-	bool create_account(const std::string& name, const std::string& password_hash);
+	bool create_account(std::string const& name, std::string const& password_hash);
 
-	void delete_account(const std::string& name);
+	void delete_account(std::string const& name);
 };
 
 #endif

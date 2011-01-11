@@ -76,10 +76,10 @@ getTexture = function(gl, url)
 	return ["Ok", tex];	
 }
 
-asyncGetBinary = function(url, handler)
+asyncGetBinary = function(url, handler, body)
 {
 	var XHR = new XMLHttpRequest();
-	XHR.open("GET", url, true);
+	XHR.open("POST", url, true);
 	XHR.onreadystatechange = function()
 	{
 		if(XHR.readyState == 4)
@@ -102,7 +102,7 @@ asyncGetBinary = function(url, handler)
 			}
 		}
 	}
-	XHR.send(null);
+	XHR.send(body);
 }
 
 mmult = function(A, B)

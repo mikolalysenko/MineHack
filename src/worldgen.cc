@@ -19,7 +19,7 @@ Block WorldGen::generate_block(int x, int y, int z)
 	return Block::Air;
 }
 
-Chunk* WorldGen::generate_chunk(const ChunkId& idx)
+Chunk* WorldGen::generate_chunk(ChunkID const& idx)
 {
 	auto res = new Chunk();
 	

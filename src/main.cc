@@ -112,10 +112,12 @@ void do_login(
 	char user_name[32];
 	char password_hash[256];
 	
+	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, "n", user_name, 32);
+	memset(user_name, 0, 32);
+	mg_get_var(qs, qs_len, "n", user_name, 20);
 	mg_get_var(qs, qs_len, "p", password_hash, 256);
 	
 	cout << "got login: " << user_name << ", pwd hash = " << password_hash << endl;
@@ -125,11 +127,15 @@ void do_login(
 	if(verify_user_name(user_name, password_hash) && create_session(user_name, key))
 	{
 		//Push login event to server
-		InputEvent ev;
-		ev.type = InputEventType::PlayerJoin;
-		ev.session_id = key;
-		memcpy(ev.join_event.name, user_name, 32);
+		InputEvent *ev = new InputEvent();
+		ev->type = InputEventType::PlayerJoin;
+		ev->session_id = key;
+		memcpy(ev->join_event.name, user_name, 32);
 		game_instance->add_event(ev);
+	
+		
+		//Debug spam
+		cout << "Logged in: " << key << endl;
 	
 		//Send key to client
 		stringstream ss;
@@ -181,9 +187,9 @@ void do_logout(
 	{
 		delete_session(session_id);
 		
-		InputEvent ev;
-		ev.type = InputEventType::PlayerLeave;
-		ev.session_id = session_id;
+		InputEvent *ev = new InputEvent();
+		ev->type = InputEventType::PlayerLeave;
+		ev->session_id = session_id;
 		game_instance->add_event(ev);
 	}
 	mg_printf(conn, "%s\nOk", ajax_reply_start);
@@ -206,7 +212,7 @@ void do_get_chunk(
 	}
 	
 	//Extract the chunk index here
-	ChunkId idx;
+	ChunkID idx;
 	idx.x = get_int("x", request_info);
 	idx.y = get_int("y", request_info);
 	idx.z = get_int("z", request_info);
@@ -226,37 +232,6 @@ void do_get_chunk(
 	}
 }
 
-//Sets a block
-void do_set_block(
-	mg_connection* conn,
-	const mg_request_info* request_info)
-{
-	//Check session id
-	SessionID session_id;
-	if(!get_session_id(request_info, session_id))
-	{
-		ajax_error(conn);
-		return;
-	}
-	
-	//Extract the chunk index here
-	int block_x = get_int("x", request_info);
-	int block_y = get_int("y", request_info);
-	int block_z = get_int("z", request_info);
-	int block_t = get_int("b", request_info);
-	
-	//Send input event
-	InputEvent ev;
-	ev.type = InputEventType::SetBlock;
-	ev.session_id = session_id;
-	ev.block_event.x = block_x;
-	ev.block_event.y = block_y;
-	ev.block_event.z = block_z;
-	ev.block_event.b = (Block)block_t;
-	game_instance->add_event(ev);
-	
-	ajax_ok(conn);
-}
 
 //Pulls pending events from client
 void do_heartbeat(
@@ -267,16 +242,56 @@ void do_heartbeat(
 	SessionID session_id;
 	if(!get_session_id(request_info, session_id))
 	{
+		cout << "Invalid session" << endl;
 		ajax_error(conn);
 		return;
 	}
-
+	
+	//Unpack incoming events
 	const int BUF_LEN = (1<<16);
 	uint8_t msg_buf[BUF_LEN];
-	int len = game_instance->heartbeat(session_id, msg_buf, BUF_LEN);
+	memset(msg_buf, '\0', BUF_LEN);
+	int len = mg_read(conn, msg_buf, BUF_LEN);
 	
-	if(len > 0)
+	//Parse out the events
+	int p = 0;
+	while(true)
 	{
+		//Create event
+		InputEvent * ev = new InputEvent();
+		ev->session_id = session_id;
+		
+		int d = ev->extract(&msg_buf[p], len);
+		if(d < 0)
+		{
+			delete ev;
+			break;
+		}
+		
+		//Add event
+		game_instance->add_event(ev);
+		p += d;
+		len -= d;
+	}
+	
+	//cout << "Heartbeat Input: " << msg_buf << endl;
+	
+	//Generate client response
+	len = game_instance->heartbeat(session_id, msg_buf, BUF_LEN);
+	
+	cout << "Heartbeat Len = " << len << endl;
+	
+	if(len >= 0)
+	{
+		if(len > 0)
+		{
+			cout << "Heartbeat Response: ";
+			for(int i=0; i<len; i++)
+				cout << (int)msg_buf[i] << ',';
+			cout << endl;
+				
+		}
+	
 		ajax_send_binary(conn, msg_buf, len);
 	}
 	else
@@ -293,8 +308,6 @@ static void *event_handler(enum mg_event event,
 
 	if (event == MG_NEW_REQUEST)
 	{
-		cout << "Got request: " << request_info->uri << endl;
-	
 		if(strcmp(request_info->uri, "/l") == 0)
 		{ do_login(conn, request_info);
 		}
@@ -306,9 +319,6 @@ static void *event_handler(enum mg_event event,
 		}
 		else if(strcmp(request_info->uri, "/g") == 0)
 		{ do_get_chunk(conn, request_info);
-		}
-		else if(strcmp(request_info->uri, "/s") == 0)
-		{ do_set_block(conn, request_info);
 		}
 		else if(strcmp(request_info->uri, "/h") == 0)
 		{ do_heartbeat(conn, request_info);
@@ -368,14 +378,14 @@ void loop()
 			else
 				msg_buf[buf_ptr++] = c;
 		}
-		
-		usleep(40);
 	}
 }
 
 //Program start point
 int main(int argc, char** argv)
 {
+	cout << sizeof(InputEvent) << endl;
+
 	init();
 	
 	//Start web server

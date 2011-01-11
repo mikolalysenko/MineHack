@@ -8,7 +8,7 @@ namespace Game
 
 //Just interleaves the bits for each of the coordinates, giving z-order indexing
 //Future idea: switch to Hilbert order curve
-uint64_t ChunkId::hash() const
+uint64_t ChunkID::hash() const
 {
 /*
 	static const uint64_t B[] = 

@@ -11,6 +11,8 @@ Game =
 	zfar  : 1000.0,
 	fov   : 45.0,
 	
+	input_events : [],
+	
 	enable_ao : true
 };
 
@@ -132,8 +134,103 @@ Game.stop = function()
 	}
 }
 
+Game.push_event = function(ev)
+{
+	//Bandwidth optimization, avoid sending redundant input events
+	for(var i=0; i<Game.input_events.length; i++)
+	{
+		if(Game.input_events[i].length != ev.length)
+			continue;
+	
+		var eq = true;
+		for(var j=0; j<Game.input_events[i].length; j++)
+		{
+			eq &= Game.input_events[i][j] == ev[j];
+			if(!eq)
+				break;
+		}
+		if(eq)
+			return;
+	}
+	Game.input_events.push(ev);
+}
+
+//Polls the server for events
+Game.heartbeat = function()
+{
+	//Build a binary packet for the event
+	var bb = new BlobBuilder();
+	
+	//Add player information
+	bb.append(Player.net_state().buffer);
+	
+	//Convert events to blob data
+	for(var i=0; i<Game.input_events.length; i++)
+	{
+		var ev = Game.input_events[i];
+		
+		if(ev[0] == "DigBlock")
+		{
+			var res = new Uint8Array(4);
+			var k = 0;
+			
+			res[k++] = 0;						//Event type
+			res[k++] = ev[1] - Player.pos[0];	//Relative block index
+			res[k++] = ev[2] - Player.pos[1];
+			res[k++] = ev[3] - Player.pos[2];
+			
+			bb.append(res.buffer);
+		}
+		else
+		{
+		}
+	}
+	
+	//Clear out input event queue
+	Game.input_events = [];
+	
+		
+	asyncGetBinary("/h?k="+Session.session_id, function(arr)
+	{
+		if(arr.length <= 0)
+			return;
+			
+		debugger;
+	
+		var i = 0;
+		
+		while(i < arr.length)
+		{
+			var t = arr[i++];
+			
+			if(t == 0)	//SetBlock event
+			{
+				if(i + 13 < arr.length)	//Bad packet, drop
+					return;
+			
+				var b = arr[i++];
+				var x = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
+				i += 3;
+				var y = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
+				i += 3;
+				var z = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
+				i += 3;
+				
+				Map.set_block(x, y, z, b);
+			}
+			else
+			{
+				//Unknown event type
+			}
+		}
+	}, bb.getBlob("application/octet-stream"));
+}
+
 Game.tick = function()
 {
+	if(Game.tick_count % 2 == 0)
+		Game.heartbeat();
+
 	++Game.tick_count;
 
 	//Update game state

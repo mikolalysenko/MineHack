@@ -11,26 +11,26 @@ namespace Server
 	{
 		std::int64_t key;
 	
-		bool operator==(const SessionID& other) const
+		bool operator==(SessionID const& other) const
 			{ return key == other.key; }
 	
-		int operator<(const SessionID& other) const
+		int operator<(SessionID const& other) const
 			{ return key < other.key; }
 	};
 
 	//IO opreations for sessionID
-	std::ostream& operator<<(std::ostream&, const SessionID&);
+	std::ostream& operator<<(std::ostream&, SessionID const&);
 	std::istream& operator>>(std::istream&, SessionID&);
 
 	void init_sessions();
 	
-	bool valid_session_id(const SessionID&);
+	bool valid_session_id(SessionID const&);
 	
-	bool logged_in(const std::string& name);
+	bool logged_in(std::string const& name);
 
-	bool create_session(const std::string& name, SessionID&);
+	bool create_session(std::string const& name, SessionID&);
 	
-	void delete_session(const SessionID&);
+	void delete_session(SessionID const&);
 }
 
 #endif

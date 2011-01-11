@@ -78,11 +78,39 @@ Player.init = function()
 	return "Ok";
 }
 
+Player.net_state = function()
+{
+	var res = new Uint8Array(13);
+	var i = 0;
+	
+	res[i++] = 1;	//Player update event id
+	
+	for(var j=0; j<3; j++)
+	{
+		var x = Math.round(Player.pos[j]);
+		res[i++] =  x     &0xff;
+		res[i++] = (x>>8) &0xff;
+		res[i++] = (x>>16)&0xff;
+	}
+	res[i++] = Math.round((180.0 + Player.yaw) * 255.0 / 360.0);
+	res[i++] = Math.round(Player.pitch + 45.0);
+	res[i++] = 
+		(Player.input["forward"]	<< 0) |
+		(Player.input["back"] 		<< 1) |
+		(Player.input["left"]		<< 2) |
+		(Player.input["right"]		<< 3) |
+		(Player.input["jump"]		<< 4) |
+		(Player.input["crouch"]	<< 5) |
+		(Player.input["dig"]		<< 6);
+	
+	return res;
+}
+
 Player.tick = function()
 {
-	front = [ -Math.sin(Player.yaw), 0, -Math.cos(Player.yaw) ];
-	right = [ -front[2], 0, front[0]];
-	up = [0, 1, 0];
+	var front = [ -Math.sin(Player.yaw), 0, -Math.cos(Player.yaw) ];
+	var right = [ -front[2], 0, front[0]];
+	var up = [0, 1, 0];
 
 	var move = function(v, s)
 	{
@@ -120,7 +148,7 @@ Player.tick = function()
 			
 		if(hit_rec != [])
 		{
-			Map.set_block(hit_rec[0], hit_rec[1], hit_rec[2], 0);
+			Game.push_event(["DigBlock", hit_rec[0], hit_rec[1], hit_rec[2]]);
 		}
 	}
 
@@ -193,4 +221,6 @@ Player.eye_ray = function()
 	var d = [ -view_m[2], -view_m[6], -view_m[10] ];
 	return [ Player.pos, d ];
 }
+
+
 

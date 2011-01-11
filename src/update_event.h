@@ -1,11 +1,16 @@
 #ifndef UPDATE_EVENT_H
 #define UPDATE_EVENT_H
 
+#include <string>
+
+#include "chunk.h"
+
 namespace Game
 {
 	enum class UpdateEventType
 	{
-		SetBlock
+		SetBlock,
+		Chat
 	};
 	
 	struct UpdateBlockEvent
@@ -20,9 +25,14 @@ namespace Game
 		
 		union
 		{
-			UpdateBlockEvent block_event;
+			UpdateBlockEvent	block_event;
 		};
+		
+		//Writes output event to buffer
+		int write(void* buf, size_t len);
 	};
+	
+
 };
 
 #endif

@@ -8,7 +8,7 @@ namespace Game
 	//The world implements a set of rules for generating chunks
 	struct WorldGen
 	{
-		Chunk* generate_chunk(const ChunkId&);
+		Chunk* generate_chunk(ChunkID const&);
 		
 		Block generate_block(int x, int y, int z);
 	};

@@ -1,26 +1,20 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
-#include <pthread.h>
+#include <vector>
 #include <string>
 #include <cstdint>
-#include <Eigen/Core>
 
 #include "session.h"
 
+#include "update_event.h"
+
 namespace Game
-{
-	enum class PlayerState
-	{
-		PreInit,
-		Connected,
-		Disconnected	
-	};
-	
+{	
 	//The player data structure
 	struct Player
 	{
-		PlayerState state;
+		float max_block_distance;
 	
 		//Session id for player
 		Server::SessionID	session_id;
@@ -29,19 +23,21 @@ namespace Game
 		std::string			name;
 		
 		//Player position
-		Eigen::Vector4d		position;
+		double				pos[3];
 		
 		//View direction
 		float				pitch, yaw;
 		
-		Player(const Server::SessionID& s, const std::string n) :
-			state(PlayerState::PreInit),
+		//Update events
+		std::vector<UpdateEvent*> updates;
+		
+		Player(Server::SessionID const& s, std::string const& n) :
 			session_id(s), 
 			name(n),
-			position(0, 0, 0),
 			pitch(0),
-			yaw(0)
-		{ }
+			yaw(0),
+			max_block_distance(10000000)
+		{ pos[0] = (1<<20); pos[1] = (1<<20); pos[2] = (1<<20); }
 		
 		~Player()
 		{ }

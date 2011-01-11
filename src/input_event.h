@@ -2,6 +2,7 @@
 #define INPUT_EVENT_H
 
 #include <cstdio>
+#include <string>
 
 #include "session.h"
 
@@ -12,11 +13,32 @@ namespace Game
 	//Different input events
 	enum class InputEventType
 	{
+		DigBlock,
+		PlayerTick,
+		SetBlock,
 		PlayerJoin,
 		PlayerLeave,
-		SetBlock
 	};
 	
+	
+	struct DigEvent
+	{
+		int x, y, z;
+	};
+		
+	struct PlayerEvent
+	{
+		int x, y, z;
+		float pitch, yaw;
+		int input_state;
+	};
+	
+	struct BlockEvent
+	{
+		int x, y, z;
+		Block b;
+	};
+
 	struct JoinEvent
 	{
 		char name[32];
@@ -25,13 +47,7 @@ namespace Game
 	struct LeaveEvent
 	{
 	};
-	
-	struct BlockEvent
-	{
-		int x, y, z;
-		Block b;
-	};
-	
+		
 	struct InputEvent
 	{
 		InputEventType		type;
@@ -39,11 +55,21 @@ namespace Game
 		
 		union
 		{
+			DigEvent	dig_event;
 			JoinEvent	join_event;
+			PlayerEvent player_event;
 			LeaveEvent	leave_event;
 			BlockEvent	block_event;
 		};
+		
+		
+		//Extracts an input event from the stream
+		int extract(
+			void* buf, 
+			size_t buf_len);
 	};
+	
+	
 };
 
 #endif

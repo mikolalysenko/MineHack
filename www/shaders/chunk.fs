@@ -8,8 +8,6 @@ varying vec4 tc;
 
 void main(void)
 {
-	
-
 	gl_FragColor = texture2D(tex, (tc.zw + fract(tc.xy)) / 16.0 );
 }
 

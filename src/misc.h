@@ -22,6 +22,14 @@ struct WriteLock
 	~WriteLock() { pthread_rwlock_unlock(lock); }
 };
 
+struct MutexLock
+{
+	pthread_mutex_t *lock;
+	
+	MutexLock(pthread_mutex_t *l) : lock(l) { pthread_mutex_lock(lock); }
+	~MutexLock() { pthread_mutex_unlock(lock); }
+};
+
 
 
 #endif

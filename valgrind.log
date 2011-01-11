@@ -1,0 +1,102 @@
+==6609== Memcheck, a memory error detector
+==6609== Copyright (C) 2002-2009, and GNU GPL'd, by Julian Seward et al.
+==6609== Using Valgrind-3.5.0-Debian and LibVEX; rerun with -h for copyright info
+==6609== Command: ./a.out
+==6609== Parent PID: 6600
+==6609== 
+--6609-- 
+--6609-- Valgrind options:
+--6609--    --suppressions=/usr/lib/valgrind/debian-libc6-dbg.supp
+--6609--    -v
+--6609--    --log-file=valgrind.log
+--6609-- Contents of /proc/version:
+--6609--   Linux version 2.6.31-20-generic (buildd@palmer) (gcc version 4.4.1 (Ubuntu 4.4.1-4ubuntu8) ) #58-Ubuntu SMP Fri Mar 12 05:23:09 UTC 2010
+--6609-- Arch and hwcaps: X86, x86-sse1-sse2
+--6609-- Page sizes: currently 4096, max supported 4096
+--6609-- Valgrind library directory: /usr/lib/valgrind
+--6609-- Reading syms from /lib/ld-2.10.1.so (0x4000000)
+--6609-- Reading debug info from /lib/ld-2.10.1.so ..
+--6609-- .. CRC mismatch (computed 5ea3f4db wanted 846118b5)
+--6609-- Reading debug info from /usr/lib/debug/lib/ld-2.10.1.so ..
+--6609-- Reading syms from /home/mikola/GitHub/WebGame/a.out (0x8048000)
+--6609-- Reading syms from /usr/lib/valgrind/memcheck-x86-linux (0x38000000)
+--6609--    object doesn't have a dynamic symbol table
+--6609-- Reading suppressions file: /usr/lib/valgrind/debian-libc6-dbg.supp
+--6609-- Reading suppressions file: /usr/lib/valgrind/default.supp
+--6609-- REDIR: 0x4015e40 (index) redirected to 0x3803e013 (vgPlain_x86_linux_REDIR_FOR_index)
+--6609-- Reading syms from /usr/lib/valgrind/vgpreload_core-x86-linux.so (0x401f000)
+--6609-- Reading syms from /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so (0x4022000)
+==6609== WARNING: new redirection conflicts with existing -- ignoring it
+--6609--     new: 0x04015e40 (index               ) R-> 0x040258c0 index
+--6609-- REDIR: 0x4015ff0 (strlen) redirected to 0x4025bb0 (strlen)
+--6609-- Reading syms from /lib/tls/i686/cmov/libdl-2.10.1.so (0x404d000)
+--6609-- Reading debug info from /lib/tls/i686/cmov/libdl-2.10.1.so ..
+--6609-- .. CRC mismatch (computed 413addca wanted e5ce2e07)
+--6609-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libdl-2.10.1.so ..
+--6609-- Reading syms from /usr/lib/libstdc++.so.6.0.13 (0x4051000)
+--6609-- Reading debug info from /usr/lib/libstdc++.so.6.0.13 ..
+--6609-- .. CRC mismatch (computed 65cf0927 wanted 4a822fd8)
+--6609--    object doesn't have a symbol table
+--6609-- Reading syms from /lib/tls/i686/cmov/libm-2.10.1.so (0x4144000)
+--6609-- Reading debug info from /lib/tls/i686/cmov/libm-2.10.1.so ..
+--6609-- .. CRC mismatch (computed 6afe2146 wanted fa8ea261)
+--6609-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libm-2.10.1.so ..
+--6609-- Reading syms from /lib/libgcc_s.so.1 (0x416a000)
+--6609-- Reading debug info from /lib/libgcc_s.so.1 ..
+--6609-- .. CRC mismatch (computed 790ab395 wanted aab00a11)
+--6609--    object doesn't have a symbol table
+--6609-- Reading syms from /lib/tls/i686/cmov/libpthread-2.10.1.so (0x4188000)
+--6609-- Reading debug info from /lib/tls/i686/cmov/libpthread-2.10.1.so ..
+--6609-- .. CRC mismatch (computed 5e595066 wanted bed8b939)
+--6609-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libpthread-2.10.1.so ..
+--6609-- Reading syms from /lib/tls/i686/cmov/libc-2.10.1.so (0x41a1000)
+--6609-- Reading debug info from /lib/tls/i686/cmov/libc-2.10.1.so ..
+--6609-- .. CRC mismatch (computed 17250532 wanted 2207db29)
+--6609-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libc-2.10.1.so ..
+--6609-- REDIR: 0x4213970 (index) redirected to 0x4025860 (index)
+--6609-- REDIR: 0x4215700 (memchr) redirected to 0x4025fd0 (memchr)
+--6609-- REDIR: 0x42143f0 (rindex) redirected to 0x40257d0 (rindex)
+--6609-- REDIR: 0x4214040 (strlen) redirected to 0x4025b90 (strlen)
+--6609-- REDIR: 0x42160f0 (memcpy) redirected to 0x4026010 (memcpy)
+--6609-- REDIR: 0x4210920 (malloc) redirected to 0x4024b97 (malloc)
+--6609-- REDIR: 0x410bcd0 (operator new[](unsigned int)) redirected to 0x4024f9f (operator new[](unsigned int))
+--6609-- REDIR: 0x410bb90 (operator new(unsigned int)) redirected to 0x402530b (operator new(unsigned int))
+--6609-- REDIR: 0x4109730 (operator delete[](void*)) redirected to 0x402414a (operator delete[](void*))
+--6609-- REDIR: 0x4210840 (free) redirected to 0x40247b1 (free)
+--6609-- REDIR: 0x4210070 (calloc) redirected to 0x4023ea7 (calloc)
+--6609-- REDIR: 0x4213ae0 (strcmp) redirected to 0x4025eb0 (strcmp)
+--6609-- REDIR: 0x4215c00 (memset) redirected to 0x4026b60 (memset)
+--6609-- REDIR: 0x4218960 (rawmemchr) redirected to 0x4026c80 (rawmemchr)
+--6609-- REDIR: 0x4214220 (strncmp) redirected to 0x4025e40 (strncmp)
+--6609-- REDIR: 0x4218a30 (strchrnul) redirected to 0x4026c50 (strchrnul)
+--6609-- REDIR: 0x42140f0 (strnlen) redirected to 0x4025b50 (strnlen)
+--6609-- REDIR: 0x4213b50 (strcpy) redirected to 0x4025bf0 (strcpy)
+--6609-- REDIR: 0x4215c60 (mempcpy) redirected to 0x4026ca0 (mempcpy)
+--6609-- REDIR: 0x4215b90 (memmove) redirected to 0x4026bd0 (memmove)
+--6609-- REDIR: 0x42158a0 (bcmp) redirected to 0x4026820 (bcmp)
+--6609-- REDIR: 0x41096d0 (operator delete(void*)) redirected to 0x40244c8 (operator delete(void*))
+==6609== 
+==6609== Process terminating with default action of signal 2 (SIGINT)
+==6609==    at 0x805F743: mg_stop (in /home/mikola/GitHub/WebGame/a.out)
+==6609==    by 0x804E47B: main (in /home/mikola/GitHub/WebGame/a.out)
+==6609== 
+==6609== HEAP SUMMARY:
+==6609==     in use at exit: 4,103,765 bytes in 278 blocks
+==6609==   total heap usage: 2,887 allocs, 2,609 frees, 4,273,132 bytes allocated
+==6609== 
+==6609== Searching for pointers to 278 not-freed blocks
+==6609== Checked 6,321,756 bytes
+==6609== 
+==6609== LEAK SUMMARY:
+==6609==    definitely lost: 0 bytes in 0 blocks
+==6609==    indirectly lost: 0 bytes in 0 blocks
+==6609==      possibly lost: 293 bytes in 5 blocks
+==6609==    still reachable: 4,103,472 bytes in 273 blocks
+==6609==         suppressed: 0 bytes in 0 blocks
+==6609== Rerun with --leak-check=full to see details of leaked memory
+==6609== 
+==6609== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 21 from 6)
+--6609-- 
+--6609-- used_suppression:     21 Debian libc6 (2.10.x) stripped dynamic linker
+==6609== 
+==6609== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 21 from 6)
