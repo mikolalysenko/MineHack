@@ -205,8 +205,12 @@ Game.heartbeat = function()
 			
 			if(t == 1)					//SetBlock event
 			{
-				if(i + 10 < arr.length)	//Bad packet, drop
+				if(i + 10 > arr.length)	//Bad packet, drop
+				{
+					debugger;
+					alert("dropping packet");
 					return;
+				}
 			
 				var b = arr[i++];
 				var x = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);

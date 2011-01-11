@@ -146,7 +146,7 @@ Player.tick = function()
 			R[1][0], R[1][1], R[1][2],
 			5);
 			
-		if(hit_rec != [])
+		if(hit_rec.length > 0)
 		{
 			Game.push_event(["DigBlock", hit_rec[0], hit_rec[1], hit_rec[2]]);
 		}

@@ -275,11 +275,30 @@ void do_heartbeat(
 		p += d;
 		len -= d;
 	}
+	
+	if(len > 0)
+	{
+		cout << "Warning!  Unused data in heartbeat buffer: ";
+		for(int i=0; i<len; i++)
+		{
+			cout << (int)msg_buf[p+i] << ",";
+		}
+		cout << endl;
+	}
+	
 	//Generate client response
 	len = game_instance->heartbeat(session_id, msg_buf, BUF_LEN);
 	
 	if(len >= 0)
 	{
+		if(len > 0)
+		{
+			cout << "Update packet: ";
+			for(int i=0; i<len; i++)
+				cout << (int)msg_buf[i] << ',';
+			cout << endl;
+		}
+	
 		ajax_send_binary(conn, msg_buf, len);
 	}
 	else
