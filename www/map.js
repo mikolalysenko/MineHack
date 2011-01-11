@@ -133,7 +133,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 			continue;
 		
 		if(	(x == 0 && d_lx != null && 
-				d_lx[31 + ((y + (z<<5))<<5)] == 0) ||
+				d_lx[31 + (y<<5) + (z<<10)] == 0) ||
 			(x > 0 && data[idx-1] == 0) )
 		{
 			//Add -x face
@@ -149,7 +149,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		
 		if(	(x == 31 && d_ux != null && 
-				d_ux[((y + (z<<5))<<5)] == 0) ||
+				d_ux[(y<<5) + (z<<10)] == 0) ||
 			(x < 32 && data[idx+1] == 0) )
 		{
 			//Add +x face

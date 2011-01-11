@@ -228,6 +228,11 @@ void do_get_chunk(
 	}
 	else
 	{
+		cout << "Sending chunk (" << idx.x << ',' << idx.y << ',' << idx.z << "): ";
+		for(int i=0; i<len; i++)
+			cout << (int)chunk_buf[i] << ',';
+		cout << endl;
+	
 		ajax_send_binary(conn, (const void*)chunk_buf, len);	
 	}
 }
@@ -273,19 +278,8 @@ void do_heartbeat(
 	//Generate client response
 	len = game_instance->heartbeat(session_id, msg_buf, BUF_LEN);
 	
-	cout << "Heartbeat Len = " << len << endl;
-	
 	if(len >= 0)
 	{
-		if(len > 0)
-		{
-			cout << "Heartbeat Response: ";
-			for(int i=0; i<len; i++)
-				cout << (int)msg_buf[i] << ',';
-			cout << endl;
-				
-		}
-	
 		ajax_send_binary(conn, msg_buf, len);
 	}
 	else

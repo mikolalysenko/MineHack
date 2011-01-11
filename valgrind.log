@@ -1,98 +1,102 @@
-==4264== Memcheck, a memory error detector
-==4264== Copyright (C) 2002-2009, and GNU GPL'd, by Julian Seward et al.
-==4264== Using Valgrind-3.5.0-Debian and LibVEX; rerun with -h for copyright info
-==4264== Command: ./a.out
-==4264== Parent PID: 4260
-==4264== 
---4264-- 
---4264-- Valgrind options:
---4264--    --suppressions=/usr/lib/valgrind/debian-libc6-dbg.supp
---4264--    -v
---4264--    --log-file=valgrind.log
---4264-- Contents of /proc/version:
---4264--   Linux version 2.6.31-20-generic (buildd@palmer) (gcc version 4.4.1 (Ubuntu 4.4.1-4ubuntu8) ) #58-Ubuntu SMP Fri Mar 12 05:23:09 UTC 2010
---4264-- Arch and hwcaps: X86, x86-sse1-sse2
---4264-- Page sizes: currently 4096, max supported 4096
---4264-- Valgrind library directory: /usr/lib/valgrind
---4264-- Reading syms from /lib/ld-2.10.1.so (0x4000000)
---4264-- Reading debug info from /lib/ld-2.10.1.so ..
---4264-- .. CRC mismatch (computed 5ea3f4db wanted 846118b5)
---4264-- Reading debug info from /usr/lib/debug/lib/ld-2.10.1.so ..
---4264-- Reading syms from /home/mikola/GitHub/WebGame/a.out (0x8048000)
---4264-- Reading syms from /usr/lib/valgrind/memcheck-x86-linux (0x38000000)
---4264--    object doesn't have a dynamic symbol table
---4264-- Reading suppressions file: /usr/lib/valgrind/debian-libc6-dbg.supp
---4264-- Reading suppressions file: /usr/lib/valgrind/default.supp
---4264-- REDIR: 0x4015e40 (index) redirected to 0x3803e013 (vgPlain_x86_linux_REDIR_FOR_index)
---4264-- Reading syms from /usr/lib/valgrind/vgpreload_core-x86-linux.so (0x401f000)
---4264-- Reading syms from /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so (0x4022000)
-==4264== WARNING: new redirection conflicts with existing -- ignoring it
---4264--     new: 0x04015e40 (index               ) R-> 0x040258c0 index
---4264-- REDIR: 0x4015ff0 (strlen) redirected to 0x4025bb0 (strlen)
---4264-- Reading syms from /lib/tls/i686/cmov/libdl-2.10.1.so (0x404d000)
---4264-- Reading debug info from /lib/tls/i686/cmov/libdl-2.10.1.so ..
---4264-- .. CRC mismatch (computed 413addca wanted e5ce2e07)
---4264-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libdl-2.10.1.so ..
---4264-- Reading syms from /usr/lib/libstdc++.so.6.0.13 (0x4051000)
---4264-- Reading debug info from /usr/lib/libstdc++.so.6.0.13 ..
---4264-- .. CRC mismatch (computed 65cf0927 wanted 4a822fd8)
---4264--    object doesn't have a symbol table
---4264-- Reading syms from /lib/tls/i686/cmov/libm-2.10.1.so (0x4144000)
---4264-- Reading debug info from /lib/tls/i686/cmov/libm-2.10.1.so ..
---4264-- .. CRC mismatch (computed 6afe2146 wanted fa8ea261)
---4264-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libm-2.10.1.so ..
---4264-- Reading syms from /lib/libgcc_s.so.1 (0x416a000)
---4264-- Reading debug info from /lib/libgcc_s.so.1 ..
---4264-- .. CRC mismatch (computed 790ab395 wanted aab00a11)
---4264--    object doesn't have a symbol table
---4264-- Reading syms from /lib/tls/i686/cmov/libpthread-2.10.1.so (0x4188000)
---4264-- Reading debug info from /lib/tls/i686/cmov/libpthread-2.10.1.so ..
---4264-- .. CRC mismatch (computed 5e595066 wanted bed8b939)
---4264-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libpthread-2.10.1.so ..
---4264-- Reading syms from /lib/tls/i686/cmov/libc-2.10.1.so (0x41a1000)
---4264-- Reading debug info from /lib/tls/i686/cmov/libc-2.10.1.so ..
---4264-- .. CRC mismatch (computed 17250532 wanted 2207db29)
---4264-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libc-2.10.1.so ..
---4264-- REDIR: 0x4213970 (index) redirected to 0x4025860 (index)
---4264-- REDIR: 0x4215700 (memchr) redirected to 0x4025fd0 (memchr)
---4264-- REDIR: 0x42143f0 (rindex) redirected to 0x40257d0 (rindex)
---4264-- REDIR: 0x4214040 (strlen) redirected to 0x4025b90 (strlen)
---4264-- REDIR: 0x4210920 (malloc) redirected to 0x4024b97 (malloc)
---4264-- REDIR: 0x410bcd0 (operator new[](unsigned int)) redirected to 0x4024f9f (operator new[](unsigned int))
---4264-- REDIR: 0x410bb90 (operator new(unsigned int)) redirected to 0x402530b (operator new(unsigned int))
---4264-- REDIR: 0x4109730 (operator delete[](void*)) redirected to 0x402414a (operator delete[](void*))
---4264-- REDIR: 0x4210840 (free) redirected to 0x40247b1 (free)
---4264-- REDIR: 0x4210070 (calloc) redirected to 0x4023ea7 (calloc)
---4264-- REDIR: 0x4213ae0 (strcmp) redirected to 0x4025eb0 (strcmp)
---4264-- REDIR: 0x4215c00 (memset) redirected to 0x4026b60 (memset)
---4264-- REDIR: 0x4218960 (rawmemchr) redirected to 0x4026c80 (rawmemchr)
---4264-- REDIR: 0x42160f0 (memcpy) redirected to 0x4026010 (memcpy)
---4264-- REDIR: 0x4214220 (strncmp) redirected to 0x4025e40 (strncmp)
---4264-- REDIR: 0x4218a30 (strchrnul) redirected to 0x4026c50 (strchrnul)
---4264-- REDIR: 0x42140f0 (strnlen) redirected to 0x4025b50 (strnlen)
---4264-- REDIR: 0x4213b50 (strcpy) redirected to 0x4025bf0 (strcpy)
---4264-- REDIR: 0x4215c60 (mempcpy) redirected to 0x4026ca0 (mempcpy)
---4264-- REDIR: 0x4215b90 (memmove) redirected to 0x4026bd0 (memmove)
---4264-- REDIR: 0x42158a0 (bcmp) redirected to 0x4026820 (bcmp)
---4264-- REDIR: 0x41096d0 (operator delete(void*)) redirected to 0x40244c8 (operator delete(void*))
-==4264== 
-==4264== HEAP SUMMARY:
-==4264==     in use at exit: 6,925,781 bytes in 435 blocks
-==4264==   total heap usage: 6,507 allocs, 6,072 frees, 7,162,816 bytes allocated
-==4264== 
-==4264== Searching for pointers to 435 not-freed blocks
-==4264== Checked 7,046,176 bytes
-==4264== 
-==4264== LEAK SUMMARY:
-==4264==    definitely lost: 0 bytes in 0 blocks
-==4264==    indirectly lost: 0 bytes in 0 blocks
-==4264==      possibly lost: 48 bytes in 2 blocks
-==4264==    still reachable: 6,925,733 bytes in 433 blocks
-==4264==         suppressed: 0 bytes in 0 blocks
-==4264== Rerun with --leak-check=full to see details of leaked memory
-==4264== 
-==4264== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 21 from 6)
---4264-- 
---4264-- used_suppression:     21 Debian libc6 (2.10.x) stripped dynamic linker
-==4264== 
-==4264== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 21 from 6)
+==5001== Memcheck, a memory error detector
+==5001== Copyright (C) 2002-2009, and GNU GPL'd, by Julian Seward et al.
+==5001== Using Valgrind-3.5.0-Debian and LibVEX; rerun with -h for copyright info
+==5001== Command: ./a.out
+==5001== Parent PID: 4961
+==5001== 
+--5001-- 
+--5001-- Valgrind options:
+--5001--    --suppressions=/usr/lib/valgrind/debian-libc6-dbg.supp
+--5001--    -v
+--5001--    --log-file=valgrind.log
+--5001-- Contents of /proc/version:
+--5001--   Linux version 2.6.31-20-generic (buildd@palmer) (gcc version 4.4.1 (Ubuntu 4.4.1-4ubuntu8) ) #58-Ubuntu SMP Fri Mar 12 05:23:09 UTC 2010
+--5001-- Arch and hwcaps: X86, x86-sse1-sse2
+--5001-- Page sizes: currently 4096, max supported 4096
+--5001-- Valgrind library directory: /usr/lib/valgrind
+--5001-- Reading syms from /lib/ld-2.10.1.so (0x4000000)
+--5001-- Reading debug info from /lib/ld-2.10.1.so ..
+--5001-- .. CRC mismatch (computed 5ea3f4db wanted 846118b5)
+--5001-- Reading debug info from /usr/lib/debug/lib/ld-2.10.1.so ..
+--5001-- Reading syms from /home/mikola/GitHub/WebGame/a.out (0x8048000)
+--5001-- Reading syms from /usr/lib/valgrind/memcheck-x86-linux (0x38000000)
+--5001--    object doesn't have a dynamic symbol table
+--5001-- Reading suppressions file: /usr/lib/valgrind/debian-libc6-dbg.supp
+--5001-- Reading suppressions file: /usr/lib/valgrind/default.supp
+--5001-- REDIR: 0x4015e40 (index) redirected to 0x3803e013 (vgPlain_x86_linux_REDIR_FOR_index)
+--5001-- Reading syms from /usr/lib/valgrind/vgpreload_core-x86-linux.so (0x401f000)
+--5001-- Reading syms from /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so (0x4022000)
+==5001== WARNING: new redirection conflicts with existing -- ignoring it
+--5001--     new: 0x04015e40 (index               ) R-> 0x040258c0 index
+--5001-- REDIR: 0x4015ff0 (strlen) redirected to 0x4025bb0 (strlen)
+--5001-- Reading syms from /lib/tls/i686/cmov/libdl-2.10.1.so (0x404d000)
+--5001-- Reading debug info from /lib/tls/i686/cmov/libdl-2.10.1.so ..
+--5001-- .. CRC mismatch (computed 413addca wanted e5ce2e07)
+--5001-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libdl-2.10.1.so ..
+--5001-- Reading syms from /usr/lib/libstdc++.so.6.0.13 (0x4051000)
+--5001-- Reading debug info from /usr/lib/libstdc++.so.6.0.13 ..
+--5001-- .. CRC mismatch (computed 65cf0927 wanted 4a822fd8)
+--5001--    object doesn't have a symbol table
+--5001-- Reading syms from /lib/tls/i686/cmov/libm-2.10.1.so (0x4144000)
+--5001-- Reading debug info from /lib/tls/i686/cmov/libm-2.10.1.so ..
+--5001-- .. CRC mismatch (computed 6afe2146 wanted fa8ea261)
+--5001-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libm-2.10.1.so ..
+--5001-- Reading syms from /lib/libgcc_s.so.1 (0x416a000)
+--5001-- Reading debug info from /lib/libgcc_s.so.1 ..
+--5001-- .. CRC mismatch (computed 790ab395 wanted aab00a11)
+--5001--    object doesn't have a symbol table
+--5001-- Reading syms from /lib/tls/i686/cmov/libpthread-2.10.1.so (0x4188000)
+--5001-- Reading debug info from /lib/tls/i686/cmov/libpthread-2.10.1.so ..
+--5001-- .. CRC mismatch (computed 5e595066 wanted bed8b939)
+--5001-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libpthread-2.10.1.so ..
+--5001-- Reading syms from /lib/tls/i686/cmov/libc-2.10.1.so (0x41a1000)
+--5001-- Reading debug info from /lib/tls/i686/cmov/libc-2.10.1.so ..
+--5001-- .. CRC mismatch (computed 17250532 wanted 2207db29)
+--5001-- Reading debug info from /usr/lib/debug/lib/tls/i686/cmov/libc-2.10.1.so ..
+--5001-- REDIR: 0x4213970 (index) redirected to 0x4025860 (index)
+--5001-- REDIR: 0x4215700 (memchr) redirected to 0x4025fd0 (memchr)
+--5001-- REDIR: 0x42143f0 (rindex) redirected to 0x40257d0 (rindex)
+--5001-- REDIR: 0x4214040 (strlen) redirected to 0x4025b90 (strlen)
+--5001-- REDIR: 0x4210920 (malloc) redirected to 0x4024b97 (malloc)
+--5001-- REDIR: 0x410bcd0 (operator new[](unsigned int)) redirected to 0x4024f9f (operator new[](unsigned int))
+--5001-- REDIR: 0x410bb90 (operator new(unsigned int)) redirected to 0x402530b (operator new(unsigned int))
+--5001-- REDIR: 0x4109730 (operator delete[](void*)) redirected to 0x402414a (operator delete[](void*))
+--5001-- REDIR: 0x4210840 (free) redirected to 0x40247b1 (free)
+--5001-- REDIR: 0x4210070 (calloc) redirected to 0x4023ea7 (calloc)
+--5001-- REDIR: 0x4213ae0 (strcmp) redirected to 0x4025eb0 (strcmp)
+--5001-- REDIR: 0x4215c00 (memset) redirected to 0x4026b60 (memset)
+--5001-- REDIR: 0x4218960 (rawmemchr) redirected to 0x4026c80 (rawmemchr)
+--5001-- REDIR: 0x42160f0 (memcpy) redirected to 0x4026010 (memcpy)
+--5001-- REDIR: 0x4214220 (strncmp) redirected to 0x4025e40 (strncmp)
+--5001-- REDIR: 0x4215df0 (stpcpy) redirected to 0x40268c0 (stpcpy)
+--5001-- REDIR: 0x4215c60 (mempcpy) redirected to 0x4026ca0 (mempcpy)
+--5001-- REDIR: 0x4218a30 (strchrnul) redirected to 0x4026c50 (strchrnul)
+--5001-- REDIR: 0x42140f0 (strnlen) redirected to 0x4025b50 (strnlen)
+--5001-- REDIR: 0x4211860 (realloc) redirected to 0x4024c46 (realloc)
+==5001== 
+==5001== Process terminating with default action of signal 6 (SIGABRT)
+==5001==    at 0x41CB4D1: raise (raise.c:64)
+==5001==    by 0x41CE931: abort (abort.c:92)
+==5001==    by 0x41C4647: __assert_fail (assert.c:81)
+==5001==    by 0x804E42D: main (in /home/mikola/GitHub/WebGame/a.out)
+==5001== 
+==5001== HEAP SUMMARY:
+==5001==     in use at exit: 283 bytes in 5 blocks
+==5001==   total heap usage: 19 allocs, 14 frees, 10,426 bytes allocated
+==5001== 
+==5001== Searching for pointers to 5 not-freed blocks
+==5001== Checked 118,720 bytes
+==5001== 
+==5001== LEAK SUMMARY:
+==5001==    definitely lost: 0 bytes in 0 blocks
+==5001==    indirectly lost: 0 bytes in 0 blocks
+==5001==      possibly lost: 0 bytes in 0 blocks
+==5001==    still reachable: 283 bytes in 5 blocks
+==5001==         suppressed: 0 bytes in 0 blocks
+==5001== Rerun with --leak-check=full to see details of leaked memory
+==5001== 
+==5001== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 21 from 6)
+--5001-- 
+--5001-- used_suppression:     21 Debian libc6 (2.10.x) stripped dynamic linker
+==5001== 
+==5001== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 21 from 6)

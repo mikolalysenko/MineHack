@@ -21,7 +21,7 @@ Block WorldGen::generate_block(int x, int y, int z)
 
 Chunk* WorldGen::generate_chunk(ChunkID const& idx)
 {
-	auto res = new Chunk();
+	auto res = new Chunk(idx);
 	
 	for(int i=0; i<CHUNK_X; i++)
 	for(int j=0; j<CHUNK_Y; j++)

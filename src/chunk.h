@@ -45,8 +45,9 @@ namespace Game
 	struct Chunk
 	{
 		ChunkID idx;
-		bool dirty;  //If set, this chunk has been modified
 		Block data[CHUNK_X*CHUNK_Y*CHUNK_Z];
+		
+		Chunk(ChunkID id) : idx(id) {}
 		
 		//Block accessor functions
 		Block get(int x, int y, int z) const

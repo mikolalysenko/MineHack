@@ -159,8 +159,6 @@ void World::handle_place_block(Player* p,  BlockEvent const& ev)
 
 void World::handle_player_tick(Player* p, PlayerEvent const& ev)
 {
-	cout << "Got player update" << endl;
-	
 	//TODO: Sanity check input values from client
 	// apply some prediction/filtering to infer new position
 	
@@ -221,8 +219,6 @@ void World::tick()
 	{
 		//Recover event pointer
 		auto ev = *iter;
-		
-		cout << "Got event: " << (int)ev.type << endl;
 		
 		//Special case:  Join events don't have a player associated to them
 		if(ev.type == InputEventType::PlayerJoin)
