@@ -14,8 +14,11 @@ const CHUNK_X		= (1<<CHUNK_X_S);
 const CHUNK_Y		= (1<<CHUNK_Y_S);
 const CHUNK_Z		= (1<<CHUNK_Z_S);
 
-const CHUNK_X_MASK	= 1 - CHUNK_X;
-const CHUNK_Y_MASK	= 1 - CHUNK_Y;
-const CHUNK_Z_MASK	= 1 - CHUNK_Z;
+const CHUNK_X_MASK	= CHUNK_X - 1;
+const CHUNK_Y_MASK	= CHUNK_Y - 1;
+const CHUNK_Z_MASK	= CHUNK_Z - 1;
 
+const CHUNK_SIZE	= CHUNK_X * CHUNK_Y * CHUNK_Z;
+
+const CHUNK_DIMS	= [ CHUNK_X, CHUNK_Y, CHUNK_Z ];
 
