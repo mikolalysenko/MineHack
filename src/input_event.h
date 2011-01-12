@@ -19,6 +19,7 @@ namespace Game
 		PlayerTick	= 1,
 		DigBlock	= 2,
 		PlaceBlock	= 3,
+		Chat		= 4,
 		
 		//Internal event types, first 256 values used for network events
 		PlayerJoin	= 0x100,
@@ -62,6 +63,14 @@ namespace Game
 		int extract(void* buf, size_t len);
 	};
 	
+	
+	struct ChatEvent
+	{
+		uint8_t len;
+		char msg[128];
+		
+		int extract(void* buf, size_t len);
+	};
 		
 	struct InputEvent
 	{
@@ -75,6 +84,7 @@ namespace Game
 			PlayerEvent player_event;
 			LeaveEvent	leave_event;
 			BlockEvent	block_event;
+			ChatEvent	chat_event;
 		};
 		
 		

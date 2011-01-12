@@ -193,6 +193,30 @@ void World::handle_dig_block(Player* p, DigEvent const& dig)
 	broadcast_update(up, x, y, z, 128.0);
 }
 
+void World::handle_chat(Player* p, ChatEvent const& chat)
+{
+	//Create null terminated buffer for pretty printing
+	char buffer[129];
+	memcpy(buffer, chat.msg, chat.len);
+	buffer[chat.len] = 0;
+	
+	cout << p->name << " says: " << buffer << endl;
+	
+	//TODO: Filtering/sanity check
+	if(p->name.size() > 20 || chat.len > 128)
+		return;
+	
+	UpdateEvent up;
+	up.type = UpdateEventType::Chat;
+	
+	up.chat_event.name_len = p->name.size();
+	memcpy(up.chat_event.name, p->name.c_str(), up.chat_event.name_len);
+	up.chat_event.msg_len = chat.len;
+	memcpy(up.chat_event.msg, chat.msg, chat.len);
+	
+	broadcast_update(up, p->pos[0], p->pos[1], p->pos[2], 256.0);
+};
+
 
 
 
@@ -249,6 +273,10 @@ void World::tick()
 			
 			case InputEventType::PlayerTick:
 				handle_player_tick(p, ev.player_event);
+			break;
+			
+			case InputEventType::Chat:
+				handle_chat(p, ev.chat_event);
 			break;
 		
 			default:

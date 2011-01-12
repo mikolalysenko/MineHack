@@ -23,13 +23,30 @@ int UpdateBlockEvent::write(void* bufv, size_t buf_len) const
 	return 10;
 }
 
+int UpdateChatEvent::write(void* bufv, size_t buf_len) const
+{
+	if(buf_len < name_len + msg_len + 2)
+		return -1;
+		
+	uint8_t* ptr = (uint8_t*)bufv;
+	
+	assert(name_len < 20);
+	*(ptr++) = name_len;
+	memcpy(ptr, name, name_len);
+	ptr += name_len;
+
+	*(ptr++) = msg_len;
+	memcpy(ptr, msg, msg_len);
+	
+	return name_len + msg_len + 2;
+}
+
 
 
 //Update event serialization
 int UpdateEvent::write(void* bufv, size_t buf_len) const
 {
 	uint8_t* buf = (uint8_t*)bufv;
-	int l = 0;
 	
 	//Write the type byte
 	if(buf_len < 1)
@@ -37,16 +54,20 @@ int UpdateEvent::write(void* bufv, size_t buf_len) const
 	*(buf++) = (uint8_t)type;
 	buf_len--;
 	
-	if(type == UpdateEventType::SetBlock)
+	int r = -1;
+	
+	switch(type)
 	{
-		int r = block_event.write(buf, buf_len);
-		if(r < 0)
-			return -1;
-		return r+1;
+		case UpdateEventType::SetBlock:
+			r = block_event.write(buf, buf_len);
+		break;
+		
+		case UpdateEventType::Chat:
+			r = chat_event.write(buf, buf_len);
+		break;
 	}
-	else
-	{
-	}
-
-	return -1;
+	
+	if(r < 0)
+		return -1;
+	return r+1;
 }

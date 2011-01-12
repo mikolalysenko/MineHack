@@ -15,7 +15,7 @@ using namespace std;
 namespace Server
 {
 const int PASSWORD_HASH_LEN = 64;
-const int USERNAME_MAX_LEN = 20;
+const int USERNAME_MAX_LEN = 20;	//Required
 const int USERNAME_MIN_LEN = 3;
 
 //User account data

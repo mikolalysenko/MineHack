@@ -59,6 +59,7 @@ namespace Game
 		void handle_place_block(Player*, BlockEvent const&);
 		void handle_dig_block(Player*, DigEvent const&);
 		void handle_player_tick(Player*, PlayerEvent const&);
+		void handle_chat(Player*, ChatEvent const&);
 
 		//Broadcasts an update to all players in radius
 		void broadcast_update(UpdateEvent const& ev, double, double, double, double radius);

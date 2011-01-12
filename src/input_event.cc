@@ -43,6 +43,24 @@ int BlockEvent::extract(void* buf, size_t buf_len)
 	return 0;
 }
 
+
+//Extracts a chat event from the stream
+int ChatEvent::extract(void* buf, size_t buf_len)
+{
+	if(buf_len < 1)
+		return -1;
+
+	uint8_t* ptr = (uint8_t*)buf;
+	
+	len = *(ptr++);
+	if(buf_len < len+1 || len > 128)
+		return -1;
+	
+	memcpy(msg, ptr, len);
+	return len+1;
+}
+
+
 int JoinEvent::extract(void* buf, size_t buf_len)
 {
 	assert(false);	//not network serializable
@@ -83,7 +101,11 @@ int InputEvent::extract(
 
 		case InputEventType::PlaceBlock:
 			l = block_event.extract(ptr, buf_len);
-		break;		
+		break;
+		
+		case InputEventType::Chat:
+			l = chat_event.extract(ptr, buf_len);
+		break;
 		
 		case InputEventType::PlayerJoin:
 			l = join_event.extract(ptr, buf_len);

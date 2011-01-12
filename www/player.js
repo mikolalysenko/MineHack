@@ -11,7 +11,8 @@ var Player =
 		68 : "right",
 		32 : "jump",
 		67 : "crouch",
-		66 : "dig"
+		66 : "dig",
+		84 : "chat"
 	},
 	
 	//Input state
@@ -22,7 +23,8 @@ var Player =
 		"right" : 0,
 		"jump" : 0,
 		"crouch" : 0,
-		"dig" : 0
+		"dig" : 0,
+		"chat" : 0
 	},
 	
 	//
@@ -106,6 +108,41 @@ Player.net_state = function()
 	return res;
 }
 
+Player.show_chat_input = function()
+{
+	var chatBox = document.getElementById("chatBox");
+	
+	if(chatBox.style.display == "none")
+	{
+		chatBox.onkeypress = function(cc)
+		{
+		
+			if(cc.keyCode != 13)
+				return true;
+		
+			var txt = chatBox.value;
+			chatBox.value = "";
+			chatBox.style.display = "none";
+		
+			if(txt.length > 128)
+			{
+				txt = txt.substring(0, 128);
+			}
+			if(txt.length > 0)
+			{
+				Game.push_event(["Chat", txt]);
+			}
+			
+			Game.canvas.focus();
+
+			return false;
+		};
+	
+		chatBox.style.display = "block";	
+		chatBox.focus();
+	}
+}
+
 Player.tick = function()
 {
 	var front = [ -Math.sin(Player.yaw), 0, -Math.cos(Player.yaw) ];
@@ -152,6 +189,12 @@ Player.tick = function()
 		}
 	}
 
+
+	if(Player.input["chat"] == 1)
+	{
+		Player.show_chat_input();
+		Player.input["chat"] = 0;
+	}
 
 	Player.yaw -= Player.dx * Player.dx * Player.dx;
 

@@ -5,6 +5,8 @@ Game =
 	
 	tick_count : 0,
 	
+	TICKS_PER_HEARTBEAT : 2,
+	
 	update_rate : 40,
 
 	znear : 1.0,
@@ -23,6 +25,15 @@ Game.resize = function()
 	
 	Game.width = Game.canvas.width;
 	Game.height = Game.canvas.height;
+	
+	//Set the dimensions for the UI stuff
+	var appPanel = document.getElementById("appElem");
+	appPanel.width = Game.canvas.width;
+	appPanel.height = Game.canvas.height;
+	
+	//Set UI position
+	var uiPanel = document.getElementById("uiPanel");
+	
 	
 	Game.draw();
 }
@@ -154,6 +165,36 @@ Game.event_serializers = {
 		}
 		
 		return res.buffer;
+	},
+	
+	"PlaceBlock" : function(ev)
+	{
+		var res = new Uint8Array(1);
+		
+		res[0] = 3;				//Event type
+		
+		//TODO: Pack more data here
+		
+		
+		return res.buffer;
+	},
+	
+	"Chat" : function(ev)
+	{
+		var utf8str = Utf8.decode(ev[1]);
+		
+		if(utf8str.length > 128)
+			break;
+		
+		var res = new Uint8Array(utf8str.length+2);
+		
+		res[0] = 4;					//Event type
+		res[1] = utf8str.length;	//String length
+		
+		for(var i=0; i<utf8str.length; i++)
+			res[i+2] = utf8str.charCodeAt(i);
+			
+		return res.buffer;
 	}
 };
 
@@ -180,10 +221,54 @@ Game.update_handlers = {
 		Map.set_block(x, y, z, b);
 		
 		return 10;
+	},
+	
+	//Chat event
+	2 : function(arr)
+	{
+		if(arr.length < 1)
+			return -1;
+		var name_len = arr[0];
+		
+		if(arr.length < name_len+2)
+			return -1;
+		var name_str_utf = arr.slice(1, name_len+1);
+		var msg_len = arr[name_len+1];
+		
+		var len = name_len + msg_len + 2;
+		
+		if(arr.length < len)
+			return -1;
+		var msg_str_utf = arr.slice(name_len+2, name_len+msg_len+2);
+
+		var uint2utf = function(v)
+		{
+			var res = ""
+			for(var i=0; i<v.length; i++)
+				res += String.fromCharCode(v[i]);
+			
+			res = Utf8.decode(res);
+			
+			return res.replace("&", "&amp;")
+					  .replace("<", "&lt;")
+					  .replace(">", "&gt;");
+		}
+		
+		var name_str = uint2utf(name_str_utf);
+		var msg_str = uint2utf(msg_str_utf);
+		
+		var html_str = "<b>" + name_str + "</b>: " + msg_str + "<br/>";
+		
+		//Add to chat log
+		var chat_log = document.getElementById("chatLog");
+		chat_log.innerHTML += html_str;
+		
+		return len;
 	}
 };
 
-
+//Pushes an input event to the server
+//Event is sent in a packet with all other input events when the next heartbeat event fires
 Game.push_event = function(ev)
 {
 	//Bandwidth optimization, avoid sending redundant input events
@@ -263,7 +348,7 @@ Game.heartbeat = function()
 
 Game.tick = function()
 {
-	if(Game.tick_count % 2 == 0)
+	if(Game.tick_count % Game.TICKS_PER_HEARTBEAT == 0)
 		Game.heartbeat();
 
 	++Game.tick_count;
