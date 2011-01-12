@@ -45,26 +45,4 @@ Chunk* Map::get_chunk(ChunkID const& idx)
 	return (*iter).second;
 }
 
-//Acquires a read lock for a particular region
-RegionReadLock::RegionReadLock(Map* m, const Region& r) : map(m), region(r)
-{
-	pthread_rwlock_rdlock(&(map->map_lock));
-}
-
-RegionReadLock::~RegionReadLock()
-{
-	pthread_rwlock_unlock(&(map->map_lock));
-}
-	
-//Acquires a write lock for a particular region
-RegionWriteLock::RegionWriteLock(Map* m, const Region& r) : map(m), region(r)
-{
-	pthread_rwlock_wrlock(&(map->map_lock));	
-}
-
-RegionWriteLock::~RegionWriteLock()
-{
-	pthread_rwlock_unlock(&(map->map_lock));
-}
-
 };

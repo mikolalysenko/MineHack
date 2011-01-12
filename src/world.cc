@@ -1,5 +1,7 @@
 #include <pthread.h>
 
+#include <cstring>
+#include <cassert>
 #include <utility>
 #include <iostream>
 #include <vector>
@@ -11,7 +13,6 @@
 #include "world.h"
 
 using namespace std;
-using namespace Eigen;
 using namespace Server;
 
 namespace Game
@@ -44,7 +45,7 @@ int World::get_compressed_chunk(
 	size_t buf_len)
 {
 	//Lock region for reading
-	RegionReadLock lock(game_map, chunk_id);
+	ReadLock lock(&game_map->map_lock);
 	Chunk* chunk = game_map->get_chunk(chunk_id);	
 	return chunk->compress((void*)buf, buf_len);
 }
@@ -234,9 +235,9 @@ void World::tick()
 	MutexLock pl(&players_lock);
 	
 	//Acquire a map-wide lock
-	Region r;
-	RegionWriteLock rl(game_map, r);
-	
+	WriteLock ml(&game_map->map_lock);
+
+		
 	//Handle all events
 	for(auto iter = events.begin(); iter!=events.end(); ++iter)
 	{

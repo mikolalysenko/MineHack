@@ -6,8 +6,6 @@
 #include <map>
 #include <cstdint>
 
-#include <Eigen/Core>
-
 #include "session.h"
 #include "chunk.h"
 #include "input_event.h"

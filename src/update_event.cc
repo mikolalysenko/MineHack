@@ -1,5 +1,9 @@
+#include <cstring>
+#include <cassert>
+
 #include "update_event.h"
 
+using namespace std;
 using namespace Game;
 
 int UpdateBlockEvent::write(void* bufv, size_t buf_len) const

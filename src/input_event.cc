@@ -1,3 +1,4 @@
+#include <cstring>
 #include <cassert>
 #include "input_event.h"
 
