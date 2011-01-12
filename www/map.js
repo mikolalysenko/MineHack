@@ -152,11 +152,11 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(x == CHUNK_X_MASK && 
+		if(	(x == CHUNK_X-1 && 
 				d_ux != null && 
 				d_ux[(y				<<CHUNK_X_S) + 
 					 (z				<<CHUNK_XY_S)] == 0) ||
-			(x < CHUNK_X && 
+			(x < CHUNK_X-1 && 
 				data[idx+CHUNK_X_STEP] == 0) )
 		{
 			//Add +x face
@@ -192,10 +192,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 2);
 		}
 		
-		if(	(y == CHUNK_Y_MASK && 
+		if(	(y == CHUNK_Y-1 && 
 				d_uy != null && 
 				d_uy[x + (z << CHUNK_XY_S)] == 0) ||
-			(y < CHUNK_Y && 
+			(y < CHUNK_Y-1 && 
 				data[idx+CHUNK_Y_STEP] == 0) )
 		{
 			//Add +y face
@@ -231,10 +231,11 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(z == CHUNK_Z_MASK && 
+		if(	(z == CHUNK_Z-1 && 
 				d_uz != null && 
 				d_uz[x + (y<<CHUNK_X_S)] == 0) ||
-			(z < CHUNK_Z && data[idx+CHUNK_Z_STEP] == 0) )
+			(z < CHUNK_Z-1 && 
+				data[idx+CHUNK_Z_STEP] == 0) )
 		{
 			//Add +z face
 			add_face();
