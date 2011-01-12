@@ -385,6 +385,8 @@ void loop()
 			else
 				msg_buf[buf_ptr++] = c;
 		}
+		
+		usleep(1);
 	}
 }
 
