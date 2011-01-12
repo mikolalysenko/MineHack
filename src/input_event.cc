@@ -1,5 +1,8 @@
 #include <cstring>
 #include <cassert>
+
+#include "session.h"
+
 #include "input_event.h"
 
 using namespace Game;
@@ -54,9 +57,11 @@ int ChatEvent::extract(void* buf, size_t buf_len)
 	uint8_t* ptr = (uint8_t*)buf;
 	
 	len = *(ptr++);
-	if(buf_len < len+1 || len > 128)
+	if(buf_len < len+1 || len > CHAT_LINE_MAX_LEN)
 		return -1;
 	
+	//Zero out the chat buffer
+	memset(msg, 0, CHAT_LINE_MAX_LEN);
 	memcpy(msg, ptr, len);
 	return len+1;
 }

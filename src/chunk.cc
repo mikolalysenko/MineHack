@@ -10,31 +10,9 @@ namespace Game
 //Future idea: switch to Hilbert order curve
 uint64_t ChunkID::hash() const
 {
-/*
-	static const uint64_t B[] = 
-	{
-		0xFFFF00000000FFFFULL,
-		0x00FF0000FF0000FFULL,
-		0xF00F00F00F00F00FULL,
-		0x30c30c30c30c30c3ULL,
-		0x9249249249249249ULL
-	};
-	
-	uint64_t bx = x, by = y, bz = z;
-	
-	for(uint64_t i=48, j=0; i>0; i>>=1, ++j)
-	{
-		bx = (bx | (bx << i)) & B[j];
-		by = (by | (by << i)) & B[j];
-		bz = (bz | (bz << i)) & B[j];
-	}
-	
-	return bx | (by << 1) | (bz << 2);
-*/
-
 	return (uint64_t)x |
-		   (((uint64_t)y)<<21ULL) |
-		   (((uint64_t)z)<<42ULL);
+		   (((uint64_t)y)<<CHUNK_IDX_S) |
+		   (((uint64_t)z)<<CHUNK_IDX_S);
 }
 
 

@@ -3,6 +3,13 @@
 
 #include <string>
 
+//Constants for different buffer sizes
+
+#define PASSWORD_HASH_LEN		64
+#define USERNAME_MAX_LEN		20
+#define USERNAME_MIN_LEN		3
+
+
 namespace Server
 {
 	void init_login();

@@ -250,4 +250,4 @@ list:
 # Remove all files that are normally created by building the program.
 .PHONY:	clean
 clean:
-	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps)
+	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps) data/*

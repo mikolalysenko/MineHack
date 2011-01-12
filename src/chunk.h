@@ -6,14 +6,43 @@
 #include <cstdlib>
 #include <cstdint>
 
-#define CHUNK_X 32
-#define CHUNK_Y 32
-#define CHUNK_Z 32
+//Chunk dimensions
 
-#define CHUNK_MAX_X		(1<<21)
-#define CHUNK_MAX_Y		(1<<21)
-#define CHUNK_MAX_Z		(1<<21)
+#define CHUNK_X_S			5
+#define CHUNK_Y_S			5
+#define CHUNK_Z_S			5
 
+#define CHUNK_X				(1<<CHUNK_X_S)
+#define CHUNK_Y				(1<<CHUNK_Y_S)
+#define CHUNK_Z				(1<<CHUNK_Z_S)
+
+#define CHUNK_X_MASK		(CHUNK_X-1)
+#define CHUNK_Y_MASK		(CHUNK_Y-1)
+#define CHUNK_Z_MASK		(CHUNK_Z-1)
+
+//Index within a chunk
+#define CHUNK_OFFSET(X,Y,Z)	((X)+((Y)<<CHUNK_X_S)+((Z)<<(CHUNK_X_S+CHUNK_Y_S)))
+
+//Maximum length for a compressed chunk
+#define MAX_CHUNK_BUFFER_LEN	(CHUNK_X*CHUNK_Y*CHUNK_Z*2)
+
+//Number of bits for a chunk index
+#define CHUNK_IDX_S			21ULL
+
+//Size of max chunk index
+#define CHUNK_IDX_MAX		(1<<CHUNK_IDX_S)
+
+#define CHUNK_IDX_MASK		(CHUNK_IDX_MAX - 1)
+
+//Coordinate indexing stuff
+#define COORD_MAX_X			(CHUNK_X + (CHUNK_IDX_MAX<<CHUNK_X_S))
+#define COORD_MAX_Y			(CHUNK_Y + (CHUNK_IDX_MAX<<CHUNK_Y_S))
+#define COORD_MAX_Z			(CHUNK_Z + (CHUNK_IDX_MAX<<CHUNK_Z_S))
+
+//Converts a coordinate into a chunk index
+#define COORD2CHUNKID(X,Y,Z)	(Game::ChunkID( ((X)>>(CHUNK_X_S)) & CHUNK_IDX_MASK, \
+												((Y)>>(CHUNK_Y_S)) & CHUNK_IDX_MASK, \
+												((Z)>>(CHUNK_Z_S)) & CHUNK_IDX_MASK ) )
 
 namespace Game
 {
@@ -54,7 +83,7 @@ namespace Game
 			assert(	x >= 0 && x < CHUNK_X &&
 					y >= 0 && y < CHUNK_Y &&
 					z >= 0 && z < CHUNK_Z );
-			return data[x + (y<<5) + (z<<10)];
+			return data[CHUNK_OFFSET(x, y, z)];
 		}
 		
 		Block set(int x, int y, int z, Block b)
@@ -62,7 +91,7 @@ namespace Game
 			assert( x >= 0 && x < CHUNK_X &&
 					y >= 0 && y < CHUNK_Y &&
 					z >= 0 && z < CHUNK_Z );
-			return data[x + (y<<5) + (z<<10)] = b;			
+			return data[CHUNK_OFFSET(x, y, z)] = b;			
 		}
 		
 		//Compress this chunk into the target buffer

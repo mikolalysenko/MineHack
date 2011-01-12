@@ -34,11 +34,12 @@ int UpdateChatEvent::write(void* bufv, size_t buf_len) const
 		
 	uint8_t* ptr = (uint8_t*)bufv;
 	
-	assert(name_len < 20);
+	assert(name_len <= USERNAME_MAX_LEN);
 	*(ptr++) = name_len;
 	memcpy(ptr, name, name_len);
 	ptr += name_len;
 
+	assert(msg_len <= CHAT_LINE_MAX_LEN);
 	*(ptr++) = msg_len;
 	memcpy(ptr, msg, msg_len);
 	

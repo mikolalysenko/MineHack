@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <string>
 
+//Length of a session id string
+#define SESSION_ID_STR_LEN		32
+
 namespace Server
 {
 	struct SessionID

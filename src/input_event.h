@@ -5,9 +5,11 @@
 #include <string>
 #include <cstdint>
 
+#include "login.h"
 #include "session.h"
-
 #include "chunk.h"
+
+#define CHAT_LINE_MAX_LEN	128
 
 namespace Game
 {
@@ -53,7 +55,7 @@ namespace Game
 
 	struct JoinEvent
 	{
-		char name[32];
+		char name[USERNAME_MAX_LEN];
 		
 		int extract(void* buf, size_t len);
 	};
@@ -67,7 +69,7 @@ namespace Game
 	struct ChatEvent
 	{
 		uint8_t len;
-		char msg[128];
+		char msg[CHAT_LINE_MAX_LEN];
 		
 		int extract(void* buf, size_t len);
 	};

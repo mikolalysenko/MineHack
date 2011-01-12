@@ -3,7 +3,9 @@
 
 #include <string>
 
+#include "login.h"
 #include "chunk.h"
+#include "input_event.h"
 
 namespace Game
 {
@@ -24,10 +26,10 @@ namespace Game
 	struct UpdateChatEvent
 	{
 		uint8_t name_len;
-		char name[20];
+		char name[USERNAME_MAX_LEN];
 		
 		uint8_t msg_len;
-		char msg[128];
+		char msg[CHAT_LINE_MAX_LEN];
 
 		int write(void* buf, size_t len) const;
 	};

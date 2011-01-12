@@ -16,6 +16,15 @@ using namespace std;
 using namespace Server;
 using namespace Game;
 
+//Size of an integer query variable
+#define INT_QUERY_LEN		32
+
+//Length of the console command buffer
+#define COMMAND_BUFFER_LEN	256
+
+//Maximum size for an event packet
+#define EVENT_PACKET_SIZE	(1<<16)
+
 static const char *options[] = {
   "document_root", "www",
   "listening_ports", "8081",
@@ -62,12 +71,12 @@ void deinit()
 
 int get_int(const char* id, const mg_request_info *req)
 {
-	char str[16];
+	char str[INT_QUERY_LEN];
 	
 	const char* qs = req->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, id, str, 16);
+	mg_get_var(qs, qs_len, id, str, INT_QUERY_LEN);
 	
 	stringstream ss(str);
 	int res;
@@ -94,12 +103,12 @@ void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 //Retrieves the session id
 bool get_session_id(const mg_request_info* request_info, SessionID& res)
 {
-	char session_id_str[128];
+	char session_id_str[SESSION_ID_STR_LEN];
 	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, "k", session_id_str, 127);
+	mg_get_var(qs, qs_len, "k", session_id_str, SESSION_ID_STR_LEN);
 	
 	if(session_id_str[0] == '\0')
 		return false;
@@ -118,16 +127,19 @@ void do_login(
 	mg_connection* conn, 
 	const mg_request_info* request_info)
 {
-	char user_name[32];
-	char password_hash[256];
+	char user_name[USERNAME_MAX_LEN+1];
+	char password_hash[PASSWORD_HASH_LEN+1];
 	
-	
+	//Construct query string
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	memset(user_name, 0, 32);
-	mg_get_var(qs, qs_len, "n", user_name, 20);
-	mg_get_var(qs, qs_len, "p", password_hash, 256);
+	//Read user/name password from query string
+	memset(user_name, 		0, USERNAME_MAX_LEN+1);
+	mg_get_var(qs, qs_len, "n", user_name, USERNAME_MAX_LEN+1);
+	
+	memset(password_hash,	0, PASSWORD_HASH_LEN+1);
+	mg_get_var(qs, qs_len, "p", password_hash, PASSWORD_HASH_LEN+1);
 	
 	cout << "got login: " << user_name << ", pwd hash = " << password_hash << endl;
 	
@@ -135,11 +147,13 @@ void do_login(
 	SessionID key;
 	if(verify_user_name(user_name, password_hash) && create_session(user_name, key))
 	{
-		//Push login event to server
+		//Initialize login event
 		InputEvent ev;
-		ev.type = InputEventType::PlayerJoin;
-		ev.session_id = key;
-		memcpy(ev.join_event.name, user_name, 32);
+		ev.type 		= InputEventType::PlayerJoin;
+		ev.session_id 	= key;
+		memcpy(ev.join_event.name, user_name, USERNAME_MAX_LEN);
+		
+		//Push to the server
 		game_instance->add_event(ev);
 	
 		
@@ -162,21 +176,29 @@ void do_register(
 	mg_connection* conn, 
 	const mg_request_info* request_info)
 {
-	char user_name[256];
-	char password_hash[256];
+	char user_name[USERNAME_MAX_LEN+1];
+	char password_hash[PASSWORD_HASH_LEN+1];
 	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, "n", user_name, 256);
-	mg_get_var(qs, qs_len, "p", password_hash, 256);
+	//Read user/name password from query string
+	memset(user_name, 		0, USERNAME_MAX_LEN+1);
+	mg_get_var(qs, qs_len, "n", user_name, USERNAME_MAX_LEN+1);
 	
+	memset(password_hash,	0, PASSWORD_HASH_LEN+1);
+	mg_get_var(qs, qs_len, "p", password_hash, PASSWORD_HASH_LEN+1);
+	
+	cout << "testing..." << endl;
+	cout << "Got register request: " << user_name << ", " << password_hash << endl;
+	
+	//Do validation stuff
 	if(user_name[0] == '\0' ||
 		password_hash[0] == '\0')
 	{
 		mg_printf(conn, "%sFail\nMissing username/password", ajax_reply_start);
 	}
-	else if(create_account(string(user_name), string(password_hash)))
+	else if(create_account(user_name, password_hash))
 	{
 		do_login(conn, request_info);
 	}
@@ -196,9 +218,12 @@ void do_logout(
 	{
 		delete_session(session_id);
 		
+		//Construct log out event
 		InputEvent ev;
-		ev.type = InputEventType::PlayerLeave;
-		ev.session_id = session_id;
+		ev.type 		= InputEventType::PlayerLeave;
+		ev.session_id	= session_id;
+		
+		//Push the event to the server
 		game_instance->add_event(ev);
 	}
 	mg_printf(conn, "%s\nOk", ajax_reply_start);
@@ -227,9 +252,8 @@ void do_get_chunk(
 	idx.z = get_int("z", request_info);
 	
 	//Extract the chunk
-	const int BUF_LEN = 32*32*32*2;
-	uint8_t chunk_buf[BUF_LEN];
-	int len = game_instance->get_compressed_chunk(session_id, idx, chunk_buf, BUF_LEN);
+	uint8_t chunk_buf[MAX_CHUNK_BUFFER_LEN];
+	int len = game_instance->get_compressed_chunk(session_id, idx, chunk_buf, MAX_CHUNK_BUFFER_LEN);
 		
 	if(len < 0)
 	{
@@ -262,10 +286,9 @@ void do_heartbeat(
 	}
 	
 	//Unpack incoming events
-	const int BUF_LEN = (1<<16);
-	uint8_t msg_buf[BUF_LEN];
-	memset(msg_buf, '\0', BUF_LEN);
-	int len = mg_read(conn, msg_buf, BUF_LEN);
+	uint8_t msg_buf[EVENT_PACKET_SIZE];
+	memset(msg_buf, 0, EVENT_PACKET_SIZE);
+	int len = mg_read(conn, msg_buf, EVENT_PACKET_SIZE);
 	
 	//Parse out the events
 	int p = 0;
@@ -285,6 +308,7 @@ void do_heartbeat(
 		len -= d;
 	}
 	
+	//This shouldn't happen, but need to check anyway
 	if(len > 0)
 	{
 		cout << "Warning!  Unused data in heartbeat buffer: ";
@@ -295,14 +319,17 @@ void do_heartbeat(
 		cout << endl;
 	}
 	
+	//Zero out message buffer again
+	memset(msg_buf, 0, EVENT_PACKET_SIZE);
+	
 	//Generate client response
-	len = game_instance->heartbeat(session_id, msg_buf, BUF_LEN);
+	len = game_instance->heartbeat(session_id, msg_buf, EVENT_PACKET_SIZE);
 	
 	if(len >= 0)
 	{
 		if(len > 0)
 		{
-			cout << "Update packet: ";
+			cout << "Pushing update packet: ";
 			for(int i=0; i<len; i++)
 				cout << (int)msg_buf[i] << ',';
 			cout << endl;
@@ -367,8 +394,7 @@ void handle_message(const char* str, size_t len)
 //The main server loop
 void loop()
 {
-	const size_t BUF_LEN = 1024;
-	char msg_buf[BUF_LEN];
+	char msg_buf[COMMAND_BUFFER_LEN];
 	int buf_ptr = 0;
 	
 	//Set stdin to non-blocking
@@ -385,7 +411,7 @@ void loop()
 			if(c == EOF)
 				break;
 			
-			if(buf_ptr >= BUF_LEN-1 || c == '\n')
+			if(buf_ptr >= (COMMAND_BUFFER_LEN-1) || c == '\n')
 			{
 				msg_buf[buf_ptr] = '\0';
 				handle_message(msg_buf, buf_ptr);
