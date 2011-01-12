@@ -1,4 +1,4 @@
-BlockType =
+const BlockType =
 [
 	"Air",
 	"Stone",
@@ -14,7 +14,7 @@ BlockType =
 // 1 = side
 // 2 = bottom
 //Like minecraft, blocks can have 3 different special labels
-BlockTexCoords =
+const BlockTexCoords =
 [
 	[ [0,0], [0,0], [0,0] ], //Air
 	[ [0,1], [0,1], [0,1] ], //Stone
@@ -126,15 +126,19 @@ ChunkVB.prototype.gen_vb = function(gl)
 	for(var y=this.y_min; y<this.y_max; ++y)
 	for(var z=this.z_min; z<this.z_max; ++z)
 	{
-		var idx = x + ((y + (z<<5)) << 5);
+		var idx = x + (y<<CHUNK_X_S) + (z<<(CHUNK_XY_S));
 		var block_id = data[idx];
 		
 		if(block_id == 0)
 			continue;
 		
-		if(	(x == 0 && d_lx != null && 
-				d_lx[31 + (y<<5) + (z<<10)] == 0) ||
-			(x > 0 && data[idx-1] == 0) )
+		if(	(x == 0 && 
+				d_lx != null && 
+				d_lx[CHUNK_X_MASK 				 + 
+					(y				<<CHUNK_X_S) + 
+					(z				<<CHUNK_XY_S)] == 0 ) ||
+			(x > 0 && 
+				data[idx-CHUNK_X_STEP] == 0) )
 		{
 			//Add -x face
 			add_face();
@@ -148,9 +152,12 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(x == 31 && d_ux != null && 
-				d_ux[(y<<5) + (z<<10)] == 0) ||
-			(x < 32 && data[idx+1] == 0) )
+		if(	(x == CHUNK_X_MASK && 
+				d_ux != null && 
+				d_ux[(y				<<CHUNK_X_S) + 
+					 (z				<<CHUNK_XY_S)] == 0) ||
+			(x < CHUNK_X && 
+				data[idx+CHUNK_X_STEP] == 0) )
 		{
 			//Add +x face
 			add_face();
@@ -165,9 +172,13 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(y == 0 && d_ly != null && 
-				d_ly[x + (31<<5) + (z<<10)] == 0) ||
-			(y > 0 && data[idx-32] == 0) )
+		if(	(y == 0 && 
+				d_ly != null && 
+				d_ly[x 						    + 
+					(CHUNK_Y_MASK << CHUNK_X_S) + 
+					(z			  << CHUNK_XY_S)] == 0) ||
+			(y > 0 && 
+				data[idx-CHUNK_Y_STEP] == 0) )
 		{
 			//Add -y face
 			add_face();
@@ -181,9 +192,11 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 2);
 		}
 		
-		if(	(y == 31 && d_uy != null && 
-				d_uy[x + (z<<10)] == 0) ||
-			(y < 32 && data[idx+32] == 0) )
+		if(	(y == CHUNK_Y_MASK && 
+				d_uy != null && 
+				d_uy[x + (z << CHUNK_XY_S)] == 0) ||
+			(y < CHUNK_Y && 
+				data[idx+CHUNK_Y_STEP] == 0) )
 		{
 			//Add +y face
 			add_face();
@@ -197,9 +210,13 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 0);
 		}
 		
-		if(	(z == 0 && d_lz != null && 
-				d_lz[x + (y<<5) + (31<<10)] == 0) ||
-			(z > 0 && data[idx-1024] == 0) )
+		if(	(z == 0 && 
+				d_lz != null && 
+				d_lz[x + 
+					(y				<<CHUNK_X_S) + 
+					(CHUNK_Z_MASK	<<CHUNK_XY_S)] == 0) ||
+			(z > 0 && 
+				data[idx-CHUNK_Z_STEP] == 0) )
 		{
 			//Add -z face
 			add_face();
@@ -214,9 +231,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(z == 31 && d_uz != null && 
-				d_uz[x + (y<<5)] == 0) ||
-			(z < 32 && data[idx+1024] == 0) )
+		if(	(z == CHUNK_Z_MASK && 
+				d_uz != null && 
+				d_uz[x + (y<<CHUNK_X_S)] == 0) ||
+			(z < CHUNK_Z && data[idx+CHUNK_Z_STEP] == 0) )
 		{
 			//Add +z face
 			add_face();
