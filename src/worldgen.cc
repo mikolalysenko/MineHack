@@ -12,6 +12,11 @@ namespace Game
 
 Block WorldGen::generate_block(int x, int y, int z)
 {
+	if(y == SURFACE_LEVEL)
+	{
+		return Block::Grass;
+	}
+
 	if(y < SURFACE_LEVEL)
 	{
 		return Block::Stone;

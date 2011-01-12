@@ -27,7 +27,7 @@ builddir = obj
 
 
 # preprocessor options to find all included files
-INC_PATH = -I$(srcdir) -I/usr/local/include/eigen3
+INC_PATH = -I$(srcdir)
 
 # libraries link options ('-lm' is common to link with the math library)
 LNK_LIBS = -pthread -ldl

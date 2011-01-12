@@ -753,6 +753,7 @@ Map.decompress_chunk = function(arr, data)
 	return data;
 }
 
+//Downloads a chunk from the server
 Map.fetch_chunk = function(x, y, z)
 {
 	//If chunk is already stored, don't get it
