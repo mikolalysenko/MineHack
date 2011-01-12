@@ -36,9 +36,6 @@ namespace Game
 		//Update events
 		std::vector<UpdateEvent> updates;
 		
-		//The player's inventory
-		InventoryID			inventory;
-		
 		Player(Server::SessionID const& s, std::string const& n) :
 			session_id(s), 
 			name(n),

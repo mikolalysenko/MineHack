@@ -51,6 +51,15 @@ void init()
 	game_instance = new World();
 }
 
+//Deletes data
+void deinit()
+{
+	game_instance->shutdown();
+	
+	//Delete login
+	shutdown_login();
+}
+
 int get_int(const char* id, const mg_request_info *req)
 {
 	char str[16];

@@ -87,11 +87,4 @@ int Chunk::compress(void* buffer, size_t len)
 	return n;
 }
 
-
-//Decompress a chunk from a buffer
-Chunk* Chunk::decompress(void* buffer, size_t len)
-{
-	return NULL;
-}
-
 };

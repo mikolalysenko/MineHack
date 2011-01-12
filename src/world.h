@@ -42,16 +42,20 @@ namespace Game
 		//Ticks the server
 		void tick();
 		
+		//Kills the simulator, saves all databases
+		void shutdown();
+		
 	private:
-		WorldGen	*gen;
 		Map    		*game_map;		
 		
 		//While held, the world is updated
 		pthread_mutex_t world_lock;
 		//TODO: Make this more fine grained later on
 		
+		//Player database
 		std::map<Server::SessionID, Player*> players;
 		
+		//Event queues and event lock
 		std::vector<InputEvent> pending_events, events;
 		pthread_mutex_t event_lock;
 		

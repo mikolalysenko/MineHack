@@ -1,3 +1,5 @@
+/*
+
 #include <pthreads.h>
 
 #include <iostream>
@@ -23,3 +25,5 @@ InventoryID generate_unique_inventory_id()
 	res.id = rand();
 	return res;
 }
+*/
+

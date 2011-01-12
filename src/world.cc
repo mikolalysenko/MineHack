@@ -22,12 +22,16 @@ namespace Game
 World::World()
 {
 	running = true;
-	gen = new WorldGen();
-	game_map = new Map(gen);
+	auto gen = new WorldGen();
+	game_map = new Map(gen, "data/map.tc");
 	
 	pthread_mutex_init(&event_lock, NULL);
-	pthread_mutex_init(&players_lock, NULL);
-	
+	pthread_mutex_init(&world_lock, NULL);
+}
+
+//Clean up/saving stuff
+void World::shutdown()
+{
 }
 
 //Adds an event to the world
@@ -44,10 +48,12 @@ int World::get_compressed_chunk(
 	uint8_t* buf,
 	size_t buf_len)
 {
-	//Lock region for reading
-	ReadLock lock(&game_map->map_lock);
-	Chunk* chunk = game_map->get_chunk(chunk_id);	
-	return chunk->compress((void*)buf, buf_len);
+	//Read the chunk from the map
+	Chunk chunk;
+	game_map->get_chunk(chunk_id, &chunk);
+	
+	//Return the compressed chunk
+	return chunk.compress((void*)buf, buf_len);
 }
 	
 //Sends queued messages to client
@@ -56,24 +62,24 @@ int World::heartbeat(
 	uint8_t* buf,
 	size_t buf_len)
 {
-	//Lock the player data base
-	MutexLock pl(&players_lock);
+	vector<UpdateEvent> update_queue;
 	
-	auto biter = players.begin();
-	
-	//Verify that player is logged in
-	auto piter = players.find(session_id);
-	if(piter == players.end())
-	{
-		cout << "Player does not exist?" << endl;
-		return -1;
+	//Need to acquire world lock in order to read player's pending events
+	{	MutexLock wl(&world_lock);
+
+		auto piter = players.find(session_id);
+		if(piter == players.end())
+		{
+			cout << "Player does not exist?" << endl;
+			return -1;
+		}
+		update_queue.swap((*piter).second->updates);
 	}
-	
-	//Handle all pending updates
-	auto p = (*piter).second;
+
+	//Write the update events out to the buffer
 	int l = 0;
-	auto iter = p->updates.begin();
-	for(; iter!=p->updates.end(); ++iter)
+	auto iter = update_queue.begin();
+	for(; iter != update_queue.end(); ++iter)
 	{
 		auto up = *iter;
 		
@@ -86,10 +92,27 @@ int World::heartbeat(
 		buf_len -= q;
 		l += q;
 	}
-	//erase old updates
-	p->updates.erase(p->updates.begin(), iter);
 	
-
+	//If there are any pending updates that didn't fit in the buffer, push them back to the player
+	if(iter != update_queue.end())
+	{
+		cout << "Did not send all updates to player" << endl;
+		
+		MutexLock wl(&world_lock);
+		
+		auto piter = players.find(session_id);
+		if(piter == players.end())
+		{
+			cout << "Player does not exist?" << endl;
+			return -1;
+		}
+		
+		//Append updates to the front of the player's update queue
+		auto p = (*piter).second;
+		p->updates.reserve(p->updates.size() + update_queue.size());
+		p->updates.insert(p->updates.begin(), update_queue.begin(), update_queue.end());
+	}
+	
 	return l;
 }
 
@@ -234,10 +257,6 @@ void World::tick()
 	//Acquire a lock on the game world
 	MutexLock pl(&world_lock);
 	
-	//Acquire a map-wide lock
-	WriteLock ml(&game_map->map_lock);
-
-		
 	//Handle all events
 	for(auto iter = events.begin(); iter!=events.end(); ++iter)
 	{

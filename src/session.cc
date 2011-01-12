@@ -12,6 +12,11 @@ using namespace std;
 namespace Server
 {
 
+//Invariants that need to be enforced:
+//  1. Each session id is associated to exactly one user name
+//  2. Each user name has at most one session id (no multiple logins)
+//	3. The selection of session ids is completely random
+
 //Information associated to a particular session
 struct Session
 {
@@ -67,8 +72,10 @@ bool create_session(const string& name, SessionID& key)
 	
 	{	WriteLock L(&session_lock);
 		
-		auto iter = session_table.find(key);
-		if(iter != session_table.end())
+		if(user_table.find(name) != user_table.end())
+			return false;
+		
+		if(session_table.find(key) != session_table.end())
 			return false;
 		
 		session_table[key] = s;

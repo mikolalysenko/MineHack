@@ -17,6 +17,7 @@ CC = gcc
 
 URL = http://127.0.0.1:8081/index.html
 
+#FIXME: Make this a config string
 BROWSER = /home/mikola/Apps/chrome-linux/chrome --enable-webgl
 
 # source files directory
@@ -27,10 +28,10 @@ builddir = obj
 
 
 # preprocessor options to find all included files
-INC_PATH = -I$(srcdir)
+INC_PATH = -I$(srcdir) -I/usr/local/include
 
 # libraries link options ('-lm' is common to link with the math library)
-LNK_LIBS = -pthread -ldl
+LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lz -lbz2 -lrt -pthread -ldl -lm -lc
 
 # other compilation options
 COMPILE_OPTS = -pthread

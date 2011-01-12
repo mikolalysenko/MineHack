@@ -1,4 +1,4 @@
-
+/*
 #ifndef INVENTORY_H
 #define INVENTORY_H
 
@@ -111,4 +111,4 @@ namespace Game
 };
 
 #endif
-
+*/

@@ -1,7 +1,14 @@
 #ifndef MAP_H
 #define MAP_H
 
+#include <string>
+#include <cstdint>
+#include <cstdlib>
+
 #include <pthread.h>
+
+#include <tcutil.h>
+#include <tchdb.h>
 
 #include <map>
 #include "chunk.h"
@@ -19,24 +26,26 @@ namespace Game
 	struct Map
 	{
 		//Map constructor
-		Map(WorldGen *w) : world_gen(w)
-		{
-			pthread_rwlock_init(&map_lock, NULL);
-		}
+		Map(WorldGen *w, std::string const& filename);
 		
 		//Retrieves the specific chunk
-		Chunk* get_chunk(ChunkID const&);
+		void get_chunk(ChunkID const&, Chunk* res);
 		
 		//Sets a block
 		void set_block(int x, int y, int z, Block t);
 		
+		//Gets a block from a chunk
 		Block get_block(int x, int y, int z);
 		
-		//TODO: Implement fine grained locking for chunks
-		pthread_rwlock_t map_lock;
-
+		//Stops the map
+		void shutdown();
+		
 	private:
-		std::map<std::uint64_t, Chunk*>  chunks;
+		TCHDB* map_db;
+		
+		//When held, the world generator is executing.
+		//Since it is not assumed to be reentrant, we can only do one thing at a time with the world generator
+		pthread_mutex_t world_gen_lock;
 		WorldGen* world_gen;
 	};
 	

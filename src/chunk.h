@@ -1,6 +1,7 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
+#include <cassert>
 #include <iostream>
 #include <cstdlib>
 #include <cstdint>
@@ -47,25 +48,26 @@ namespace Game
 	{
 		Block data[CHUNK_X*CHUNK_Y*CHUNK_Z];
 		
-		Chunk() {}
-		
 		//Block accessor functions
 		Block get(int x, int y, int z) const
 		{
+			assert(	x >= 0 && x < CHUNK_X &&
+					y >= 0 && y < CHUNK_Y &&
+					z >= 0 && z < CHUNK_Z );
 			return data[x + (y<<5) + (z<<10)];
 		}
 		
 		Block set(int x, int y, int z, Block b)
 		{
+			assert( x >= 0 && x < CHUNK_X &&
+					y >= 0 && y < CHUNK_Y &&
+					z >= 0 && z < CHUNK_Z );
 			return data[x + (y<<5) + (z<<10)] = b;			
 		}
 		
 		//Compress this chunk into the target buffer
 		//Returns the length of the encoded chunk, or -1 if it failed
 		int compress(void* target, size_t len);
-		
-		//Decompresses a chunk from a buffer
-		static Chunk* decompress(void* buffer, size_t len);
 	};
 	
 };

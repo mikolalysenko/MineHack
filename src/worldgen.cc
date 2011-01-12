@@ -24,10 +24,8 @@ Block WorldGen::generate_block(int x, int y, int z)
 	return Block::Air;
 }
 
-Chunk* WorldGen::generate_chunk(ChunkID const& idx)
+void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 {
-	auto res = new Chunk();
-	
 	for(int i=0; i<CHUNK_X; i++)
 	for(int j=0; j<CHUNK_Y; j++)
 	for(int k=0; k<CHUNK_Z; k++)
@@ -38,8 +36,6 @@ Chunk* WorldGen::generate_chunk(ChunkID const& idx)
 		
 		res->set(i, j, k, generate_block(x, y, z));
 	}
-	
-	return res;
 }
 
 };

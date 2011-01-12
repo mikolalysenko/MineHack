@@ -1,11 +1,13 @@
 #include <string>
 #include <map>
 #include <iostream>
-#include <fstream>
 #include <cctype>
+#include <cstdlib>
+#include <cstdint>
 
-#include <unistd.h>
-#include <pthread.h>
+//Tokyo cabinet
+#include <tcutil.h>
+#include <tchdb.h>
 
 #include "misc.h"
 #include "login.h"
@@ -18,74 +20,35 @@ const int PASSWORD_HASH_LEN = 64;
 const int USERNAME_MAX_LEN = 20;	//Required
 const int USERNAME_MIN_LEN = 3;
 
-//User account data
-struct LoginData
-{
-	string	user_name;
-	string password_hash;
-
-	//Other account wide data goes here
-};
-
-//Lock for the login dictionary
-static pthread_rwlock_t login_lock = PTHREAD_RWLOCK_INITIALIZER;
-
-static map<string, LoginData>	login_table;
-
-typedef map<string, LoginData>::iterator login_iter;
-
+TCHDB *login_db = NULL;
 
 //Initializes the login table
 void init_login()
 {
-	ifstream users("data/login.dat");
+	//Create login database
+	login_db = tchdbnew();
 	
-	while(users.good())
-	{
-		LoginData nlogin;
-		users >> nlogin.user_name >> nlogin.password_hash;
-		login_table[nlogin.user_name] = nlogin;
-	}
+	//Set options
+	//TODO: Set other tuning options here
+	tchdbsetmutex(login_db);
+	
+	//Open it
+	tchdbopen(login_db, "data/login.tc", HDBOWRITER | HDBOCREAT);
 }
 
-//Check points all the user login data
-void checkpoint_login()
+//Shuts down the login server
+void shutdown_login()
 {
-	{	ofstream data("data/login.tmp.dat");
-		ReadLock L(&login_lock);
-	
-		for(auto it = login_table.begin();
-			it != login_table.end();
-			++it)
-		{
-			LoginData login = (*it).second;
-			data << login.user_name << ' ' << login.password_hash << endl;
-		}
-	}
-	
-	unlink("data/login.dat");
-	link("data/login.tmp.dat", "data/login.dat");
-	unlink("data/login.tmp.dat");
+	tchdbdel(login_db);
 }
 
-//Verifies a user name/password combo
-bool verify_user_name(const string& name, const string& password_hash)
+void sync_login()
 {
-	bool valid = false;
-
-	{	ReadLock L(&login_lock);
-
-		login_iter row = login_table.find(name);
-		if(row != login_table.end())
-		{
-			valid = ((*row).second.password_hash == password_hash);
-		}
-	}
-	
-	return valid;
+	tchdbsync(login_db);
 }
 
 
+//Check if a user name is valid
 bool is_valid_username(const string& name)
 {
 	if(name.size() < USERNAME_MIN_LEN ||
@@ -103,6 +66,7 @@ bool is_valid_username(const string& name)
 	return true;
 }
 
+//Check if a password hash is valid
 bool is_valid_password_hash(const string& pass)
 {
 	if(pass.size() != PASSWORD_HASH_LEN)
@@ -117,34 +81,49 @@ bool is_valid_password_hash(const string& pass)
 	return true;
 }
 
-//Creates an account
-bool create_account(const string& name, const string& password_hash)
+
+
+//Verifies a user name/password combo
+bool verify_user_name(const string& name, const string& password_hash)
 {
-	//Validate name and password
-	if(!(is_valid_username(name) && is_valid_password_hash(password_hash)))
+	char pass_buf[PASSWORD_HASH_LEN];
+	
+	if(!is_valid_password_hash(password_hash) || 
+		!is_valid_username(name))
 	{
 		return false;
 	}
 	
-	//Create login record
-	LoginData login;
-	login.user_name = name;
-	login.password_hash = password_hash;
-
-	//Insert user into table
-	bool success = true;
-	
-	{	WriteLock L(&login_lock);
-	
-		if(login_table.find(name) == login_table.end())
-		{	login_table[name] = login;
-		}
-		else
-		{	success = false;
-		}	
+	int l = tchdbget3(login_db, 
+		(const void*)name.c_str(), name.size(), 
+		(void*)&pass_buf, PASSWORD_HASH_LEN);
+		
+	if(l != PASSWORD_HASH_LEN)
+	{
+		return false;
 	}
-	    
-    return success;
+	
+	for(int i=0; i<PASSWORD_HASH_LEN; i++)
+	{
+		if(pass_buf[i] != password_hash[i])
+			return false;
+	}
+	
+	return true;
+}
+
+//Creates an account
+bool create_account(const string& name, const string& password_hash)
+{
+	//Validate name and password
+	if(!is_valid_username(name) || !is_valid_password_hash(password_hash))
+	{
+		return false;
+	}
+
+	return tchdbputkeep(login_db, 
+		(const void*)name.c_str(), name.size(), 
+		(const void*)password_hash.c_str(), password_hash.size());
 }
 
 
