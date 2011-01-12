@@ -46,8 +46,11 @@ namespace Game
 		WorldGen	*gen;
 		Map    		*game_map;		
 		
+		//While held, the world is updated
+		pthread_mutex_t world_lock;
+		//TODO: Make this more fine grained later on
+		
 		std::map<Server::SessionID, Player*> players;
-		pthread_mutex_t players_lock;
 		
 		std::vector<InputEvent> pending_events, events;
 		pthread_mutex_t event_lock;

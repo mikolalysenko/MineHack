@@ -231,8 +231,8 @@ void World::tick()
 		events.swap(pending_events);
 	}
 	
-	//Acquire the player database mutex
-	MutexLock pl(&players_lock);
+	//Acquire a lock on the game world
+	MutexLock pl(&world_lock);
 	
 	//Acquire a map-wide lock
 	WriteLock ml(&game_map->map_lock);
@@ -284,6 +284,8 @@ void World::tick()
 			break;
 		}
 	}
+	
+	//Process player inputs
 	
 	//Update map
 }

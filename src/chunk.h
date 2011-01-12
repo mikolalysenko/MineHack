@@ -28,6 +28,7 @@ namespace Game
 		Log
 	};
 
+	//A chunk index into the map
 	struct ChunkID
 	{
 		//Chunk coordinates are 21-bit unsigned ints
@@ -40,12 +41,13 @@ namespace Game
 		std::uint64_t hash() const;
 	};
 
+	//Chunks are blobs of blocks
+	// basic unit the game map/vehicles are composed of
 	struct Chunk
 	{
-		ChunkID idx;
 		Block data[CHUNK_X*CHUNK_Y*CHUNK_Z];
 		
-		Chunk(ChunkID id) : idx(id) {}
+		Chunk() {}
 		
 		//Block accessor functions
 		Block get(int x, int y, int z) const

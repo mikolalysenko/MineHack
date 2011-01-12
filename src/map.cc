@@ -28,20 +28,15 @@ Chunk* Map::get_chunk(ChunkID const& idx)
 	//Check if contained in map
 	auto iter = chunks.find(hash);
 	
-	cout << "lookup chunk: " << idx.x << ',' << idx.y << ',' << idx.z << endl;
-	
 	if(iter == chunks.end())
 	{
-		cout << "not found, generating chunk" << endl;
+		cout << "chunk not found, generating chunk" << endl;
 		auto nchunk = world_gen->generate_chunk(idx);
 		chunks[hash] = nchunk;
 		return nchunk;
 	}
 	
 	auto res = (*iter).second;
-	
-	cout << "got chunk: " << res->idx.x << ',' << res->idx.y << ',' << res->idx.z << endl;
-	
 	return (*iter).second;
 }
 

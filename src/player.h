@@ -5,6 +5,8 @@
 #include <string>
 #include <cstdint>
 
+#include "inventory.h"
+
 #include "session.h"
 
 #include "update_event.h"
@@ -33,6 +35,9 @@ namespace Game
 		
 		//Update events
 		std::vector<UpdateEvent> updates;
+		
+		//The player's inventory
+		InventoryID			inventory;
 		
 		Player(Server::SessionID const& s, std::string const& n) :
 			session_id(s), 
