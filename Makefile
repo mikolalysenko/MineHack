@@ -189,9 +189,13 @@ $(GOAL_PROF):	$(GOAL_EXE)
 # user at make invocation.
 ###############################################################################
 
-test: $(exe) $(datadir)
+valgrind: $(exe) $(datadir)
 	(sleep 2; $(BROWSER) $(URL)) &
 	valgrind --log-file=valgrind.log ./$(exe)
+
+test: $(exe) $(datadir)
+	(sleep 2; $(BROWSER) $(URL)) &
+	./$(exe)
 
 
 $(datadir):
