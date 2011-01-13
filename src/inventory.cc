@@ -79,8 +79,6 @@ void shutdown_inventory()
 }
 
 
-/*
-
 //Passed to client function
 struct InventoryTransactionRecord
 {
@@ -94,9 +92,10 @@ struct InventoryTransactionRecord
 
 
 //Executes a transaction on an inventory record atomically
+template<typename T>
 bool inventory_transaction(
 	InventoryID const& inv_id, 
-	std::function< bool(InventoryTransactionRecord&) > func)
+	T func)
 {
 	if(!inv_id.valid())
 		return false;
@@ -144,6 +143,7 @@ struct ItemTransactionRecord
 {
 	ItemID			item_id;
 	ItemHeader		item_header;
+	int				index;			//Position of item in inventory
 	InventoryID		inv_id;
 	InventoryHeader	inv_header;
 	int				n_items;
@@ -154,9 +154,10 @@ struct ItemTransactionRecord
 
 
 //Executes an update transaction atomically on an item record and its associated inventory record
+template<typename T>
 bool item_transaction(
 	ItemID const& item_id,
-	std::function< bool(ItemTransactionRecord&) > func)
+	T func)
 {
 	if(!item_id.valid() || item_id.empty())
 		return false;
@@ -201,6 +202,27 @@ bool item_transaction(
 		row.items			= (ItemID*)(void*)((uint8_t*)data + sizeof(ItemHeader));
 		row.size			= size;
 		row.data 			= data;
+
+
+		//Find position of item in inventory
+		bool orphan = true;
+		for(int i=0; i<row.n_items; i++)
+		{
+			if(row.items[i] == item_id)
+			{
+				row.index = i;
+				orphan = false;
+				break;
+			}
+		}
+		
+		if(orphan)
+		{
+			//Orphan item exists?
+			cout << "This should never happen!  Got orphan item id " << item_id.id << endl;
+			tchdbtranabort(inventory_db);
+			return false;
+		}
 		
 		//Invoke update function
 		if( !func(row) )
@@ -219,7 +241,7 @@ bool item_transaction(
 //Creates an inventory object
 //	If capacity is -1, then the number of items is infinite
 //	Otherwise the inventory is a fixed size
-InventoryID create_inventory(int capacity)
+bool create_inventory(InventoryID& result, int capacity)
 {
 	InventoryID id = generate_inventory_id();
 
@@ -229,14 +251,15 @@ InventoryID create_inventory(int capacity)
 		int size 	= sizeof(ItemID) * capacity + sizeof(InventoryHeader);
 		void * data = calloc(size, 1);
 		
+		//Set scope guard
+		ScopeFree	guard(data);
+		
 		//Initialize header
 		((InventoryHeader*)data)->capacity = capacity;
 		
 		tchdbput(inventory_db,
 			(const void*)&id, sizeof(InventoryID),
 			(const void*)&data, size);
-			
-		free(data);
 	}
 	else
 	{
@@ -248,7 +271,8 @@ InventoryID create_inventory(int capacity)
 			(const void*)&header, sizeof(InventoryHeader));
 	}
 		
-	return id;
+	result = id;
+	return true;
 }
 
 //Returns the items contained in a particular inventory object
@@ -283,87 +307,58 @@ bool get_inventory(InventoryID const& id, vector<ItemID>& result)
 }
 
 
-//Swaps two items in an inventory (used when player is rearranging inventory)
-bool swap_item(InventoryID const& inv_id, int idx1, int idx2)
+//Deletes an inventory object
+struct InventoryDeleteTransaction
 {
-	return inventory_transaction(inv_id, 
-		std::function< bool(InventoryTransactionRecord) >
-		([](InventoryTransactionRecord)
+	bool operator()(InventoryTransactionRecord& row)
 	{
-		if(	idx1 >= n_items || idx1 < 0 ||
-			idx2 >= n_items || idx2 < 0 )
+		for(int i=0; i<row.n_items; i++)
 		{
-			return false;
+			if(!row.items[i].empty())
+				tchdbout(inventory_db, (const void*)&row.items[i], sizeof(ItemID));
 		}
 		
-		ItemID tmp 	= items[idx1];
-		items[idx1] = items[idx2];
-		items[idx2] = items[idx1];
-		
-		tchdbput(inventory_db,
-			(const void*)&id, 	sizeof(InventoryID),
-			(const void*)data, 	size);
-		
+		tchdbout(inventory_db, (const void*)&row.inv_id, sizeof(InventoryID));
 		return true;
-	}));
-}
+	}
+};
 
-
-//Deletes an inventory object
 bool delete_inventory(InventoryID const& inv_id)
 {
-	return inventory_transaction(inv_id, [&](
-		InventoryHeader const& 	inv_header,
-		int 					n_items, 
-		ItemID* 				items,
-		int 					size,
-		void* 					data)
-	{
-		for(int i=0; i<n_items; i++)
-		{
-			if(!items[i].empty())
-				tchdbout(inventory_db, (const void*)&items[i], sizeof(ItemID));
-		}
-		
-		tchdbout(inventory_db, (const void*)&id, sizeof(InventoryID));
-	});
+	return inventory_transaction(inv_id, InventoryDeleteTransaction());
 }
-
 
 
 //Adds an item to the given inventory
-ItemID create_item(InventoryID const& inv_id, Item const& val)
+struct CreateItemTransaction
 {
-	ItemID item_id = generate_item_id();
-
-	ItemHeader item_header;
-	item_header.inv_id 	= inv_id;
-	item_header.item 	= val;
+	ItemID		item_id;
+	ItemHeader* item_header;
 	
-	bool result = inventory_transaction(inv_id, [&](
-		InventoryHeader const&	inv_header,
-		int 					n_items, 
-		ItemID* 				items,
-		int						size,
-		void* 					data)
+	CreateItemTransaction(
+		ItemID const&	id,
+		ItemHeader* 	hdr) : 
+			item_id(id), item_header(hdr) {}
+
+	bool operator()(InventoryTransactionRecord& row)
 	{
-		if(inv_header.capacity < 0)
+		if(row.inv_header.capacity < 0)
 		{
 			//For unlimited capacity inventory, just append
 			tchdbputcat(inventory_db,
-				(const void*)&inv_id,	sizeof(InventoryID),
-				(const void*)&item_id,	sizeof(ItemID));
+				(const void*)&(item_header->inv_id),	sizeof(InventoryID),
+				(const void*)&item_id,					sizeof(ItemID));
 		}
 		else
 		{
 			//Otherwise, need to put in first available slot (if it exists)
 			bool full = true;
 		
-			for(int i=0; i<n_items; i++)
+			for(int i=0; i<row.n_items; i++)
 			{
-				if(items[i].empty())
+				if(row.items[i].empty())
 				{
-					items[i] = res;
+					row.items[i] = item_id;
 					full = false;
 					break;
 				}
@@ -373,33 +368,47 @@ ItemID create_item(InventoryID const& inv_id, Item const& val)
 				return false;
 			
 			tchdbput(inventory_db,
-				(const void*)&inv_id, 	sizeof(InventoryID),
-				data, 					size);
+				(const void*)&(item_header->inv_id), 	sizeof(InventoryID),
+				row.data, 								row.size);
 		}
 		
 		tchdbput(inventory_db,
-			(const void*)&item_id, 		sizeof(ItemID),
-			(const void*)&item_header, 	sizeof(ItemHeader));
+			(const void*)&item_id,	 	sizeof(ItemID),
+			(const void*)item_header, 	sizeof(ItemHeader));
 			
 		return true;
-	});
+	
+	}
+};
+
+bool create_item(InventoryID const& inv_id, Item const& val, ItemID& item_id)
+{
+	item_id = generate_item_id();
+	
+	ItemHeader item_header;
+	item_header.inv_id	= inv_id;
+	item_header.item 	= val;
+	
+	bool result = inventory_transaction(inv_id, CreateItemTransaction(item_id, &item_header));
 	
 	//If item creation failed, just return a null item
 	if(!result)
-		item_id.id = 0;
-	return item_id;
+		item_id.clear();
+	return result;
 }
 
+
 //Retrieves the inventory id associated to a particular item
-bool get_item_val(ItemID const& id, Item& result)
+bool get_item_val(ItemID const& item_id, Item& result)
 {
-	assert(id.valid());
+	if(!item_id.valid())
+		return false;
 
 	ItemHeader header;
 	
-	int size = tchdbget(inventory_db, 
-		(const void*)&id, 	sizeof(ItemID),
-		(void*)&header, 	sizeof(ItemHeader));
+	int size = tchdbget3(inventory_db, 
+		(const void*)&item_id, 	sizeof(ItemID),
+		(void*)&header, 		sizeof(ItemHeader));
 		
 	if(size != sizeof(ItemHeader))
 		return false;
@@ -410,15 +419,16 @@ bool get_item_val(ItemID const& id, Item& result)
 }
 
 //Retrieves an item
-bool get_item_inventory(ItemID const& item, InventoryID& result)
+bool get_item_inventory(ItemID const& item_id, InventoryID& result)
 {
-	assert(id.valid());
-
+	if(!item_id.valid())
+		return false;
+	
 	ItemHeader header;
 	
-	int size = tchdbget(inventory_db,
-		(const void*)&id, 	sizeof(ItemID),
-		(void*)&header, 	sizeof(ItemHeader));
+	int size = tchdbget3(inventory_db,
+		(const void*)&item_id, 	sizeof(ItemID),
+		(void*)&header, 		sizeof(ItemHeader));
 		
 	if(size != sizeof(ItemHeader))
 		return false;
@@ -429,74 +439,85 @@ bool get_item_inventory(ItemID const& item, InventoryID& result)
 }
 
 //Deletes an item
-bool delete_item(ItemID const& item_id)
+struct DeleteItemTransaction
 {
-	return item_transaction(item_id, [&](
-		ItemHeader const& 		item_header,
-		InventoryHeader const&	inv_header,
-		int						n_items,
-		ItemID* 				items,
-		int 					size,
-		void* 					data)
+	bool operator()(ItemTransactionRecord& row)
 	{
 		//Have to remove item from inventory list, two basic cases to deal with
-		if(inv_header.capacity < 0)
+		if(row.inv_header.capacity < 0)
 		{
-			//Variable size list - move last item to position and decrement length
-			bool found_item = false;
-			for(int i=0; i<n_items; i++)
-			{
-				if(items[i] == item)
-				{
-					items[i] = items[n_items-1];
-					found_item = true;
-					break;
-				}
-			}
-			if(!found_item)
-				return false;
-			
+			//Unlimited capacity: Move last item to this index and decrease size
+			row.items[row.index] = row.items[row.n_items - 1];
 			tchdbput(inventory_db,
-				(const void*)&inv,	sizeof(InventoryID),
-				data, 				size - sizeof(ItemID));
+				(const void*)&row.inv_id,	sizeof(InventoryID),
+				row.data, 					row.size - sizeof(ItemID));
 		}
 		else
 		{
 			//Fixed size list, just 0 appropriate item
-			bool found_item = false;
-			for(int i=0; i<n_items; i++)
-			{
-				if(items[i] == item)
-				{
-					items[i].id = 0;
-					found_item = true;
-					break;
-				}
-			}
-			if(!found_item)
-				return false;
-			
+			row.items[row.index].clear();
 			tchdbput(inventory_db,
-				(const void*)&inv,	sizeof(InventoryID),
-				data, 				size);
+				(const void*)&row.inv_id,	sizeof(InventoryID),
+				row.data, 					row.size);
 		}
 			
 		tchdbout(inventory_db, 
-			(const void*)&item, 	sizeof(ItemID));
-	});
+			(const void*)&row.item_id, 	sizeof(ItemID));
+	
+	}
+};
+
+bool delete_item(ItemID const& item_id)
+{
+	return item_transaction(item_id, DeleteItemTransaction());
 }
 
-//Transfers an item to a new inventory
-bool move_item(ItemID const& item, InventoryID const& source, InventoryID const& target)
-{
-	return false;
-}
 
 //Uses an item's charge.  If charge drops to 0, destroys the item.  If item doesn't have enough charges, returns false.
-bool use_item_charge(InventoryID const& owner, ItemID const& item, int ncharge=1)
+struct UseChargeTransaction
 {
-	return false;
+	InventoryID	owner_inv_id;
+	int 		charge_cost;
+	
+	UseChargeTransaction(InventoryID const& owner, int ncharge) :
+		owner_inv_id(owner), charge_cost(ncharge) {}
+		
+	
+	bool operator()(ItemTransactionRecord& row)
+	{
+		if(!(row.item_header.inv_id == owner_inv_id))
+			return false;
+			
+		if(charge_cost > row.item_header.item.charges)
+		{
+			return false;
+		}
+		else if(charge_cost == row.item_header.item.charges)
+		{
+			//Charge cost drops to exactly 0, delete object
+			DeleteItemTransaction rmtran;
+			return rmtran(row);
+		}
+		else
+		{
+			row.item_header.item.charges -= charge_cost;
+			
+			tchdbput(inventory_db,
+				(const void*)&row.item_id,		sizeof(ItemID),
+				(const void*)&row.item_header,	sizeof(ItemHeader));
+		}
+	}
+	
+};
+
+bool use_item_charge(InventoryID const& owner_id, ItemID const& item_id, int cost)
+{
+	return item_transaction(item_id, UseChargeTransaction(owner_id, cost));
 }
-*/
+
 
 }
+
+
+
+
