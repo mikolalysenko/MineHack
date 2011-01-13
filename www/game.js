@@ -204,8 +204,6 @@ Game.update_handlers = {
 	//Set block event
 	1 : function(arr)
 	{
-		alert("got block set packet");
-	
 		if(arr.length < 13)	//Bad packet, drop
 			return -1;
 			
@@ -326,7 +324,6 @@ Game.heartbeat = function()
 		var i = 0;
 		while(i < arr.length)
 		{
-			alert("got packet");
 			var t = arr[i++];
 			
 			var handler = Game.update_handlers[t];
