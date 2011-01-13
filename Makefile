@@ -205,10 +205,10 @@ $(exe):	$(objs)
 	$(CXX) $^ -o $@ $(LDOPTS) $(LDFLAGS)
 
 # explicit definition of the implicit rule used to compile source files
-$(builddir)/%.o:	src/%.cc $(builddir)
+$(builddir)/%.o:	src/%.cc
 	$(CXX) -c $< $(CPPOPTS) $(CXXOPTS) $(CPPFLAGS) $(CXXFLAGS) -o $@
 
-$(builddir)/%.o:	src/%.c $(builddir)
+$(builddir)/%.o:	src/%.c
 	$(CC) -c $< $(CPPOPTS) $(CXXOPTS) $(CPPFLAGS) $(CXXFLAGS) -o $@
 
 # Rule to build our included dependencies makefiles.
@@ -220,13 +220,13 @@ $(builddir)/%.o:	src/%.c $(builddir)
 # Note that the dependencies can be goal specific.
 # The goal_flag_file is determined at run time because it must be the current
 # goal and not the goal in use when the dependencies makefile was created.
-$(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file) $(builddir)
+$(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file)
 	$(SHELL) -ec '$(CXX) -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 
 
-$(builddir)/%.$(deps_suffix):	src/%.c $(goal_flag_file) $(builddir)
+$(builddir)/%.$(deps_suffix):	src/%.c $(goal_flag_file)
 	$(SHELL) -ec '$(CC) -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
@@ -242,7 +242,7 @@ endif
 # Rule to produce the goal flag file.
 # If the goal has changed then we must rebuild on a clean state because
 # pre-processor DEFINE's may have changed.
-$(goal_flag_file): $(builddir)
+$(goal_flag_file):
 	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps)
 	touch $@
 
