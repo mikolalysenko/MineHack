@@ -22,3 +22,4 @@ const CHUNK_SIZE	= CHUNK_X * CHUNK_Y * CHUNK_Z;
 
 const CHUNK_DIMS	= [ CHUNK_X, CHUNK_Y, CHUNK_Z ];
 
+

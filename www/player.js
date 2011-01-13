@@ -216,9 +216,9 @@ Player.tick = function()
 Player.chunk = function()
 {
 	return [
-		Math.floor(Player.pos[0]) >> 5,
-		Math.floor(Player.pos[1]) >> 5,
-		Math.floor(Player.pos[2]) >> 5 ];
+		Math.floor(Player.pos[0]) >> CHUNK_X_S,
+		Math.floor(Player.pos[1]) >> CHUNK_Y_S,
+		Math.floor(Player.pos[2]) >> CHUNK_Z_S ];
 }
 
 //Create view matrix
@@ -264,6 +264,5 @@ Player.eye_ray = function()
 	var d = [ -view_m[2], -view_m[6], -view_m[10] ];
 	return [ Player.pos, d ];
 }
-
 
 
