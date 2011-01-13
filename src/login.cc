@@ -36,6 +36,7 @@ void init_login()
 //Shuts down the login server
 void shutdown_login()
 {
+	tchdbclose(login_db);
 	tchdbdel(login_db);
 }
 

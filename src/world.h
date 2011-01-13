@@ -25,6 +25,7 @@ namespace Game
 						
 		//Ctor
 		World();
+		~World();
 		
 		//Adds an event to the server
 		void add_event(InputEvent const& ev);
@@ -44,16 +45,16 @@ namespace Game
 		//Ticks the server
 		void tick();
 		
-		//Kills the simulator, saves all databases
-		void shutdown();
-
-			
-		
 	private:
-		Map    		*game_map;
+		Map    			*game_map;
 		
 		//Mailbox for player updates
 		UpdateMailbox	player_updates;
+		
+		//Input event queue and event lock
+		std::vector<InputEvent> pending_events, events;
+		pthread_mutex_t event_lock;
+
 		
 		//While held, the world is updated
 		pthread_mutex_t world_lock;
@@ -62,9 +63,6 @@ namespace Game
 		//Player database
 		std::map<Server::SessionID, Player*> players;
 		
-		//Event queues and event lock
-		std::vector<InputEvent> pending_events, events;
-		pthread_mutex_t event_lock;
 		
 		void handle_add_player(Server::SessionID const&, JoinEvent const&);
 		void handle_remove_player(Player*);

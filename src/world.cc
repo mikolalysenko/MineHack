@@ -25,13 +25,15 @@ World::World()
 	auto gen = new WorldGen();
 	game_map = new Map(gen, "data/map.tc");
 	
+	//Initialize locks
 	pthread_mutex_init(&event_lock, NULL);
 	pthread_mutex_init(&world_lock, NULL);
 }
 
 //Clean up/saving stuff
-void World::shutdown()
+World::~World()
 {
+	delete game_map;
 }
 
 //Adds an event to the world

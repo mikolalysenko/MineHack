@@ -11,8 +11,45 @@
 
 #include "update_event.h"
 
+//Maximum name for a player/avatar
+
+//Player input constants
+#define INPUT_FORWARD		(1<<0)
+#define INPUT_BACKWARD		(1<<1)
+#define INPUT_LEFT			(1<<2)
+#define INPUT_RIGHT			(1<<3)
+#define INPUT_JUMP			(1<<4)
+#define INPUT_CROUCH		(1<<5)
+
 namespace Game
-{	
+{
+
+	//Player data values
+	struct PlayerData
+	{
+		//The player's name
+		char name[USERNAME_MAX_LEN];
+		
+		//Player's session id
+		Server::SessionID session_id;
+		
+		//Player position in world coordinates
+		double x, y, z;
+		
+		//Player pitch/yaw
+		double pitch, yaw;
+		
+		//Player input state
+		int input_state;
+	};
+
+
+	//Contains a collection of players
+	struct PlayerDB
+	{
+		
+	};
+
 	//The player data structure
 	struct Player
 	{

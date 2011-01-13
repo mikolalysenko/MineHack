@@ -21,17 +21,17 @@ namespace Server
 			{ return key < other.key; }
 	};
 
-	//IO opreations for sessionID
+	//IO opreations for sessionID (mostly for stringification/sending get request)
 	std::ostream& operator<<(std::ostream&, SessionID const&);
 	std::istream& operator>>(std::istream&, SessionID&);
 
 	void init_sessions();
 	
 	bool valid_session_id(SessionID const&);
-	
-	bool logged_in(std::string const& name);
+		
+	bool logged_in(std::string const& username);
 
-	bool create_session(std::string const& name, SessionID&);
+	bool create_session(std::string const& username, SessionID&);
 	
 	void delete_session(SessionID const&);
 }

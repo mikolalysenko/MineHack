@@ -58,18 +58,14 @@ void init()
 	init_login();
 	init_sessions();
 	
-	//Initialize inventory database
-	init_inventory("data/items.tc");
-	
 	game_instance = new World();
 }
 
 //Deletes data
 void deinit()
 {
-	game_instance->shutdown();
+	delete game_instance;
 	
-	shutdown_inventory();
 	shutdown_login();
 }
 

@@ -75,6 +75,7 @@ void Map::get_chunk(ChunkID const& idx, Chunk* chunk)
 	}
 }
 
+//Sets a block in the map
 void Map::set_block(int x, int y, int z, Block b)
 {
 	auto idx = COORD2CHUNKID(x, y, z);
@@ -118,7 +119,5 @@ Block Map::get_block(int x, int y, int z)
 								y & CHUNK_Y_MASK, 
 								z & CHUNK_Z_MASK)];
 }
-
-
 
 };

@@ -76,7 +76,6 @@ UpdateHandler.handlers =
 //Handles a block update packet
 UpdateHandler.handle_update_packet = function(arr)
 {
-	alert("HERE!");
 	var i = 0;
 	
 	while(i < arr.length)
@@ -97,7 +96,6 @@ UpdateHandler.handle_update_packet = function(arr)
 		}
 		else
 		{
-			debugger;
 			alert("bad update type: " + t + " --  dropping packet");
 			return;
 		}
