@@ -161,6 +161,7 @@ usage:
 	@echo "----	------"
 	@echo "usage	print this message"
 	@echo "list	list the source files"
+	@echo "test	Does a test run of the executable"
 	@echo "$(GOAL_EXE)	build the executable"
 	@echo "$(GOAL_DEBUG)	build the executable with debug options"
 	@echo "$(GOAL_PROF)	build the executable with profiling options"
