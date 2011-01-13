@@ -1,4 +1,4 @@
-#include <pthreads.h>
+#include <pthread.h>
 
 #include <iostream>
 #include <cmath>

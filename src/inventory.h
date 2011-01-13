@@ -74,7 +74,6 @@ namespace Game
 	//
 	InventoryID create_inventory(int capacity);
 	
-	ItemID create_item(int
 	
 	//Moves an item to the target inventory
 	bool move_item(ItemID, InventoryID);
