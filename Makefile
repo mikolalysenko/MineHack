@@ -18,7 +18,7 @@ CC = gcc
 URL = http://127.0.0.1:8081/index.html
 
 #FIXME: Make this a config string
-BROWSER = /home/mikola/Apps/chrome-linux/chrome --enable-webgl
+BROWSER = $(CHROME) --enable-webgl
 
 # source files directory
 srcdir = src
@@ -26,6 +26,7 @@ srcdir = src
 # build directory
 builddir = obj
 
+datadir = data
 
 # preprocessor options to find all included files
 INC_PATH = -I$(srcdir) -I/usr/local/include
@@ -187,20 +188,26 @@ $(GOAL_PROF):	$(GOAL_EXE)
 # user at make invocation.
 ###############################################################################
 
-test: $(exe)
+test: $(exe) $(datadir)
 	(sleep 2; $(BROWSER) $(URL)) &
 	valgrind --log-file=valgrind.log ./$(exe)
 
 
+$(datadir):
+	mkdir $(datadir)
+
+$(builddir):
+	mkdir $(builddir)
+
 # linking
-$(exe):	$(objs)
+$(exe):	$(objs) 
 	$(CXX) $^ -o $@ $(LDOPTS) $(LDFLAGS)
 
 # explicit definition of the implicit rule used to compile source files
-$(builddir)/%.o:	src/%.cc
+$(builddir)/%.o:	src/%.cc $(builddir)
 	$(CXX) -c $< $(CPPOPTS) $(CXXOPTS) $(CPPFLAGS) $(CXXFLAGS) -o $@
 
-$(builddir)/%.o:	src/%.c
+$(builddir)/%.o:	src/%.c $(builddir)
 	$(CC) -c $< $(CPPOPTS) $(CXXOPTS) $(CPPFLAGS) $(CXXFLAGS) -o $@
 
 # Rule to build our included dependencies makefiles.
@@ -212,13 +219,13 @@ $(builddir)/%.o:	src/%.c
 # Note that the dependencies can be goal specific.
 # The goal_flag_file is determined at run time because it must be the current
 # goal and not the goal in use when the dependencies makefile was created.
-$(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file)
+$(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file) $(builddir)
 	$(SHELL) -ec '$(CXX) -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 
 
-$(builddir)/%.$(deps_suffix):	src/%.c $(goal_flag_file)
+$(builddir)/%.$(deps_suffix):	src/%.c $(goal_flag_file) $(builddir)
 	$(SHELL) -ec '$(CC) -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
@@ -234,7 +241,7 @@ endif
 # Rule to produce the goal flag file.
 # If the goal has changed then we must rebuild on a clean state because
 # pre-processor DEFINE's may have changed.
-$(goal_flag_file):
+$(goal_flag_file): $(builddir)
 	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps)
 	touch $@
 
