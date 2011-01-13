@@ -31,6 +31,14 @@ struct MutexLock
 	~MutexLock() { pthread_mutex_unlock(lock); }
 };
 
+struct SpinLock
+{
+	pthread_spinlock_t	*lock;
+	
+	SpinLock(pthread_spinlock_t *l) : lock(l) { pthread_spin_lock(lock); }
+	~SpinLock() { pthread_spin_unlock(lock); }
+};
+
 struct ScopeFree
 {
 	void* ptr;

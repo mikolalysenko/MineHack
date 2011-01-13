@@ -1,78 +1,157 @@
+#include <pthread.h>
+
 #include <cstring>
 #include <cassert>
+#include <cstdlib>
+#include <cstdint>
 
+#include <tcutil.h>
+
+#include "session.h"
+#include "misc.h"
 #include "update_event.h"
 
 using namespace std;
+using namespace Server;
 using namespace Game;
 
-int UpdateBlockEvent::write(void* bufv, size_t buf_len) const
+void* UpdateBlockEvent::write(int& len) const
 {
-	if(buf_len < 10)
-		return -1;
-		
-	uint8_t* buf = (uint8_t*)bufv;
-			
-	buf[0] = (uint8_t)b;
-	buf[1] =  x 	  & 0xff;
-	buf[2] = (x >> 8) & 0xff;
-	buf[3] = (x >> 16)& 0xff;
-	buf[4] =  y 	  & 0xff;
-	buf[5] = (y >> 8) & 0xff;
-	buf[6] = (y >> 16)& 0xff;
-	buf[7] =  z 	  & 0xff;
-	buf[8] = (z >> 8) & 0xff;
-	buf[9] = (z >> 16)& 0xff;
+	len = 14;
+
+	uint8_t* buf = (uint8_t*)malloc(len);
+	uint8_t* ptr = buf;
 	
-	return 10;
+	*(ptr++) = (uint8_t)UpdateEventType::SetBlock;
+	*(ptr++) = (uint8_t)b;
+	*(ptr++) =  x 	  	& 0xff;
+	*(ptr++) = (x >> 8) & 0xff;
+	*(ptr++) = (x >> 16)& 0xff;
+	*(ptr++) = (x >> 24)& 0xff;
+	*(ptr++) =  y 	  	& 0xff;
+	*(ptr++) = (y >> 8) & 0xff;
+	*(ptr++) = (y >> 16)& 0xff;
+	*(ptr++) = (y >> 24)& 0xff;
+	*(ptr++) =  z 	  	& 0xff;
+	*(ptr++) = (z >> 8) & 0xff;
+	*(ptr++) = (z >> 16)& 0xff;
+	*(ptr++) = (z >> 24)& 0xff;
+	
+	return (void*)buf;
 }
 
-int UpdateChatEvent::write(void* bufv, size_t buf_len) const
+void* UpdateChatEvent::write(int& len) const
 {
-	if(buf_len < name_len + msg_len + 2)
-		return -1;
-		
-	uint8_t* ptr = (uint8_t*)bufv;
-	
 	assert(name_len <= USERNAME_MAX_LEN);
+	assert(msg_len <= CHAT_LINE_MAX_LEN);
+	
+	len = 3 + name_len + msg_len;
+
+	uint8_t* buf = (uint8_t*)malloc(len);
+	uint8_t* ptr = buf;
+	
+	//Set type
+	*(ptr++) = (uint8_t) UpdateEventType::Chat;
+	
 	*(ptr++) = name_len;
 	memcpy(ptr, name, name_len);
 	ptr += name_len;
 
-	assert(msg_len <= CHAT_LINE_MAX_LEN);
 	*(ptr++) = msg_len;
 	memcpy(ptr, msg, msg_len);
 	
-	return name_len + msg_len + 2;
+	return (void*)buf;
 }
-
 
 
 //Update event serialization
-int UpdateEvent::write(void* bufv, size_t buf_len) const
+void* UpdateEvent::write(int& len) const
 {
-	uint8_t* buf = (uint8_t*)bufv;
-	
-	//Write the type byte
-	if(buf_len < 1)
-		return -1;
-	*(buf++) = (uint8_t)type;
-	buf_len--;
-	
-	int r = -1;
-	
 	switch(type)
 	{
 		case UpdateEventType::SetBlock:
-			r = block_event.write(buf, buf_len);
+			return block_event.write(len);
 		break;
 		
 		case UpdateEventType::Chat:
-			r = chat_event.write(buf, buf_len);
+			return chat_event.write(len);
 		break;
+		
+		default:
+			return NULL;
+	}
+}
+
+
+
+UpdateMailbox::UpdateMailbox()
+{
+	pthread_spin_init(&lock, NULL);
+	
+	//Create the mailboxes
+	mailboxes = tcmapnew2(256);
+}
+
+UpdateMailbox::~UpdateMailbox()
+{
+	tcmapdel(mailboxes);
+}
+	
+//Sends an event to a terget
+void UpdateMailbox::send_event(
+	Server::SessionID const& id, 
+	UpdateEvent const& up)
+{
+	int len;
+	void* data = up.write(len);
+	if(data == NULL)
+		return;
+	
+	//Set scope handler for data
+	ScopeFree	data_guard(data);		
+		
+	cout << "writing event, len = " << len << ", data = ";
+	for(int i=0; i< len; i++)
+	{
+		cout << (int)((uint8_t*)data)[i] << ",";
+	}
+	cout << endl;
+	
+	
+
+	
+	//Lock database and add key	
+	{	SpinLock	guard(&lock);
+		
+		tcmapputcat(mailboxes,
+			(const void*)&id,	sizeof(SessionID),
+			data, 				len);
+	}
+}
+		
+//Retrieves all events
+void* UpdateMailbox::get_events(
+	SessionID const& id, 
+	int& len)
+{
+	void * result = NULL;
+	
+	{	SpinLock	guard(&lock);
+		
+		const void* data = tcmapget(mailboxes, 
+			(const void*)&id, sizeof(SessionID), 
+			&len);
+			
+		if(data == NULL)
+			return NULL;
+			
+		//Copy data into result
+		result = malloc(len);
+		memcpy(result, data, len);
+		
+		tcmapout(mailboxes, (const void*)&id, sizeof(SessionID));
 	}
 	
-	if(r < 0)
-		return -1;
-	return r+1;
+	return result;
 }
+

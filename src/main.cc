@@ -289,61 +289,62 @@ void do_heartbeat(
 		return;
 	}
 	
-	//Unpack incoming events
-	uint8_t msg_buf[EVENT_PACKET_SIZE];
-	memset(msg_buf, 0, EVENT_PACKET_SIZE);
-	int len = mg_read(conn, msg_buf, EVENT_PACKET_SIZE);
+	{	//Unpack incoming events
+		uint8_t msg_buf[EVENT_PACKET_SIZE];
+		memset(msg_buf, 0, EVENT_PACKET_SIZE);
+		int len = mg_read(conn, msg_buf, EVENT_PACKET_SIZE);
 	
-	//Parse out the events
-	int p = 0;
-	while(true)
-	{
-		//Create event
-		InputEvent ev;
-		ev.session_id = session_id;
-		
-		int d = ev.extract(&msg_buf[p], len);
-		if(d < 0)
-			break;
-		
-		//Add event
-		game_instance->add_event(ev);
-		p += d;
-		len -= d;
-	}
-	
-	//This shouldn't happen, but need to check anyway
-	if(len > 0)
-	{
-		cout << "Warning!  Unused data in heartbeat buffer: ";
-		for(int i=0; i<len; i++)
+		//Parse out the events
+		int p = 0;
+		while(true)
 		{
-			cout << (int)msg_buf[p+i] << ",";
+			//Create event
+			InputEvent ev;
+			ev.session_id = session_id;
+		
+			int d = ev.extract(&msg_buf[p], len);
+			if(d < 0)
+				break;
+		
+			//Add event
+			game_instance->add_event(ev);
+			p += d;
+			len -= d;
 		}
-		cout << endl;
-	}
 	
-	//Zero out message buffer again
-	memset(msg_buf, 0, EVENT_PACKET_SIZE);
-	
-	//Generate client response
-	len = game_instance->heartbeat(session_id, msg_buf, EVENT_PACKET_SIZE);
-	
-	if(len >= 0)
-	{
+		//This shouldn't happen, but need to check anyway
 		if(len > 0)
 		{
-			cout << "Pushing update packet: ";
+			cout << "Warning!  Unused data in heartbeat buffer: ";
 			for(int i=0; i<len; i++)
-				cout << (int)msg_buf[i] << ',';
+			{
+				cout << (int)msg_buf[p+i] << ",";
+			}
 			cout << endl;
 		}
-	
-		ajax_send_binary(conn, msg_buf, len);
 	}
-	else
-	{
-		ajax_error(conn);
+	
+	{	//Generate client response
+		int mlen;
+		void * data = game_instance->heartbeat(session_id, mlen);
+	
+		if(data == NULL)
+		{
+			ajax_send_binary(conn, data, 0);
+			return;
+		}
+		
+		ScopeFree guard(data);
+
+		if(mlen > 0)
+		{
+			cout << "Pushing update packet: ";
+			for(int i=0; i<mlen; i++)
+				cout << (int)((uint8_t*)data)[i] << ',';
+			cout << endl;
+		}
+
+		ajax_send_binary(conn, data, mlen);
 	}
 }
 

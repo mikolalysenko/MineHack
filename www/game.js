@@ -204,18 +204,20 @@ Game.update_handlers = {
 	//Set block event
 	1 : function(arr)
 	{
-		if(arr.length < 10)	//Bad packet, drop
+		alert("got block set packet");
+	
+		if(arr.length < 13)	//Bad packet, drop
 			return -1;
 			
 		//Parse out event contents
 		var i = 0;
 		var b = arr[i++];
-		var x = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
-		i += 3;
-		var y = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
-		i += 3;
-		var z = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16);
-		i += 3;
+		var x = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16) + (arr[i+3]<<24);
+		i += 4;
+		var y = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16) + (arr[i+3]<<24);
+		i += 4;
+		var z = arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16) + (arr[i+3]<<24);
+		i += 4;
 		
 		//Execute update
 		Map.set_block(x, y, z, b);
@@ -320,9 +322,11 @@ Game.heartbeat = function()
 		
 	asyncGetBinary("/h?k="+Session.session_id, function(arr)
 	{
+	
 		var i = 0;
 		while(i < arr.length)
 		{
+			alert("got packet");
 			var t = arr[i++];
 			
 			var handler = Game.update_handlers[t];

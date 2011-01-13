@@ -5,6 +5,9 @@
 
 #include <map>
 #include <cstdint>
+#include <cstdlib>
+
+#include <tcutil.h>
 
 #include "session.h"
 #include "chunk.h"
@@ -34,19 +37,23 @@ namespace Game
 			size_t buf_len);
 		
 		//Sends queued messages to client
-		int heartbeat(
+		void* heartbeat(
 			Server::SessionID const&,
-			uint8_t* buf,
-			size_t buf_len);
+			int& len);
 		
 		//Ticks the server
 		void tick();
 		
 		//Kills the simulator, saves all databases
 		void shutdown();
+
+			
 		
 	private:
-		Map    		*game_map;		
+		Map    		*game_map;
+		
+		//Mailbox for player updates
+		UpdateMailbox	player_updates;
 		
 		//While held, the world is updated
 		pthread_mutex_t world_lock;
@@ -67,7 +74,8 @@ namespace Game
 		void handle_chat(Player*, ChatEvent const&);
 
 		//Broadcasts an update to all players in radius
-		void broadcast_update(UpdateEvent const& ev, double, double, double, double radius);
+		void broadcast_update(UpdateEvent const&, 
+			double x, double y, double z, double r);
 
 	};
 };
