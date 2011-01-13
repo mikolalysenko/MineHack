@@ -1,8 +1,8 @@
 
 //Chunk parameters
-const CHUNK_X_S		= 5;
-const CHUNK_Y_S		= 5;
-const CHUNK_Z_S		= 5;
+const CHUNK_X_S		= 4;
+const CHUNK_Y_S		= 4;
+const CHUNK_Z_S		= 4;
 
 const CHUNK_XY_S	= CHUNK_X_S + CHUNK_Y_S;
 

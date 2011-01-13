@@ -189,7 +189,7 @@ $(GOAL_PROF):	$(GOAL_EXE)
 
 test: $(exe)
 	(sleep 2; $(BROWSER) $(URL)) &
-	./$(exe)
+	valgrind --log-file=valgrind.log ./$(exe)
 
 
 # linking
@@ -250,4 +250,4 @@ list:
 # Remove all files that are normally created by building the program.
 .PHONY:	clean
 clean:
-	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps) data/*
+	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps) data/* *.log

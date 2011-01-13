@@ -8,9 +8,9 @@
 
 //Chunk dimensions
 
-#define CHUNK_X_S			5
-#define CHUNK_Y_S			5
-#define CHUNK_Z_S			5
+#define CHUNK_X_S			4
+#define CHUNK_Y_S			4
+#define CHUNK_Z_S			4
 
 #define CHUNK_X				(1<<CHUNK_X_S)
 #define CHUNK_Y				(1<<CHUNK_Y_S)

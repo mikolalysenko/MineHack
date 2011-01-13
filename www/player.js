@@ -244,9 +244,9 @@ Player.view_matrix = function()
 	var rot = mmult(rotp, roty);
 		
 	var c = Player.chunk();	
-	c[0] *= 32;
-	c[1] *= 32;
-	c[2] *= 32;
+	c[0] *= CHUNK_X;
+	c[1] *= CHUNK_Y;
+	c[2] *= CHUNK_Z;
 		
 	var trans = new Float32Array([
 		1, 0, 0, 0,
