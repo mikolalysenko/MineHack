@@ -1,6 +1,7 @@
 #ifndef MISC_H
 #define MISC_H
 
+#include <cstdlib>
 #include <pthread.h>
 
 #include "mongoose.h"
@@ -30,11 +31,20 @@ struct MutexLock
 	~MutexLock() { pthread_mutex_unlock(lock); }
 };
 
+struct ScopeFree
+{
+	void* ptr;
+	
+	ScopeFree(void* p) : ptr(p) {}
+	ScopeFree() { std::free(ptr); }
+};
+
 template<class T> struct ScopeDelete
 {
 	T* ptr;
 	ScopeDelete(T* p) : ptr(p) {}
 	~ScopeDelete() { delete ptr; }
 };
+
 
 #endif

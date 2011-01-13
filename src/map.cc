@@ -80,28 +80,32 @@ void Map::set_block(int x, int y, int z, Block b)
 	auto idx = COORD2CHUNKID(x, y, z);
 	Chunk c;
 
-	if(!tchdbtranbegin(map_db))
-		return;
-	
-	int l = tchdbget3(map_db, 
-		(const void*)&idx, sizeof(ChunkID),
-		(void*)&c, sizeof(Chunk));
-		
-	if(l != sizeof(Chunk))
+	while(true)
 	{
-		tchdbtranabort(map_db);
-		return;
-	}
-
-	c.data[CHUNK_OFFSET(x & CHUNK_X_MASK, 
-						y & CHUNK_Y_MASK, 
-						z & CHUNK_Z_MASK)] = b;
+		if(!tchdbtranbegin(map_db))
+			return;
 	
-	tchdbput(map_db,
-		(const void*)&idx, sizeof(ChunkID),
-		(void*)&c, sizeof(Chunk));
+		int l = tchdbget3(map_db, 
+			(const void*)&idx, sizeof(ChunkID),
+			(void*)&c, sizeof(Chunk));
 		
-	tchdbtrancommit(map_db);
+		if(l != sizeof(Chunk))
+		{
+			tchdbtranabort(map_db);
+			return;
+		}
+
+		c.data[CHUNK_OFFSET(x & CHUNK_X_MASK, 
+							y & CHUNK_Y_MASK, 
+							z & CHUNK_Z_MASK)] = b;
+	
+		tchdbput(map_db,
+			(const void*)&idx, sizeof(ChunkID),
+			(void*)&c, sizeof(Chunk));
+		
+		if(tchdbtrancommit(map_db))
+			return;
+	}
 }
 
 //Retrieves a chunk from the map

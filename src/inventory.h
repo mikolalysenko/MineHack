@@ -21,7 +21,7 @@
 //	5. No inventory contains more items than its total capacity
 //
 
-#define INVENTORY_CAPACITY		32
+#define INVENTORY_ID_MASK		(1ULL<<50ULL)
 
 namespace Game
 {	
@@ -29,16 +29,20 @@ namespace Game
 	struct ItemID
 	{
 		std::uint64_t id;
+		
+		bool valid() const { return (INVENTORY_ID_MASK & id) == 0; }
+		bool empty() const { return id == 0; }
 	};
 	
 	struct InventoryID
 	{
 		std::uint64_t id;
+		
+		bool valid() const { return (INVENTORY_ID_MASK & id) != 0; }
 	};
 	
 	enum class ItemType : std::uint8_t
 	{
-		Empty		= 0,
 		BlockStack	= 1,
 		
 		//Other item types go here (tools, food, etc.)
@@ -49,11 +53,10 @@ namespace Game
 		Block		block_type;
 	};
 	
+	//An item is an individual object in the game world
 	struct Item
 	{
 		ItemType		type;			//The item type
-		ItemID			uuid;			//The UUID associated to this item
-		InventoryID		inv_uuid;		//The UUID for the inventory containing this item
 		int				charges;		//The number of charges associated to this item.
 										//   When this reaches 0, destroy the item
 		union
@@ -62,24 +65,47 @@ namespace Game
 		};
 	};
 	
-	//An inventory tracks a collection of items
-	struct Inventory
-	{
-		//The inventory objects
-		InventoryID			uuid;
+	
+	//Initialize database
+	void init_inventory(std::string const& path);
+	
+	//Shutdown database
+	void shutdown_inventory();
 
-		ItemID				items[INVENTORY_CAPACITY];
-	};
-	
-	//
-	InventoryID create_inventory(int capacity);
-	
-	
-	//Moves an item to the target inventory
-	bool move_item(ItemID, InventoryID);
-	
-	//Uses an item
-	bool use_charge(ItemID, int count);
+
+	//Creates an inventory object
+	//	If capacity is -1, then the number of items is infinite
+	//	Otherwise the inventory is a fixed size
+	InventoryID create_inventory(int capacity = -1);
+
+	//Returns the items contained in a particular inventory object
+	bool get_inventory(InventoryID const& id, std::vector<ItemID>&);
+
+	//Swaps two items in an inventory (used when player is rearranging inventory)
+	bool swap_item(InventoryID const&, int idx1, int idx2);
+
+	//Deletes an inventory object
+	bool delete_inventory(InventoryID const& id);
+
+
+
+	//Adds an item to the given inventory
+	ItemID create_item(InventoryID const&, Item const&);
+
+	//Retrieves the inventory id associated to a particular item
+	bool get_item_inventory(ItemID const& item, InventoryID&);
+
+	//Retrieves an item
+	bool get_item_val(ItemID const& item, Item&);
+
+	//Deletes an item
+	bool delete_item(ItemID const& item);
+
+	//Transfers an item to a new inventory
+	bool move_item(ItemID const& item, InventoryID const& source, InventoryID const& target);
+
+	//Uses an item's charge.  If charge drops to 0, destroys the item.  If item doesn't have enough charges, returns false.
+	bool use_item_charge(InventoryID const& owner, ItemID const& item, int ncharge=1);
 };
 
 #endif

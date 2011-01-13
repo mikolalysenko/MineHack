@@ -11,6 +11,7 @@
 #include "session.h"
 #include "misc.h"
 #include "world.h"
+#include "inventory.h"
 
 using namespace std;
 using namespace Server;
@@ -57,6 +58,9 @@ void init()
 	init_login();
 	init_sessions();
 	
+	//Initialize inventory database
+	init_inventory("data/items.tc");
+	
 	game_instance = new World();
 }
 
@@ -65,7 +69,7 @@ void deinit()
 {
 	game_instance->shutdown();
 	
-	//Delete login
+	shutdown_inventory();
 	shutdown_login();
 }
 
