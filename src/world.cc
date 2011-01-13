@@ -57,63 +57,11 @@ int World::get_compressed_chunk(
 }
 	
 //Sends queued messages to client
-int World::heartbeat(
+void* World::heartbeat(
 	Server::SessionID const& session_id,
-	uint8_t* buf,
-	size_t buf_len)
+	int& len)
 {
-	vector<UpdateEvent> update_queue;
-	
-	//Need to acquire world lock in order to read player's pending events
-	{	MutexLock wl(&world_lock);
-
-		auto piter = players.find(session_id);
-		if(piter == players.end())
-		{
-			cout << "Player does not exist?" << endl;
-			return -1;
-		}
-		update_queue.swap((*piter).second->updates);
-	}
-
-	//Write the update events out to the buffer
-	int l = 0;
-	auto iter = update_queue.begin();
-	for(; iter != update_queue.end(); ++iter)
-	{
-		auto up = *iter;
-		
-		int q = up.write(buf, buf_len);
-		
-		if(q < 0)
-			break;
-		
-		buf += q;
-		buf_len -= q;
-		l += q;
-	}
-	
-	//If there are any pending updates that didn't fit in the buffer, push them back to the player
-	if(iter != update_queue.end())
-	{
-		cout << "Did not send all updates to player" << endl;
-		
-		MutexLock wl(&world_lock);
-		
-		auto piter = players.find(session_id);
-		if(piter == players.end())
-		{
-			cout << "Player does not exist?" << endl;
-			return -1;
-		}
-		
-		//Append updates to the front of the player's update queue
-		auto p = (*piter).second;
-		p->updates.reserve(p->updates.size() + update_queue.size());
-		p->updates.insert(p->updates.begin(), update_queue.begin(), update_queue.end());
-	}
-	
-	return l;
+	return player_updates.get_events(session_id, len);
 }
 
 //Broadcasts an event to all players
@@ -129,7 +77,7 @@ void World::broadcast_update(UpdateEvent const& up, double x, double y, double z
 		
 		if( dx*dx+dy*dy+dz*dz < radius*radius )
 		{
-			p->updates.push_back(up);
+			player_updates.send_event((*pl).first, up);
 		}
 	}
 }

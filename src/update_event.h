@@ -1,7 +1,14 @@
 #ifndef UPDATE_EVENT_H
 #define UPDATE_EVENT_H
 
+#include <pthread.h>
+
 #include <string>
+#include <cstdlib>
+#include <cstdio>
+#include <cstdint>
+
+#include <tcutil.h>
 
 #include "login.h"
 #include "chunk.h"
@@ -20,7 +27,7 @@ namespace Game
 		int x, y, z;
 		Block b;
 		
-		int write(void* buf, size_t len) const;
+		void* write(int& len) const;
 	};
 	
 	struct UpdateChatEvent
@@ -31,7 +38,7 @@ namespace Game
 		uint8_t msg_len;
 		char msg[CHAT_LINE_MAX_LEN];
 
-		int write(void* buf, size_t len) const;
+		void* write(int& len) const;
 	};
 	
 	struct UpdateEvent
@@ -45,7 +52,25 @@ namespace Game
 		};
 		
 		//Writes output event to buffer
-		int write(void* buf, size_t len) const;
+		//Client must release pointer with free
+		void* write(int& len) const;
+	};
+	
+	struct UpdateMailbox
+	{
+		UpdateMailbox();
+		~UpdateMailbox();
+	
+		//Sends an event to a terget
+		void send_event(Server::SessionID const&, UpdateEvent const&);
+		
+		//Retrieves all events
+		void* get_events(Server::SessionID const&, int& len);
+		
+	private:
+		
+		pthread_spinlock_t	lock;
+		TCMAP*				mailboxes;
 	};
 };
 
