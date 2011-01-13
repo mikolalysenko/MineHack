@@ -130,7 +130,7 @@ Player.show_chat_input = function()
 			}
 			if(txt.length > 0)
 			{
-				Game.push_event(["Chat", txt]);
+				InputHandler.push_event(["Chat", txt]);
 			}
 			
 			Game.canvas.focus();
@@ -185,7 +185,7 @@ Player.tick = function()
 			
 		if(hit_rec.length > 0)
 		{
-			Game.push_event(["DigBlock", hit_rec[0], hit_rec[1], hit_rec[2]]);
+			InputHandler.push_event(["DigBlock", hit_rec[0], hit_rec[1], hit_rec[2]]);
 		}
 	}
 
