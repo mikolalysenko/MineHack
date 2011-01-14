@@ -1,3 +1,4 @@
+#include <cstring>
 #include <string>
 #include <map>
 #include <iostream>
@@ -18,6 +19,7 @@ namespace Server
 {
 
 TCHDB *login_db = NULL;
+
 
 //Initializes the login table
 void init_login()
@@ -40,24 +42,18 @@ void shutdown_login()
 	tchdbdel(login_db);
 }
 
-void sync_login()
-{
-	tchdbsync(login_db);
-}
-
-
 //Check if a user name is valid
-bool is_valid_username(const string& name)
+bool is_valid_user_name(const string& user_name)
 {
-	if(name.size() < USERNAME_MIN_LEN ||
-		name.size() > USERNAME_MAX_LEN)
+	if(	user_name.size() < USER_NAME_MIN_LEN ||
+		user_name.size() > USER_NAME_MAX_LEN)
 	{
 		return false;
 	}
 	
-	for(size_t i=0; i<name.size(); i++)
+	for(size_t i=0; i<user_name.size(); i++)
 	{
-		if(!isalnum(name[i]))
+		if(!isalnum(user_name[i]))
 			return false;
 	}
 	
@@ -80,50 +76,169 @@ bool is_valid_password_hash(const string& pass)
 }
 
 
-
-//Verifies a username/password combo
-bool verify_username(const string& name, const string& password_hash)
+//Checks if a player name is valid
+bool is_valid_player_name(const string& player_name)
 {
-	char pass_buf[PASSWORD_HASH_LEN];
-	
-	if(!is_valid_password_hash(password_hash) || 
-		!is_valid_username(name))
+	if(	player_name.size() > PLAYER_NAME_MAX_LEN )
 	{
 		return false;
 	}
 	
-	int l = tchdbget3(login_db, 
-		(const void*)name.c_str(), name.size(), 
-		(void*)&pass_buf, PASSWORD_HASH_LEN);
-		
-	if(l != PASSWORD_HASH_LEN)
+	for(size_t i=0; i<player_name.size(); i++)
 	{
-		return false;
-	}
-	
-	for(int i=0; i<PASSWORD_HASH_LEN; i++)
-	{
-		if(pass_buf[i] != password_hash[i])
+		if(!isalnum(player_name[i]))
 			return false;
 	}
 	
 	return true;
+
+}
+
+
+//Verifies a user_name/password combo
+bool verify_user_name(const string& user_name, const string& password_hash)
+{
+	if( !is_valid_password_hash(password_hash) || 
+		!is_valid_user_name(user_name))
+	{
+		return false;
+	}
+	
+	int len;
+	void * data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
+		
+	if(data == NULL)
+	{
+		return false;
+	}
+	
+	ScopeFree guard(data);
+
+	if(len < sizeof(LoginRecord))
+	{
+		return false;
+	}
+	
+	//Read in the login record
+	LoginRecord* account = (LoginRecord*)data;
+	return (strncmp(account->password_hash, password_hash.c_str(), PASSWORD_HASH_LEN) == 0);
+}
+
+
+bool get_login_record(const string& user_name, LoginRecord& result)
+{
+	int len;
+	void * data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
+		
+	if(data == NULL)
+	{
+		return false;
+	}
+	
+	ScopeFree guard(data);
+
+	if(len < sizeof(LoginRecord))
+	{
+		return false;
+	}
+	
+	result = *(LoginRecord*)data;
+	return true;
 }
 
 //Creates an account
-bool create_account(const string& name, const string& password_hash)
+bool create_account(const string& user_name, const string& password_hash)
 {
 	//Validate name and password
-	if(!is_valid_username(name) || !is_valid_password_hash(password_hash))
+	if(	!is_valid_user_name(user_name) || 
+		!is_valid_password_hash(password_hash))
 	{
 		return false;
 	}
 
 	return tchdbputkeep(login_db, 
-		(const void*)name.c_str(), name.size(), 
+		(const void*)user_name.c_str(), user_name.size(), 
 		(const void*)password_hash.c_str(), password_hash.size());
 }
 
+//Checks if a user name exists
+bool user_name_exists(std::string const& user_name)
+{
+	int len = tchdbvsiz(login_db, (const void*)user_name.c_str(), user_name.size());
+	return len >= sizeof(LoginRecord);
+}
+
+//Adds a player name to the list
+bool add_player_name(std::string const& user_name, std::string const& player_name)
+{
+	if( !user_name_exists(user_name) || 
+		!is_valid_player_name(player_name) )
+	{
+		return false;
+	}
+	
+	return tchdbputcat(login_db,
+		(const void*)user_name.c_str(), user_name.size(),
+		(const void*)player_name.c_str(), player_name.size() + 1);
+}
+
+//Retrieves player names
+bool get_player_names(string const& user_name, vector<string>& player_names)
+{
+	player_names.clear();
+
+	int len;
+	void* data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
+	if(data == NULL)
+		return false;
+	ScopeFree	guard(data);
+
+	if(len < sizeof(LoginRecord))
+		return false;
+	
+	char* ptr = ((char*)data) + sizeof(LoginRecord);
+	for(int i=sizeof(LoginRecord); i<len; ++i)
+	{
+		if( ((char*)data)[i] == '\0' )
+		{
+			player_names.push_back(ptr);
+			ptr = ((char*)data) + i + 1;
+		}
+	}
+	
+	return true;
+}
+
+//Removes a player name from an account	
+bool remove_player_name(string const& user_name, string const& player_name)
+{
+	int len;
+	void* data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
+	if(data == NULL)
+		return false;
+	ScopeFree	guard(data);
+	
+	if(len < sizeof(LoginRecord))
+		return false;
+	
+	char* ptr = ((char*)data) + sizeof(LoginRecord);
+	for(int i=sizeof(LoginRecord); i<len; i += strlen(ptr))
+	{
+		if(strcmp(ptr, player_name.c_str()) == 0)
+		{
+			int l = player_name.size();
+			int s = i + l;
+			
+			memmove(ptr, ((char*)data) + s, len - s);
+			
+			return tchdbput(login_db,
+				(const void*)user_name.c_str(), user_name.size(),
+				data, len - l);
+		}
+	}
+	
+	return false;
+}
 
 };
 

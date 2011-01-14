@@ -152,13 +152,13 @@ bool get_session_id(
 	SessionID& session_id)
 {
 	//Allocate a buffer
-	char session_id_str[SESSION_ID_STR_LEN];	
+	char session_id_str[24];	
 	memset(session_id_str, 0, sizeof(session_id_str));
 	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	int len = mg_get_var(qs, qs_len, "k", session_id_str, SESSION_ID_STR_LEN);
+	int len = mg_get_var(qs, qs_len, "k", session_id_str, sizeof(session_id_str));
 	
 	if(len < 0)
 		return false;
@@ -237,9 +237,9 @@ void do_register(HttpEvent& ev)
 //Handle a user login
 void do_login(HttpEvent& ev)
 {
-	string username, password_hash;
+	string user_name, password_hash;
 	
-	if(	!get_string(ev.req, "n", username) ||
+	if(	!get_string(ev.req, "n", user_name) ||
 		!get_string(ev.req, "p", password_hash) )
 	{
 		ajax_printf(ev.conn, 
@@ -250,12 +250,14 @@ void do_login(HttpEvent& ev)
 	}
 
 	SessionID session_id;
-	if( verify_username(username, password_hash) &&
-		create_session(username, session_id) )
+	if( verify_user_name(user_name, password_hash) &&
+		create_session(user_name, session_id) )
 	{
+		cout << "session id = " << session_id.id << endl;
+	
 		ajax_printf(ev.conn, 
 			"Ok\n"
-			"%016lx", session_id.id);
+			"%016Lx", session_id.id);
 	}
 	else
 	{
@@ -288,18 +290,122 @@ void do_logout(HttpEvent& ev)
 
 void do_create_player(HttpEvent& ev)
 {
+	//Grab request variables
+	SessionID	session_id;
+	string		player_name;
+	Session		session;
+	
+	if( !get_session_id(ev.req, session_id) ||
+		!get_string(ev.req, "player_name", player_name) ||
+		!get_session_data(session_id, session) ||
+		session.state != SessionState::PreJoinGame )
+	{
+		ajax_error(ev.conn);
+		return;
+	}
+	
+	//TODO: Create player in db
+	
+	if( add_player_name(session.user_name, player_name) )
+	{
+		ajax_printf(ev.conn, 
+			"Ok\n"
+			"Created player successfully");
+	}
+	else
+	{
+		//TODO: Remove player from db
+	
+		remove_player_name(session.user_name, player_name);
+	
+		ajax_printf(ev.conn,
+			"Fail\n"
+			"Player name is already in use");
+	}
 }
 
 void do_join_game(HttpEvent& ev)
 {
+	//Grab request variables
+	SessionID		session_id;
+	string			player_name;
+	Session			session;
+	vector<string>	player_names;
+	
+	if( !get_session_id(ev.req, session_id) ||
+		!get_string(ev.req, "player_name", player_name) ||
+		!get_session_data(session_id, session) ||
+		session.state != SessionState::PreJoinGame ||
+		!get_player_names(session.user_name, player_names) ||
+		find(player_names.begin(), player_names.end(), player_name) == player_names.end() )
+	{
+		ajax_error(ev.conn);
+		return;
+	}
+
+	//TODO: Add player to game
+	
+	if( set_session_player(session_id, player_name) )
+	{
+		ajax_printf(ev.conn,
+			"Ok\n"
+			"Successfully joined game\n");
+	}
+	else
+	{
+		//TODO: Remove player from game
+	
+		ajax_error(ev.conn);
+	}
+
 }
 
 void do_list_players(HttpEvent& ev)
 {
+	//Grab request variables
+	SessionID		session_id;
+	Session			session;
+	vector<string>	player_names;
+	
+	if( !get_session_id(ev.req, session_id) ||
+		!get_session_data(session_id, session) ||
+		session.state != SessionState::PreJoinGame ||
+		!get_player_names(session.user_name, player_names) )
+	{
+		ajax_error(ev.conn);
+		return;
+	}
+
+	ajax_printf(ev.conn, "Ok\n");
+	for(int i=0; i<player_names.size(); i++)
+	{
+		mg_printf(ev.conn, "%s\n", player_names[i].c_str());
+	}
 }
 
 void do_delete_player(HttpEvent& ev)
 {
+	//Grab request variables
+	SessionID	session_id;
+	string		player_name;
+	Session		session;
+	
+	if( !get_session_id(ev.req, session_id) ||
+		!get_string(ev.req, "player_name", player_name) ||
+		!get_session_data(session_id, session) ||
+		session.state != SessionState::PreJoinGame ) )
+	{
+		ajax_error(ev.conn);
+		return;
+	}
+	
+	//TODO: Remove player from database
+
+	remove_player_name(session.user_name, player_name)	
+	
+	ajax_printf(ev.conn,
+		"Ok\n"
+		"Successfully removed player");
 }
 
 
@@ -435,49 +541,62 @@ static void *event_handler(mg_event event,
                            const mg_request_info *request_info)
 {
 
-	if (event == MG_NEW_REQUEST)
+	if (event == MG_NEW_REQUEST && 
+		request_info->uri[0] == '/' &&
+		request_info->uri[1] != '\0' &&
+		request_info->uri[2] == '\0' )
 	{
 		HttpEvent ev;
 		ev.conn = conn;
 		ev.req = request_info;
-	
-		//Login events
-		if(strcmp(request_info->uri, "/l") == 0)
-		{ do_login(ev);
-		}
-		else if(strcmp(request_info->uri, "/r") == 0)
-		{ do_register(ev);
-		}
-		else if(strcmp(request_info->uri, "/q")	 == 0)
-		{ do_logout(ev);
-		}
+
+		//Events are determined by a single character
+		switch(request_info->uri[1])
+		{
+			//Game events
+			case 'h':
+				do_heartbeat(ev);
+			break;
+			
+			case 'g':
+				do_get_chunk(ev);
+			break;
 		
-		//Character creation events
-		else if(strcmp(request_info->uri, "/t") == 0)
-		{ do_list_players(ev);
-		}
-		else if(strcmp(request_info->uri, "/c") == 0)
-		{ do_create_player(ev);
-		}
-		else if(strcmp(request_info->uri, "/j") == 0)
-		{ do_join_game(ev);
-		}
-		else if(strcmp(request_info->uri, "/d") == 0)
-		{ do_delete_player(ev);
-		}
 		
-		//Game events
-		else if(strcmp(request_info->uri, "/g") == 0)
-		{ do_get_chunk(ev);
-		}
-		else if(strcmp(request_info->uri, "/h") == 0)
-		{ do_heartbeat(ev);
-		}
-		
-		//Unknown event type
-		else
-		{ return NULL;
-		}
+			//Login events
+			case 'l':
+				do_login(ev);
+			break;
+			
+			case 'r':
+				do_register(ev);
+			break;
+			
+			case 'q':
+				do_logout(ev);
+			break;
+			
+			//Character creation events
+			case 't':
+				do_list_players(ev);
+			break;
+			
+			case 'c':
+				do_create_player(ev);
+			break;
+			
+			case 'j':
+				do_join_game(ev);
+			break;
+			
+			case 'd':
+				do_delete_player(ev);
+			break;
+			
+			//Unknown event type
+			default:
+				return NULL;
+		}		
 		
 		return (void*)"yes";
 	}

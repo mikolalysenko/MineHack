@@ -28,7 +28,7 @@ namespace Game
 	struct PlayerData
 	{
 		//The player's name
-		char name[USERNAME_MAX_LEN];
+		char name[USER_NAME_MAX_LEN];
 		
 		//Player's session id
 		Server::SessionID session_id;

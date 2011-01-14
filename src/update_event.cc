@@ -42,7 +42,7 @@ void* UpdateBlockEvent::write(int& len) const
 
 void* UpdateChatEvent::write(int& len) const
 {
-	assert(name_len <= USERNAME_MAX_LEN);
+	assert(name_len <= USER_NAME_MAX_LEN);
 	assert(msg_len <= CHAT_LINE_MAX_LEN);
 	
 	len = 3 + name_len + msg_len;

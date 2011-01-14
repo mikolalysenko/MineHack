@@ -2,7 +2,8 @@
 var Session = 
 {
 	logged_in: false,
-	session_id: ""
+	session_id: "",
+	player_name: ""
 };
 
 Session.hash_password = function(username, password)
@@ -68,7 +69,8 @@ Session.logout = function()
 		XHR.send(null);
 		
 		Session.logged_in = false;
-		Session.session_id = false;	
+		Session.session_id = "";	
+		Session.player_name = "";
 	}
 }
 

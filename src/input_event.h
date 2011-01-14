@@ -55,7 +55,7 @@ namespace Game
 
 	struct JoinEvent
 	{
-		char name[USERNAME_MAX_LEN];
+		char name[USER_NAME_MAX_LEN];
 		
 		int extract(void* buf, size_t len);
 	};

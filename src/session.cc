@@ -17,23 +17,13 @@ namespace Server
 //  2. Each user name has at most one session id (no multiple logins)
 //	3. The selection of session ids is completely random
 
-//Information associated to a particular session
-struct Session
-{
-	SessionID id;
-
-	//Other session specific data goes here
-	std::string user_name;
-};
-
-
 //Lock for the session table
 static pthread_rwlock_t session_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 //Indexes
 static map<string, SessionID>	user_table;
-static map<uint64_t, Session>	session_table;
-
+static map<string, SessionID>	player_table;
+static map<SessionID, Session>	session_table;
 
 void init_sessions()
 {
@@ -42,7 +32,7 @@ void init_sessions()
 bool valid_session_id(const SessionID& session_id)
 {
 	ReadLock L(&session_lock);
-	return session_table.find(session_id.id) != session_table.end();
+	return session_table.find(session_id) != session_table.end();
 }
 
 bool logged_in(const string& name)
@@ -51,24 +41,43 @@ bool logged_in(const string& name)
 	return user_table.find(name) != user_table.end();
 }
 
-bool create_session(const string& name, SessionID& session_id)
+bool get_player_session(string const& player_name, SessionID& result)
 {
-	session_id.id = (((int64_t)mrand48())<<32) | (int64_t)mrand48();
+	ReadLock L(&session_lock);
 	
+	auto iter = player_table.find(player_name);
+	if(iter == player_table.end())
+		return false;
+	
+	result = (*iter).second;
+	return true;
+}
+
+
+bool create_session(const string& user_name, SessionID& session_id)
+{
+	if( user_name.size() > USER_NAME_MAX_LEN )
+		return false;
+	
+	//Generate session id
+	session_id.id = (((uint64_t)mrand48())<<32) | (uint64_t)mrand48();
+	
+	//Initialize session variable
 	Session s;
-	s.user_name = name;
-	s.id = session_id;
+	s.state			= SessionState::PreJoinGame;
+	s.user_name		= user_name;
+	s.player_name	= "";
 	
 	{	WriteLock L(&session_lock);
 		
-		if(user_table.find(name) != user_table.end())
+		if(user_table.find(user_name) != user_table.end())
 			return false;
 		
-		if(session_table.find(session_id.id) != session_table.end())
+		if(session_table.find(session_id) != session_table.end())
 			return false;
 		
-		session_table[session_id.id] = s;
-		user_table[name] = session_id;
+		session_table[session_id] = s;
+		user_table[user_name] = session_id;
 	}
 	
 	return true;
@@ -77,11 +86,53 @@ bool create_session(const string& name, SessionID& session_id)
 void delete_session(const SessionID& session_id)
 {
 	WriteLock L(&session_lock);
-		
-	auto iter = session_table.find(session_id.id);
+	
+	auto iter = session_table.find(session_id);
 	
 	if(iter != session_table.end())
+	{
+		auto session = (*iter).second;
+	
+		auto u_iter = user_table.find(session.user_name);
+		if(u_iter != user_table.end())
+			user_table.erase(u_iter);
+		
+		auto p_iter = player_table.find(session.player_name);
+		if(p_iter != player_table.end())
+			player_table.erase(p_iter);
+	
 		session_table.erase(iter);
+	}
 }
+
+bool set_session_player(SessionID const& session_id, std::string const& player_name)
+{
+	WriteLock L(&session_lock);
+	
+	auto iter = session_table.find(session_id);
+	if(	iter == session_table.end() ||
+		(*iter).second.state != SessionState::PreJoinGame ||
+		player_table.find(player_name) != player_table.end() )
+		return false;
+
+	player_table[player_name] 	= session_id;
+	(*iter).second.player_name	= player_name;
+	(*iter).second.state		= SessionState::InGame;
+	
+	return true;
+}
+	
+bool get_session_data(SessionID const& session_id, Session& result)
+{
+	ReadLock L(&session_lock);
+	
+	auto iter = session_table.find(session_id);
+	if(iter == session_table.end())
+		return false;
+		
+	result = (*iter).second;
+	return true;
+}
+
 
 };
