@@ -5,6 +5,8 @@
 #include <sstream>
 #include <cassert>
 #include <cstring>
+#include <cstdarg>
+#include <cstdio>
 
 #include "mongoose.h"
 #include "login.h"
@@ -33,59 +35,78 @@ static const char *options[] = {
   NULL
 };
 
-static const char *ajax_reply_start =
-  "HTTP/1.1 200 OK\n"
-  "Cache: no-cache\n"
-  "Content-Type: application/x-javascript\n"
-  "\n";
-  
-
 World * game_instance = NULL;
 
-void ajax_ok(mg_connection* conn)
+//Event data
+struct HttpEvent
 {
-	mg_printf(conn, "%s", ajax_reply_start);
-}
+	mg_connection* conn;
+	const mg_request_info* req;
+};
 
-void ajax_error(mg_connection* conn)
+// --------------------------------------------------------------------------------
+//A client session has 3 states:
+//
+// 	Not logged in - before a session id has been created, user has not signed on to account
+//	Character select - user has logged in, but is not yet in the game world
+//	In game		- user has joined game, can participate in the game world.
+//
+//	Event handlers are grouped according to which state they act
+// --------------------------------------------------------------------------------
+
+// ----------------- Login/account event handlers -----------------
+void do_register(HttpEvent&);
+void do_login(HttpEvent&);
+void do_logout(HttpEvent&);
+
+// ----------------- Session / character event handleers -----------------
+void do_create_player(HttpEvent&);
+void do_join_game(HttpEvent&);
+void do_list_players(HttpEvent&);
+void do_delete_player(HttpEvent&);
+
+// ----------------- Game event handlers -----------------
+void do_heartbeat(HttpEvent&);
+void do_get_chunk(HttpEvent&);
+
+
+
+// --------------------------------------------------------------------------------
+//    Client output methods
+// --------------------------------------------------------------------------------
+
+//Sends an error message to a particular connection
+void ajax_error(mg_connection* conn) 
 {
 	mg_printf(conn, "HTTP/1.1 403 Forbidden\nCache: no-cache\n\n");
 }
 
-//Server initialization
-void init()
+//Prints a message to the target with the ajax header
+void ajax_printf(mg_connection* conn, const char* fmt, ...)
 {
-	init_login();
-	init_sessions();
+	va_list args;
+	va_start(args, fmt);
+		
+	//Write header
+	mg_printf(conn, 
+	  "HTTP/1.1 200 OK\n"
+	  "Cache: no-cache\n"
+	  "Content-Type: application/x-javascript\n"
+	  "\n");
+
+	//Get string length and allocate buffer
+	int len = vsprintf(NULL, fmt, args);	
+	char* buf = (char*)malloc(len);
 	
-	game_instance = new World();
+	//Set guard
+	ScopeFree guard(buf);
+	
+	//Format string and write to web socket
+	vsprintf(NULL, fmt, args);
+	mg_write(conn, buf, len);
 }
 
-//Deletes data
-void deinit()
-{
-	delete game_instance;
-	
-	shutdown_login();
-}
-
-int get_int(const char* id, const mg_request_info *req)
-{
-	char str[INT_QUERY_LEN];
-	
-	const char* qs = req->query_string;
-	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
-	
-	mg_get_var(qs, qs_len, id, str, INT_QUERY_LEN);
-	
-	stringstream ss(str);
-	int res;
-	ss >> res;
-	
-	return res;
-}
-
-//Pushes a binary message to the client
+//Sends a binary blob to the client
 void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 {
 	mg_printf(conn,
@@ -97,154 +118,205 @@ void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 	  "\n", len);
 
 	mg_write(conn, buf, len);	
-
 }
 
-//Retrieves the session id
-bool get_session_id(const mg_request_info* request_info, SessionID& res)
+// --------------------------------------------------------------------------------
+//    Client input methods
+// --------------------------------------------------------------------------------
+
+//Retrieves a string
+bool get_string(
+	const mg_request_info* request_info, 
+	const std::string& var,
+	std::string& res)
 {
-	char session_id_str[SESSION_ID_STR_LEN];
+	char tmp_str[256];
 	
 	const char* qs = request_info->query_string;
 	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
 	
-	mg_get_var(qs, qs_len, "k", session_id_str, SESSION_ID_STR_LEN);
+	int l = mg_get_var(qs, qs_len, var.c_str(), tmp_str, 256);
 	
-	if(session_id_str[0] == '\0')
+	if(l < 0)
+		return false;
+		
+	res = tmp_str;
+	return true;
+}
+
+// Retrieves the session id from a URL
+bool get_session_id(
+	const mg_request_info* request_info, 
+	SessionID& session_id)
+{
+	//Allocate a buffer
+	char session_id_str[SESSION_ID_STR_LEN];	
+	memset(session_id_str, 0, sizeof(session_id_str));
+	
+	const char* qs = request_info->query_string;
+	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
+	
+	int len = mg_get_var(qs, qs_len, "k", session_id_str, SESSION_ID_STR_LEN);
+	
+	if(len < 0)
 		return false;
 	
-	stringstream ss(session_id_str);
-	ss >> res;
+	//Scan in the session id
+	sscanf(session_id_str, "%lx", &session_id.id);
 	
-	if(valid_session_id(res))
+	if(valid_session_id(session_id))
 		return true;
 	
 	return false;
 }
 
-//Handle a user login
-void do_login(
-	mg_connection* conn, 
-	const mg_request_info* request_info)
+//The HttpBlob reader just pulls all the text out of a body in binary form
+struct HttpBlobReader
 {
-	char user_name[USERNAME_MAX_LEN+1];
-	char password_hash[PASSWORD_HASH_LEN+1];
+	int len;
+	void* data;
 	
-	//Construct query string
-	const char* qs = request_info->query_string;
-	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
-	
-	//Read user/name password from query string
-	memset(user_name, 		0, USERNAME_MAX_LEN+1);
-	mg_get_var(qs, qs_len, "n", user_name, USERNAME_MAX_LEN+1);
-	
-	memset(password_hash,	0, PASSWORD_HASH_LEN+1);
-	mg_get_var(qs, qs_len, "p", password_hash, PASSWORD_HASH_LEN+1);
-	
-	cout << "got login: " << user_name << ", pwd hash = " << password_hash << endl;
-	
-	//Retrieve session id and verify user name
-	SessionID key;
-	if(verify_user_name(user_name, password_hash) && create_session(user_name, key))
+	HttpBlobReader(mg_connection* conn) : len(-1), data(NULL)
 	{
-		//Initialize login event
-		InputEvent ev;
-		ev.type 		= InputEventType::PlayerJoin;
-		ev.session_id 	= key;
-		memcpy(ev.join_event.name, user_name, USERNAME_MAX_LEN);
+		//Read number of available bytes
+		int avail = mg_available_bytes(conn);
+		if(avail < 0)
+		{	avail = -1;
+			return;
+		}
 		
-		//Push to the server
-		game_instance->add_event(ev);
-	
+		//Allocate buffer
+		data = malloc(avail);
+		len = mg_read(conn, data, avail);
 		
-		//Debug spam
-		cout << "Logged in: " << key << endl;
+		//Sanity check
+		assert(len == avail);
+	}
 	
-		//Send key to client
-		stringstream ss;
-		ss << key;
-		mg_printf(conn, "%sOk\n%s", ajax_reply_start, ss.str().c_str());
+	//Free data
+	~HttpBlobReader()
+	{	
+		if(data != NULL)
+			free(data);
 	}
-	else
-	{
-		mg_printf(conn, "%sFail\nCould not log in", ajax_reply_start);
-	}
-}
+};
+
+
+
+// --------------------------------------------------------------------------------
+//    Prelogin event handlers
+// --------------------------------------------------------------------------------
 
 //Create an account
-void do_register(
-	mg_connection* conn, 
-	const mg_request_info* request_info)
+void do_register(HttpEvent& ev)
 {
-	char user_name[USERNAME_MAX_LEN+1];
-	char password_hash[PASSWORD_HASH_LEN+1];
+	string username, password_hash;
 	
-	const char* qs = request_info->query_string;
-	size_t qs_len = (qs == NULL ? 0 : strlen(qs));
-	
-	//Read user/name password from query string
-	memset(user_name, 		0, USERNAME_MAX_LEN+1);
-	mg_get_var(qs, qs_len, "n", user_name, USERNAME_MAX_LEN+1);
-	
-	memset(password_hash,	0, PASSWORD_HASH_LEN+1);
-	mg_get_var(qs, qs_len, "p", password_hash, PASSWORD_HASH_LEN+1);
-	
-	cout << "testing..." << endl;
-	cout << "Got register request: " << user_name << ", " << password_hash << endl;
-	
-	//Do validation stuff
-	if(user_name[0] == '\0' ||
-		password_hash[0] == '\0')
+	if(	!get_string(ev.req, "n", username) ||
+		!get_string(ev.req, "p", password_hash) )
 	{
-		mg_printf(conn, "%sFail\nMissing username/password", ajax_reply_start);
+		ajax_printf(ev.conn, 
+			"Fail\n"	
+			"Missing username/password\n");
 	}
-	else if(create_account(user_name, password_hash))
+	else if(create_account(username, password_hash))
 	{
-		do_login(conn, request_info);
+		do_login(ev);
 	}
 	else
 	{
-		mg_printf(conn, "%sFail\nUser name already in use", ajax_reply_start);	
+		ajax_printf(ev.conn,
+			"Fail\n"
+			"Username already in use\n");
 	}
 }
+
+
+//Handle a user login
+void do_login(HttpEvent& ev)
+{
+	string username, password_hash;
+	
+	if(	!get_string(ev.req, "n", username) ||
+		!get_string(ev.req, "p", password_hash) )
+	{
+		ajax_printf(ev.conn, 
+			"Fail\n"	
+			"Missing username/password\n");
+		
+		return;
+	}
+
+	SessionID session_id;
+	if( verify_username(username, password_hash) &&
+		create_session(username, session_id) )
+	{
+		ajax_printf(ev.conn, 
+			"Ok\n"
+			"%016lx\n", session_id.id);
+	}
+	else
+	{
+		ajax_printf(ev.conn,
+			"Fail\n"
+			"Could not log in\n");	
+	}
+}
+
 
 //Handle user log out
-void do_logout(
-	mg_connection* conn, 
-	const mg_request_info* request_info)
+void do_logout(HttpEvent& ev)
 {
 	SessionID session_id;
-	if(get_session_id(request_info, session_id))
+	if(get_session_id(ev.req, session_id))
 	{
 		delete_session(session_id);
-		
-		//Construct log out event
-		InputEvent ev;
-		ev.type 		= InputEventType::PlayerLeave;
-		ev.session_id	= session_id;
-		
-		//Push the event to the server
-		game_instance->add_event(ev);
 	}
-	mg_printf(conn, "%s\nOk", ajax_reply_start);
+
+	ajax_printf(ev.conn, "Ok");
 }
 
 
+
+// --------------------------------------------------------------------------------
+//    Character select event handlers
+// --------------------------------------------------------------------------------
+
+void do_create_player(HttpEvent& ev)
+{
+}
+
+void do_join_game(HttpEvent& ev)
+{
+}
+
+void do_list_players(HttpEvent& ev)
+{
+}
+
+void do_delete_player(HttpEvent& ev)
+{
+}
+
+
+
+// --------------------------------------------------------------------------------
+//    Game event handlers
+// --------------------------------------------------------------------------------
+
 //Retrieves a chunk
-void do_get_chunk(
-	mg_connection* conn,
-	const mg_request_info* request_info)
+void do_get_chunk(HttpEvent& ev)
 {
 	//Check session id here
 	SessionID session_id;
-	if(!get_session_id(request_info, session_id))
+	if(!get_session_id(ev.req, session_id))
 	{
 		cout << "Invalid session" << endl;
-	
-		ajax_error(conn);
+		ajax_error(ev.conn);
 		return;
 	}
 	
+	/*
 	//Extract the chunk index here
 	ChunkID idx;
 	idx.x = get_int("x", request_info);
@@ -268,14 +340,17 @@ void do_get_chunk(
 	
 		ajax_send_binary(conn, (const void*)chunk_buf, len);	
 	}
+	*/
+	
+	
 }
 
 
 //Pulls pending events from client
-void do_heartbeat(
-	mg_connection* conn,
-	const mg_request_info* request_info)
+void do_heartbeat(HttpEvent& ev)
 {
+
+	/*
 	//Check session id
 	SessionID session_id;
 	if(!get_session_id(request_info, session_id))
@@ -342,31 +417,60 @@ void do_heartbeat(
 
 		ajax_send_binary(conn, data, mlen);
 	}
+	*/
 }
 
-//Event dispatch
-static void *event_handler(enum mg_event event,
-                           struct mg_connection *conn,
-                           const struct mg_request_info *request_info)
+
+// --------------------------------------------------------------------------------
+//    Server interface code
+// --------------------------------------------------------------------------------
+
+//The event dispatcher
+static void *event_handler(mg_event event,
+                           mg_connection *conn,
+                           const mg_request_info *request_info)
 {
 
 	if (event == MG_NEW_REQUEST)
 	{
+		HttpEvent ev;
+		ev.conn = conn;
+		ev.req = request_info;
+	
+		//Login events
 		if(strcmp(request_info->uri, "/l") == 0)
-		{ do_login(conn, request_info);
+		{ do_login(ev);
 		}
 		else if(strcmp(request_info->uri, "/r") == 0)
-		{ do_register(conn, request_info);
+		{ do_register(ev);
 		}
 		else if(strcmp(request_info->uri, "/q")	 == 0)
-		{ do_logout(conn, request_info);
+		{ do_logout(ev);
 		}
+		
+		//Character creation events
+		else if(strcmp(request_info->uri, "/t") == 0)
+		{ do_list_players(ev);
+		}
+		else if(strcmp(request_info->uri, "/c") == 0)
+		{ do_create_player(ev);
+		}
+		else if(strcmp(request_info->uri, "/j") == 0)
+		{ do_join_game(ev);
+		}
+		else if(strcmp(request_info->uri, "/d") == 0)
+		{ do_delete_player(ev);
+		}
+		
+		//Game events
 		else if(strcmp(request_info->uri, "/g") == 0)
-		{ do_get_chunk(conn, request_info);
+		{ do_get_chunk(ev);
 		}
 		else if(strcmp(request_info->uri, "/h") == 0)
-		{ do_heartbeat(conn, request_info);
+		{ do_heartbeat(ev);
 		}
+		
+		//Unknown event type
 		else
 		{ return NULL;
 		}
@@ -393,7 +497,7 @@ void handle_message(const char* str, size_t len)
 }
 
 //The main server loop
-void loop()
+void server_loop()
 {
 	char msg_buf[COMMAND_BUFFER_LEN];
 	int buf_ptr = 0;
@@ -426,10 +530,29 @@ void loop()
 	}
 }
 
+
+//Server initialization
+void init_app()
+{
+	init_login();
+	init_sessions();
+	
+	game_instance = new World();
+}
+
+
+//Kills server
+void shutdown_app()
+{
+	delete game_instance;
+	shutdown_login();
+}
+
+
 //Program start point
 int main(int argc, char** argv)
 {
-	init();
+	init_app();
 	
 	//Start web server
 	mg_context *context = mg_start(&event_handler, options);
@@ -437,11 +560,13 @@ int main(int argc, char** argv)
 	cout << "Server started" << endl;
 	
 	//Run main thread
-	loop();
+	server_loop();
 	
 	//Stop web server
 	mg_stop(context);
 	cout << "Server stopped" << endl;
+	
+	shutdown_app();
 
 	return 0;
 }

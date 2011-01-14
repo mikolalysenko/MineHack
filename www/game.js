@@ -79,6 +79,13 @@ Game.init = function(canvas)
 	Map.update_cache();
 	
 	//Initialize screen
+	window.onresize = function(event)
+	{
+		if(Game.running)
+		{
+			Game.resize();
+		}
+	}
 	Game.resize();
 	
 	//Start running the game
@@ -136,7 +143,7 @@ Game.draw = function()
 	gl.flush();
 }
 
-Game.stop = function()
+Game.shutdown = function()
 {
 	if(Game.running)
 	{

@@ -19,7 +19,7 @@ namespace Server
 	//Resynchronizes the login database
 	void sync_login();
 	
-	bool verify_user_name(std::string const& name, std::string const& password_hash);
+	bool verify_username(std::string const& name, std::string const& password_hash);
 
 	bool create_account(std::string const& name, std::string const& password_hash);
 

@@ -87,7 +87,7 @@ void World::broadcast_update(UpdateEvent const& up, double x, double y, double z
 //Handle a player join event
 void World::handle_add_player(Server::SessionID const& session_id, JoinEvent const& ev)
 {
-	cout << "Adding player: " << ev.name << ", session id: " << session_id << endl 
+	cout << "Adding player: " << ev.name << ", session id: " << session_id.id << endl 
 		 << "-----------------------------------------------------------" << endl;
 	players[session_id] = new Player(session_id, ev.name);
 }
@@ -95,7 +95,7 @@ void World::handle_add_player(Server::SessionID const& session_id, JoinEvent con
 //Handle removing a player
 void World::handle_remove_player(Player* p)
 {
-	cout << "Removing player: " << p->session_id << endl;
+	cout << "Removing player: " << p->session_id.id << endl;
 	auto iter = players.find(p->session_id);
 	if(iter == players.end())
 	{
@@ -111,7 +111,7 @@ void World::handle_place_block(Player* p,  BlockEvent const& ev)
 	int x = ev.x, y = ev.y, z = ev.z;
 	auto b = ev.b;
 
-	cout << "Setting block: " << x << "," << y << "," << z << " <- " << (uint8_t)b << "; by " << p->session_id << endl;
+	cout << "Setting block: " << x << "," << y << "," << z << " <- " << (uint8_t)b << "; by " << p->session_id.id << endl;
 
 	
 	//TODO: Sanity check event

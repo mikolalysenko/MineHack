@@ -32,28 +32,17 @@ static pthread_rwlock_t session_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 //Indexes
 static map<string, SessionID>	user_table;
-static map<SessionID, Session>	session_table;
-
-
-std::ostream& operator<<(std::ostream& os, const SessionID& id)
-{
-	return os << id.key;
-}
-
-std::istream& operator>>(std::istream& is, SessionID& id)
-{
-	return is >> id.key;
-}
+static map<uint64_t, Session>	session_table;
 
 
 void init_sessions()
 {
 }
 
-bool valid_session_id(const SessionID& key)
+bool valid_session_id(const SessionID& session_id)
 {
 	ReadLock L(&session_lock);
-	return session_table.find(key) != session_table.end();
+	return session_table.find(session_id.id) != session_table.end();
 }
 
 bool logged_in(const string& name)
@@ -62,34 +51,34 @@ bool logged_in(const string& name)
 	return user_table.find(name) != user_table.end();
 }
 
-bool create_session(const string& name, SessionID& key)
+bool create_session(const string& name, SessionID& session_id)
 {
-	key.key = (((int64_t)mrand48())<<32) | (int64_t)mrand48();
+	session_id.id = (((int64_t)mrand48())<<32) | (int64_t)mrand48();
 	
 	Session s;
 	s.user_name = name;
-	s.id = key;
+	s.id = session_id;
 	
 	{	WriteLock L(&session_lock);
 		
 		if(user_table.find(name) != user_table.end())
 			return false;
 		
-		if(session_table.find(key) != session_table.end())
+		if(session_table.find(session_id.id) != session_table.end())
 			return false;
 		
-		session_table[key] = s;
-		user_table[name] = key;
+		session_table[session_id.id] = s;
+		user_table[name] = session_id;
 	}
 	
 	return true;
 }
 
-void delete_session(const SessionID& key)
+void delete_session(const SessionID& session_id)
 {
 	WriteLock L(&session_lock);
 		
-	auto iter = session_table.find(key);
+	auto iter = session_table.find(session_id.id);
 	
 	if(iter != session_table.end())
 		session_table.erase(iter);

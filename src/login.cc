@@ -81,8 +81,8 @@ bool is_valid_password_hash(const string& pass)
 
 
 
-//Verifies a user name/password combo
-bool verify_user_name(const string& name, const string& password_hash)
+//Verifies a username/password combo
+bool verify_username(const string& name, const string& password_hash)
 {
 	char pass_buf[PASSWORD_HASH_LEN];
 	

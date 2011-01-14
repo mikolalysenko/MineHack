@@ -5,10 +5,11 @@
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
 	<link rel="stylesheet" href="main.css" type="text/css"/>
 	<script type="text/javascript" src="constants.js"></script>
-	<script type="text/javascript" src="loader.js"></script>
+	<script type="text/javascript" src="loader.js"></script>	
 	<script type="text/javascript" src="misc.js"></script>
 	<script type="text/javascript" src="sha256.js"></script>
 	<script type="text/javascript" src="session.js"></script>
+	<script type="text/javascript" src="app.js"></script>	
 	<script type="text/javascript" src="input.js"></script>
 	<script type="text/javascript" src="update.js"></script>
 	<script type="text/javascript" src="player.js"></script>
@@ -16,154 +17,29 @@
 	<script type="text/javascript" src="map.js"></script>
 </head>
 
-<body onUnload="javascript:Session.logout();" onLoad="javascript:page_init();">
+<body onUnload="javascript:App.logout();" onLoad="javascript:App.init();">
 
-<script type="text/javascript">
-
-window.onresize = function(event)
-{
-	if(Game.running)
-	{
-		Game.resize();
-	}
-}
-
-set_error = function(msg)
-{
-	//Scrub message
-	msg = msg.replace(/\&/g, "&amp;")
-			 .replace(/\</g, "&lt;")
-			 .replace(/\>/g, "&gt;")
-			 .replace(/\n/g, "\<br\/\>");
-			 
-	if(!Session.logged_in)
-	{
-		document.getElementById('errMsg').innerHTML = msg;
-	}
-	else
-	{
-		Game.stop();
-		Game.crashed = true;
-		
-		var appElem = document.getElementById('appElem');
-		appElem.style.display = 'none';
-		var noGL = document.getElementById('noWebGL');
-		var noGLerr = document.getElementById('noWebGLReason');
-		noGL.style.display = 'block';
-		noGLerr.innerHTML = msg;
-	}
-}
-
-start_game = function()
-{
-	var loginElem = document.getElementById('loginElem');
-	var progElem = document.getElementById('progress');
-	var appElem = document.getElementById('appElem');
-	
-	progElem.style.display = 'none';
-	loginElem.style.display = 'none';
-	appElem.style.display   = 'block';
-	
-	var res = Game.init(document.getElementById('canvas'));
-	if(res != 'Ok')
-	{
-		set_error(res);
-	}
-}
-
-update_progress = function(url)
-{
-	var prog_txt = document.getElementById('progress');
-	prog_txt.innerHTML = "Loaded: " + url + "<br\/\>%" + Loader.pct_loaded * 100.0 + " Complete";
-	
-	if(Loader.finished && Session.logged_in)
-	{
-		start_game();
-	}
-}
-
-set_logged_in = function()
-{
-	if(Loader.failed)
-	{
-		set_error("FAILED TO LOAD RESOURCES");
-	}
-	else if(Loader.finished)
-	{
-		start_game();
-	}
-	else
-	{
-		var loginElem = document.getElementById('loginElem');
-		var progElem = document.getElementById('progress');
-		var appElem = document.getElementById('appElem');
-	
-		progElem.style.display = 'block';
-		loginElem.style.display = 'none';
-		appElem.style.display   = 'none';	
-	}
-}
-
-do_register = function()
-{
-	var user_txt = document.getElementById('userName');
-	var pass_txt = document.getElementById('password');
-	
-	var res = Session.register(user_txt.value, pass_txt.value);
-	pass_txt.value = "";
-	
-	if(res == 'ok')
-	{	set_logged_in();
-	}
-	else
-	{	set_error(res);
-	}
-}
-
-do_login = function()
-{
-	var user_txt = document.getElementById('userName');
-	var pass_txt = document.getElementById('password');
-	
-	var res = Session.login(user_txt.value, pass_txt.value);
-	pass_txt.value = "";
-	
-	if(res == 'ok')
-	{	set_logged_in();
-	}
-	else
-	{	set_error(res);
-	}
-}
-
-do_test = function()
-{
-	var user_txt = document.getElementById('userName');
-	var pass_txt = document.getElementById('password');
-	
-	user_txt.value = "user" + Math.floor(Math.random()*10000000);
-	pass_txt.value = "p" + Math.floor(Math.random()*10000000) + "." + Math.floor(Math.random()*10000000);
-	
-	do_register();
-}
-
-page_init = function()
-{
-	Loader.start(update_progress, set_error);
-	do_test();
-}
-
-</script>
-
-<div id="loginElem" align=center>
+<div id="loginElem" align=center style="display:none;">
 <input type="text" id="userName" width="20" value=""/> <br/>
 <input type="password" id="password" width="20" value="" /> <br/>
 
-<input type="button" value="Login" onclick="javascript:do_login();">
-<input type="button" value="Create Account" onclick="javascript:do_register();">
+<input type="button" value="Login" onclick="javascript:App.state.do_login();"/>
+<input type="button" value="Create Account" onclick="javascript:App.state.do_register();"/>
 
 <div id="errMsg" style="color:red;"> </div>
 </div>
+
+<div id="selectElem" align=center style="display:none;">
+Select your avatar: <br/>
+
+<div id="avatarList">
+</div>
+<br/>
+
+<input id="playerName" type="text" value="" size="20"/>
+<input id="createPlayer" type="button" value="Create" onclick="javascript:App.state.do_create_player();"/>
+</div>
+
 
 <div id="appElem" style="display:none;">
 <canvas id="canvas" width=500 height=500 style="position:absolute; top:0px; left:0px;"></canvas><br/>
@@ -176,9 +52,9 @@ page_init = function()
 <div id="progress" style="display:none;" align=center>
 </div>
 
-<div id="noWebGL" style="display:none; background-color:red; color:black;">
+<div id="errorElem" style="display:none; background-color:red; color:black;">
 <h1> <tt> !!!ABORT!!! <br/>
-REASON: <div id="noWebGLReason"></div> </tt> </h1>
+REASON: <div id="errorReason"></div> </tt> </h1>
 </div>
 
 </body>

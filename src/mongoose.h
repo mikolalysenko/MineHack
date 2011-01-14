@@ -152,6 +152,9 @@ int mg_write(struct mg_connection *, const void *buf, size_t len);
 int mg_printf(struct mg_connection *, const char *fmt, ...);
 
 
+//HACK: Returns the number of bytes available in the header
+int mg_available_bytes(struct mg_connection*);
+
 // Read data from the remote end, return number of bytes read.
 int mg_read(struct mg_connection *, void *buf, size_t len);
 

@@ -12,18 +12,18 @@ namespace Server
 {
 	struct SessionID
 	{
-		std::int64_t key;
-	
-		bool operator==(SessionID const& other) const
-			{ return key == other.key; }
-	
-		int operator<(SessionID const& other) const
-			{ return key < other.key; }
+		std::uint64_t id;
+		
+		bool operator==(const SessionID& other) const
+		{
+			return id == other.id;
+		}
+		
+		bool operator<(const SessionID& other) const
+		{
+			return id < other.id;
+		}
 	};
-
-	//IO opreations for sessionID (mostly for stringification/sending get request)
-	std::ostream& operator<<(std::ostream&, SessionID const&);
-	std::istream& operator>>(std::istream&, SessionID&);
 
 	void init_sessions();
 	

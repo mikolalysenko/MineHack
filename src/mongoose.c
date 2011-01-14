@@ -1055,6 +1055,7 @@ struct dirent * readdir(DIR *dir) {
 
     } else {
       SetLastError(ERROR_FILE_NOT_FOUND);
+
     }
   } else {
     SetLastError(ERROR_BAD_ARGUMENTS);
@@ -1310,6 +1311,13 @@ static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
   }
 
   return nread;
+}
+
+
+//Returns the number of available bytes in the header
+int mg_available_bytes(struct mg_connection *conn)
+{
+	return conn->content_len - conn->consumed_content;
 }
 
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {
