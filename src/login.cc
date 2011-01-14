@@ -234,7 +234,7 @@ bool remove_player_name(string const& user_name, string const& player_name)
 			
 			return tchdbput(login_db,
 				(const void*)user_name.c_str(), user_name.size(),
-				data, len - i);
+				data, len - l);
 		}
 		ptr += l;
 	}
