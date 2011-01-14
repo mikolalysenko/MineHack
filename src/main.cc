@@ -393,7 +393,7 @@ void do_delete_player(HttpEvent& ev)
 	if( !get_session_id(ev.req, session_id) ||
 		!get_string(ev.req, "player_name", player_name) ||
 		!get_session_data(session_id, session) ||
-		session.state != SessionState::PreJoinGame ) )
+		session.state != SessionState::PreJoinGame ) 
 	{
 		ajax_error(ev.conn);
 		return;
@@ -401,7 +401,7 @@ void do_delete_player(HttpEvent& ev)
 	
 	//TODO: Remove player from database
 
-	remove_player_name(session.user_name, player_name)	
+	remove_player_name(session.user_name, player_name);
 	
 	ajax_printf(ev.conn,
 		"Ok\n"

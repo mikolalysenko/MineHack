@@ -86,3 +86,58 @@ Session.valid_password = function(password)
 	return password.length > 6;
 }
 
+
+Session.do_action = function(url)
+{
+	var XHR = new XMLHttpRequest();
+	XHR.open("GET", url, false);
+	XHR.send();
+	
+	return XHR.responseText.split("\n");
+}
+
+
+Session.get_players = function()
+{
+	if(!Session.logged_in || Session.player_name != "")
+		return [];
+	
+	var response = Session.do_action("t?k="+Session.session_id);
+	
+	if(response[0] != "Ok")
+		return [];
+		
+	return response.slice(1, response.length-1);
+}
+
+Session.add_player = function(player_name)
+{
+	if(!Session.logged_in || Session.player_name != "")
+		return ["Fail", "Not logged in"];
+		
+	return Session.do_action("c?k="+Session.session_id+"&player_name="+player_name);
+}
+
+Session.remove_player = function(player_name)
+{
+	if(!Session.logged_in || Session.player_name != "")
+		return ["Fail", "Not logged in"];
+	
+	return Session.do_action("d?k="+Session.session_id+"&player_name="+player_name);
+}
+
+Session.join_game = function(player_name)
+{
+	if(!Session.logged_in || Session.player_name != "")
+		return ["Fail", "Not logged in"];
+		
+	var response = Session.do_action("j?k="+Session.session_id+"&player_name="+player_name);
+	
+	if(response[0] != "Ok")
+		return ["Fail", response[1]];
+		
+	Session.player_name = player_name;
+	return ["Ok", "Successfully joined game"];
+}
+
+

@@ -222,19 +222,21 @@ bool remove_player_name(string const& user_name, string const& player_name)
 		return false;
 	
 	char* ptr = ((char*)data) + sizeof(LoginRecord);
-	for(int i=sizeof(LoginRecord); i<len; i += strlen(ptr))
+	for(int i=sizeof(LoginRecord); i<len; )
 	{
+		cout << "Checking record: " << ptr << endl;
+		
+		int l = strlen(ptr) + 1;
+		i += l;
 		if(strcmp(ptr, player_name.c_str()) == 0)
 		{
-			int l = player_name.size();
-			int s = i + l;
-			
-			memmove(ptr, ((char*)data) + s, len - s);
+			memmove(ptr, ((char*)data) + i, len - i);
 			
 			return tchdbput(login_db,
 				(const void*)user_name.c_str(), user_name.size(),
-				data, len - l);
+				data, len - i);
 		}
+		ptr += l;
 	}
 	
 	return false;
