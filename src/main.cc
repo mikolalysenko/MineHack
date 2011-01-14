@@ -84,25 +84,27 @@ void ajax_error(mg_connection* conn)
 //Prints a message to the target with the ajax header
 void ajax_printf(mg_connection* conn, const char* fmt, ...)
 {
-	va_list args;
-	va_start(args, fmt);
-		
-	//Write header
-	mg_printf(conn, 
+	const char* AJAX_HEADER = 	  
 	  "HTTP/1.1 200 OK\n"
 	  "Cache: no-cache\n"
 	  "Content-Type: application/x-javascript\n"
-	  "\n");
+	  "\n";
 
-	//Get string length and allocate buffer
-	int len = vsprintf(NULL, fmt, args);	
-	char* buf = (char*)malloc(len);
+	char buf[1024];
+
+	va_list args;
+	va_start(args, fmt);	
+	int len = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
 	
-	//Set guard
-	ScopeFree guard(buf);
-	
-	//Format string and write to web socket
-	vsprintf(NULL, fmt, args);
+	if(len < 0)
+	{
+		ajax_error(conn);
+		return;
+	}
+
+	//Push data to client
+	mg_write(conn, AJAX_HEADER, strlen(AJAX_HEADER));
 	mg_write(conn, buf, len);
 }
 
@@ -217,7 +219,7 @@ void do_register(HttpEvent& ev)
 	{
 		ajax_printf(ev.conn, 
 			"Fail\n"	
-			"Missing username/password\n");
+			"Missing username/password");
 	}
 	else if(create_account(username, password_hash))
 	{
@@ -227,7 +229,7 @@ void do_register(HttpEvent& ev)
 	{
 		ajax_printf(ev.conn,
 			"Fail\n"
-			"Username already in use\n");
+			"Username already in use");
 	}
 }
 
@@ -242,7 +244,7 @@ void do_login(HttpEvent& ev)
 	{
 		ajax_printf(ev.conn, 
 			"Fail\n"	
-			"Missing username/password\n");
+			"Missing username/password");
 		
 		return;
 	}
@@ -253,13 +255,13 @@ void do_login(HttpEvent& ev)
 	{
 		ajax_printf(ev.conn, 
 			"Ok\n"
-			"%016lx\n", session_id.id);
+			"%016lx", session_id.id);
 	}
 	else
 	{
 		ajax_printf(ev.conn,
 			"Fail\n"
-			"Could not log in\n");	
+			"Could not log in");
 	}
 }
 
@@ -273,7 +275,9 @@ void do_logout(HttpEvent& ev)
 		delete_session(session_id);
 	}
 
-	ajax_printf(ev.conn, "Ok");
+	ajax_printf(ev.conn,		
+		"Ok\n"
+		"Logout successful");
 }
 
 

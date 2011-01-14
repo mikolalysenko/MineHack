@@ -15,7 +15,7 @@ LoginState.shutdown = function()
 {
 	//Shutdown the login state
 	var loginPane = document.getElementById('loginElem');
-	loginPane.style.display = 'block';
+	loginPane.style.display = 'none';
 
 	var pass_txt = document.getElementById('password');
 	pass_txt.value = "";
@@ -78,28 +78,60 @@ var CharacterSelectState = {};
 
 CharacterSelectState.init = function()
 {
-	var selectElem = document.getElementById("loginElem");
+	CharacterSelectState.player_list = [];
+	var selectElem = document.getElementById("selectElem");
 	selectElem.style.display = "block";
+	
+	CharacterSelectState.add_player("asshole");
 }
 
 CharacterSelectState.shutdown = function()
 {
-	var selectElem = document.getElementById("loginElem");
+	var selectElem = document.getElementById("selectElem");
 	selectElem.style.display = "none";
 }
 
-CharacterSelectState.do_select_player = function()
+CharacterSelectState.do_select_player = function(player_num)
 {
+	alert("Select player: " + player_num);
+}
+
+CharacterSelectState.do_delete_player = function(player_num)
+{
+	alert("Delete player: " + player_num);
 }
 
 CharacterSelectState.do_create_player = function()
 {
+	var player_name = document.getElementById("playerName");
+	
+	CharacterSelectState.add_player(player_name.value);	
 }
 
-CharacterSelectState.do_delete_player = function()
+
+CharacterSelectState.generate_players = function()
 {
+	var listElem = document.getElementById("avatarList");
+	listElem.innerHTML = "";
+
+	for(var i in CharacterSelectState.player_list)
+	{
+		var player_name = CharacterSelectState.player_list[i];
+		
+		var div_elem = 
+			'<a class="avatarSelect" href="javascript:App.state.do_select_player(' + i + ');">' + player_name + '</a>' + 
+			'<input class="avatarDel" onclick="javascript:App.state.do_delete_player(' + i + ');" type="button" value = "X" />' +
+			'<br/>';
+			
+		listElem.innerHTML += div_elem;
+	}
 }
 
+CharacterSelectState.add_player = function(player_name)
+{
+	CharacterSelectState.player_list.push(player_name);
+	CharacterSelectState.generate_players();
+}
 
 
 

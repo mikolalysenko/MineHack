@@ -15,6 +15,8 @@ Session.handle_login = function(XHR)
 	XHR.send(null);
 	var response = XHR.responseText;
 	
+	alert("Got response: " + response);
+	
 	lines = response.split('\n');
 	if(lines.length == 2 && lines[0] == 'Ok')
 	{
