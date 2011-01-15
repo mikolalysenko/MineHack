@@ -23,7 +23,7 @@ int Config::readInt(std::string const& key)
 {
 	int retval = 0;
 	
-	//int l = tchdbget3(config_db, (const void*)key.data, 4, (void*)chunk, sizeof(Chunk));
+	//int l = tchdbget3(config_db, (const void*)key.data, key.size, (void*)&retval, sizeof(int));
 	
 	return retval;
 }

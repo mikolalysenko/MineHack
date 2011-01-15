@@ -64,7 +64,7 @@ float dot3D(int g[], float x, float y, float z)
 	return g[0]*x + g[1]*y + g[2]*z;
 }
 
-float contrib2D(float xco, float yco, float x, float y)
+float contrib2D(int xco, int yco, float x, float y)
 {
 	int gi = pseudorand_var(2, xco, yco) % 12;
 	float t = 0.5 - x*x - y*y;
@@ -76,7 +76,7 @@ float contrib2D(float xco, float yco, float x, float y)
 	return t * t * dot2D(grad3[gi], x, y);
 }
 
-float contrib3D(float xco, float yco, float zco, float x, float y, float z)
+float contrib3D(int xco, int yco, int zco, float x, float y, float z)
 {
 	int gi = pseudorand_var(3, xco, yco, zco) % 12;
 	
