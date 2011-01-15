@@ -1056,6 +1056,7 @@ struct dirent * readdir(DIR *dir) {
     } else {
       SetLastError(ERROR_FILE_NOT_FOUND);
 
+
     }
   } else {
     SetLastError(ERROR_BAD_ARGUMENTS);
@@ -2354,6 +2355,7 @@ static void handle_directory_request(struct mg_connection *conn,
 
   (void) mg_printf(conn, "%s",
       "HTTP/1.1 200 OK\r\n"
+      "Cache: no-cache\r\n"
       "Connection: close\r\n"
       "Content-Type: text/html; charset=utf-8\r\n\r\n");
 
@@ -3891,6 +3893,7 @@ static void accept_new_connection(const struct socket *listener,
       cry(fc(ctx), "%s: %s is not allowed to connect",
           __func__, inet_ntoa(accepted.rsa.u.sin.sin_addr));
       (void) closesocket(accepted.sock);
+
     }
   }
 }

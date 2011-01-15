@@ -281,7 +281,7 @@ App.init = function()
 	
 	
 	//TODO: take this out for production
-	App.do_test();
+	//App.do_test();
 }
 
 App.shutdown = function()
