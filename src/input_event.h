@@ -21,11 +21,7 @@ namespace Game
 		PlayerTick	= 1,
 		DigBlock	= 2,
 		PlaceBlock	= 3,
-		Chat		= 4,
-		
-		//Internal event types, first 256 values used for network events
-		PlayerJoin	= 0x100,
-		PlayerLeave,
+		Chat		= 4
 	};
 	
 	
@@ -53,19 +49,6 @@ namespace Game
 		int extract(void* buf, size_t len);
 	};
 
-	struct JoinEvent
-	{
-		char name[USER_NAME_MAX_LEN];
-		
-		int extract(void* buf, size_t len);
-	};
-	
-	struct LeaveEvent
-	{
-		int extract(void* buf, size_t len);
-	};
-	
-	
 	struct ChatEvent
 	{
 		uint8_t len;
@@ -77,14 +60,11 @@ namespace Game
 	struct InputEvent
 	{
 		InputEventType		type;
-		Server::SessionID 	session_id;
 		
 		union
 		{
 			DigEvent	dig_event;
-			JoinEvent	join_event;
 			PlayerEvent player_event;
-			LeaveEvent	leave_event;
 			BlockEvent	block_event;
 			ChatEvent	chat_event;
 		};

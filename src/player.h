@@ -23,41 +23,11 @@
 
 namespace Game
 {
-
-	//Player data values
-	struct PlayerData
-	{
-		//The player's name
-		char name[USER_NAME_MAX_LEN];
-		
-		//Player's session id
-		Server::SessionID session_id;
-		
-		//Player position in world coordinates
-		double x, y, z;
-		
-		//Player pitch/yaw
-		double pitch, yaw;
-		
-		//Player input state
-		int input_state;
-	};
-
-
-	//Contains a collection of players
-	struct PlayerDB
-	{
-		
-	};
-
 	//The player data structure
 	struct Player
 	{
 		float max_block_distance;
 	
-		//Session id for player
-		Server::SessionID	session_id;
-		
 		//Player name
 		std::string			name;
 		
@@ -70,8 +40,7 @@ namespace Game
 		//Current key presses
 		int 				input_state;
 		
-		Player(Server::SessionID const& s, std::string const& n) :
-			session_id(s), 
+		Player(std::string const& n) :
 			name(n),
 			pitch(0),
 			yaw(0),

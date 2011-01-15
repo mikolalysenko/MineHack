@@ -62,10 +62,12 @@ namespace Game
 		~UpdateMailbox();
 	
 		//Sends an event to a terget
-		void send_event(Server::SessionID const&, UpdateEvent const&);
+		void send_event(std::string const&, UpdateEvent const&);
 		
 		//Retrieves all events
-		void* get_events(Server::SessionID const&, int& len);
+		void* get_events(std::string const&, int& len);
+		
+		void clear_events(std::string const&);
 		
 	private:
 		

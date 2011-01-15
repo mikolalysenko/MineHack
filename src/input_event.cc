@@ -66,20 +66,6 @@ int ChatEvent::extract(void* buf, size_t buf_len)
 	return len+1;
 }
 
-
-int JoinEvent::extract(void* buf, size_t buf_len)
-{
-	assert(false);	//not network serializable
-	return -1;
-}
-
-int LeaveEvent::extract(void* buf, size_t buf_len)
-{
-	assert(false); //not network serializable
-	return -1;
-}
-
-
 //Extracts an input event from the stream
 int InputEvent::extract(
 	void* buf, 
@@ -111,14 +97,6 @@ int InputEvent::extract(
 		
 		case InputEventType::Chat:
 			l = chat_event.extract(ptr, buf_len);
-		break;
-		
-		case InputEventType::PlayerJoin:
-			l = join_event.extract(ptr, buf_len);
-		break;
-		
-		case InputEventType::PlayerLeave:
-			l = leave_event.extract(ptr, buf_len);
 		break;
 		
 		default:

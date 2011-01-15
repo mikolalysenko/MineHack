@@ -309,7 +309,7 @@ void do_create_player(HttpEvent& ev)
 		return;
 	}
 	
-	//TODO: Create player in db
+	//TODO: Add player record
 	
 	if( add_player_name(session.user_name, player_name) )
 	{
@@ -319,7 +319,7 @@ void do_create_player(HttpEvent& ev)
 	}
 	else
 	{
-		//TODO: Remove player from db
+		//TODO: Roll back changes
 	
 		remove_player_name(session.user_name, player_name);
 	
@@ -350,9 +350,8 @@ void do_join_game(HttpEvent& ev)
 		return;
 	}
 
-	//TODO: Add player to game
-	
-	if( set_session_player(session_id, player_name) )
+	if( game_instance->add_player(player_name) &&	
+		set_session_player(session_id, player_name) )
 	{
 		ajax_printf(ev.conn,
 			"Ok\n"
@@ -360,8 +359,7 @@ void do_join_game(HttpEvent& ev)
 	}
 	else
 	{
-		//TODO: Remove player from game
-	
+		game_instance->remove_player(player_name);
 		ajax_error(ev.conn);
 	}
 
@@ -425,7 +423,7 @@ void do_delete_player(HttpEvent& ev)
 void do_get_chunk(HttpEvent& ev)
 {
 	HttpBlobReader blob(ev.conn);
-
+	
 	//Read out the session id
 	if(blob.len <= sizeof(SessionID) + 4)
 	{
@@ -433,7 +431,15 @@ void do_get_chunk(HttpEvent& ev)
 		return;
 	}
 	
-	SessionID session_id = *((SessionID*)blob.data);
+	SessionID	session_id = *((SessionID*)blob.data);
+	Session		session;
+	
+	if(!get_session_data(session_id, session) || 
+		session.state != SessionState::InGame)
+	{
+		ajax_error(ev.conn);
+		return;
+	}
 	
 	uint8_t chunk_buf[MAX_CHUNK_BUFFER_LEN];
 	uint8_t	*buf_ptr = chunk_buf;
@@ -444,7 +450,7 @@ void do_get_chunk(HttpEvent& ev)
 	{
 		//Extract the chunk
 		int len = game_instance->get_compressed_chunk(
-			session_id, *chunk_ptr, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
+			session.player_name, *chunk_ptr, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
 	
 		if(len < 0)
 			break;
@@ -460,61 +466,61 @@ void do_get_chunk(HttpEvent& ev)
 //Pulls pending events from client
 void do_heartbeat(HttpEvent& ev)
 {
-
-	ajax_send_binary(ev.conn, NULL, 0);
-
-	/*
-	//Check session id
-	SessionID session_id;
-	if(!get_session_id(request_info, session_id))
+	HttpBlobReader blob(ev.conn);
+	
+	if(blob.len <= sizeof(SessionID))
 	{
-		cout << "Invalid session" << endl;
-		ajax_error(conn);
+		ajax_error(ev.conn);
 		return;
 	}
 	
-	{	//Unpack incoming events
-		uint8_t msg_buf[EVENT_PACKET_SIZE];
-		memset(msg_buf, 0, EVENT_PACKET_SIZE);
-		int len = mg_read(conn, msg_buf, EVENT_PACKET_SIZE);
+	SessionID	session_id = *((SessionID*)blob.data);
+	Session		session;
 	
-		//Parse out the events
-		int p = 0;
-		while(true)
-		{
-			//Create event
-			InputEvent ev;
-			ev.session_id = session_id;
-		
-			int d = ev.extract(&msg_buf[p], len);
-			if(d < 0)
-				break;
-		
-			//Add event
-			game_instance->add_event(ev);
-			p += d;
-			len -= d;
-		}
-	
-		//This shouldn't happen, but need to check anyway
-		if(len > 0)
-		{
-			cout << "Warning!  Unused data in heartbeat buffer: ";
-			for(int i=0; i<len; i++)
-			{
-				cout << (int)msg_buf[p+i] << ",";
-			}
-			cout << endl;
-		}
+	if( !get_session_data(session_id, session) ||
+		session.state != SessionState::InGame )
+	{
+		ajax_error(ev.conn);
+		return;
 	}
+
+
+	//Parse out the events
+	int p = 0, len = blob.len;
+	while(true)
+	{
+		//Create event
+		InputEvent input;
+		int d = input.extract(&blob.data[p], len);
+		if(d < 0)
+			break;
+	
+		//Add event
+		game_instance->add_event(session.player_name, input);
+		p += d;
+		len -= d;
+	}
+
+	//This shouldn't happen, but need to check anyway
+	if(len > 0)
+	{
+		cout << "Warning!  Unused data in heartbeat buffer: ";
+		for(int i=0; i<len; i++)
+		{
+			cout << (int)blob.data[p+i] << ",";
+		}
+		cout << endl;
+	}
+
+	
 	
 	{	//Generate client response
 		int mlen;
-		void * data = game_instance->heartbeat(session_id, mlen);
+		void * data = game_instance->heartbeat(session.player_name, mlen);
 	
 		if(data == NULL)
 		{
-			ajax_send_binary(conn, data, 0);
+			ajax_send_binary(ev.conn, data, 0);
 			return;
 		}
 		
@@ -528,9 +534,8 @@ void do_heartbeat(HttpEvent& ev)
 			cout << endl;
 		}
 
-		ajax_send_binary(conn, data, mlen);
+		ajax_send_binary(ev.conn, data, mlen);
 	}
-	*/
 }
 
 

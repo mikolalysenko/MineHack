@@ -82,8 +82,6 @@ void* UpdateEvent::write(int& len) const
 	}
 }
 
-
-
 UpdateMailbox::UpdateMailbox()
 {
 	pthread_spin_init(&lock, NULL);
@@ -98,9 +96,7 @@ UpdateMailbox::~UpdateMailbox()
 }
 	
 //Sends an event to a terget
-void UpdateMailbox::send_event(
-	Server::SessionID const& id, 
-	UpdateEvent const& up)
+void UpdateMailbox::send_event(string const& player_name, UpdateEvent const& up)
 {
 	int len;
 	void* data = up.write(len);
@@ -117,29 +113,21 @@ void UpdateMailbox::send_event(
 	}
 	cout << endl;
 	
-	
-
-	
 	//Lock database and add key	
 	{	SpinLock	guard(&lock);
-		
-		tcmapputcat(mailboxes,
-			(const void*)&id,	sizeof(SessionID),
-			data, 				len);
+		tcmapputcat(mailboxes, (const void*)player_name.c_str(), player_name.size(), data, len);
 	}
 }
 		
 //Retrieves all events
-void* UpdateMailbox::get_events(
-	SessionID const& id, 
-	int& len)
+void* UpdateMailbox::get_events(string const& player_name, int& len)
 {
 	void * result = NULL;
 	
 	{	SpinLock	guard(&lock);
 		
 		const void* data = tcmapget(mailboxes, 
-			(const void*)&id, sizeof(SessionID), 
+			(const void*)player_name.c_str(), player_name.size(), 
 			&len);
 			
 		if(data == NULL)
@@ -149,7 +137,7 @@ void* UpdateMailbox::get_events(
 		result = malloc(len);
 		memcpy(result, data, len);
 		
-		tcmapout(mailboxes, (const void*)&id, sizeof(SessionID));
+		tcmapout(mailboxes, (const void*)player_name.c_str(), player_name.size());
 	}
 	
 	return result;

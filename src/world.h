@@ -3,15 +3,17 @@
 
 #include <pthread.h>
 
+#include <utility>
+#include <string>
 #include <map>
 #include <cstdint>
 #include <cstdlib>
 
 #include <tcutil.h>
 
-#include "session.h"
 #include "chunk.h"
 #include "input_event.h"
+#include "update_event.h"
 #include "worldgen.h"
 #include "map.h"
 #include "player.h"
@@ -27,19 +29,25 @@ namespace Game
 		World();
 		~World();
 		
+		//Adds a player
+		bool add_player(std::string const& player_name);
+		
+		//Removes a player
+		bool remove_player(std::string const& player_name);
+		
 		//Adds an event to the server
-		void add_event(InputEvent const& ev);
+		void add_event(std::string const& player_name, InputEvent const& ev);
 		
 		//Retrieves a compressed chunk from the server
 		int get_compressed_chunk(
-			Server::SessionID const&, 
+			std::string const& player_name,
 			ChunkID const&,
 			uint8_t* buf,
 			size_t buf_len);
 		
 		//Sends queued messages to client
 		void* heartbeat(
-			Server::SessionID const&,
+			std::string const& player_name,
 			int& len);
 		
 		//Ticks the server
@@ -48,24 +56,18 @@ namespace Game
 	private:
 		Map    			*game_map;
 		
+		//Event queues
+		std::vector< std::pair<std::string, InputEvent> > pending_events, events;
+		pthread_mutex_t		event_lock;
+		
 		//Mailbox for player updates
 		UpdateMailbox	player_updates;
 		
-		//Input event queue and event lock
-		std::vector<InputEvent> pending_events, events;
-		pthread_mutex_t event_lock;
-
-		
-		//While held, the world is updated
-		pthread_mutex_t world_lock;
-		//TODO: Make this more fine grained later on
-		
 		//Player database
-		std::map<Server::SessionID, Player*> players;
+		std::map<std::string, Player*> players;
+		pthread_mutex_t		player_lock;
 		
 		
-		void handle_add_player(Server::SessionID const&, JoinEvent const&);
-		void handle_remove_player(Player*);
 		void handle_place_block(Player*, BlockEvent const&);
 		void handle_dig_block(Player*, DigEvent const&);
 		void handle_player_tick(Player*, PlayerEvent const&);
