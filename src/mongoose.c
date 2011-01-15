@@ -2355,7 +2355,6 @@ static void handle_directory_request(struct mg_connection *conn,
 
   (void) mg_printf(conn, "%s",
       "HTTP/1.1 200 OK\r\n"
-      "Cache: no-cache\r\n"
       "Connection: close\r\n"
       "Content-Type: text/html; charset=utf-8\r\n\r\n");
 
@@ -2502,7 +2501,6 @@ static void handle_file_request(struct mg_connection *conn, const char *path,
 
   (void) mg_printf(conn,
       "HTTP/1.1 %d %s\r\n"
-      "Cache: no-cache\r\n"
       "Date: %s\r\n"
       "Last-Modified: %s\r\n"
       "Etag: \"%s\"\r\n"
@@ -3000,7 +2998,7 @@ static void put_file(struct mg_connection *conn, const char *path) {
   conn->request_info.status_code = mg_stat(path, &st) == 0 ? 200 : 201;
 
   if ((rc = put_dir(path)) == 0) {
-    mg_printf(conn, "HTTP/1.1 %d OK\r\nCache: no-cache\r\n\r\n", conn->request_info.status_code);
+    mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n", conn->request_info.status_code);
   } else if (rc == -1) {
     send_http_error(conn, 500, http_500_error,
         "put_dir(%s): %s", path, strerror(ERRNO));
@@ -3017,7 +3015,7 @@ static void put_file(struct mg_connection *conn, const char *path) {
       (void) fseeko(fp, (off_t) r1, SEEK_SET);
     }
     if (forward_body_data(conn, fp, INVALID_SOCKET, NULL))
-      (void) mg_printf(conn, "HTTP/1.1 %d OK\r\nCache: no-cache\r\n\r\n",
+      (void) mg_printf(conn, "HTTP/1.1 %d OK\r\n\r\n",
           conn->request_info.status_code);
     (void) fclose(fp);
   }
@@ -3159,7 +3157,7 @@ static void handle_ssi_file_request(struct mg_connection *conn,
   } else {
     set_close_on_exec(fileno(fp));
     mg_printf(conn, "HTTP/1.1 200 OK\r\n"
-              "Cache: no-cache\r\nContent-Type: text/html\r\nConnection: %s\r\n\r\n",
+              "Content-Type: text/html\r\nConnection: %s\r\n\r\n",
               suggest_connection_header(conn));
     send_ssi_file(conn, path, fp, 0);
     (void) fclose(fp);

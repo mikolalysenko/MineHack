@@ -198,7 +198,7 @@ bool get_session_id(
 		return false;
 	
 	//Scan in the session id
-	sscanf(session_id_str, "%lx", &session_id.id);
+	sscanf(session_id_str, "%llx", &session_id.id);
 	
 	if(valid_session_id(session_id))
 		return true;
@@ -258,7 +258,7 @@ void do_login(HttpEvent& ev)
 	
 		ajax_printf(ev.conn, 
 			"Ok\n"
-			"%016lx", session_id.id);
+			"%016llx", session_id.id);
 	}
 	else
 	{
@@ -272,6 +272,8 @@ void do_login(HttpEvent& ev)
 //Handle user log out
 void do_logout(HttpEvent& ev)
 {
+	cout << "Logout" << endl;
+
 	SessionID session_id;
 	if(get_session_id(ev.req, session_id))
 	{
@@ -291,6 +293,8 @@ void do_logout(HttpEvent& ev)
 
 void do_create_player(HttpEvent& ev)
 {
+	cout << "Creating player" << endl;
+
 	//Grab request variables
 	SessionID	session_id;
 	string		player_name;
@@ -327,6 +331,8 @@ void do_create_player(HttpEvent& ev)
 
 void do_join_game(HttpEvent& ev)
 {
+	cout << "Joining game" << endl;
+
 	//Grab request variables
 	SessionID		session_id;
 	string			player_name;
@@ -430,7 +436,7 @@ void do_get_chunk(HttpEvent& ev)
 	}
 	
 	SessionID session_id = *((SessionID*)blob.data);
-	printf("Got get_chunk request from %016lx\n", session_id.id);
+	printf("Got get_chunk request from %016llx\n", session_id.id);
 	
 	uint8_t chunk_buf[MAX_CHUNK_BUFFER_LEN];
 	uint8_t	*buf_ptr = chunk_buf;
@@ -543,6 +549,12 @@ static void *event_handler(mg_event event,
                            mg_connection *conn,
                            const mg_request_info *request_info)
 {
+
+	if(event == MG_NEW_REQUEST)
+	{
+		cout << "Got request: " << request_info->uri << endl;
+	}
+
 
 	if (event == MG_NEW_REQUEST && 
 		request_info->uri[0] == '/' &&
