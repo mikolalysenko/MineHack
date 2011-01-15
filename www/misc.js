@@ -76,7 +76,7 @@ getTexture = function(gl, url)
 	return ["Ok", tex];	
 }
 
-asyncGetBinary = function(url, handler, body)
+asyncGetBinary = function(url, handler, err_handler, body)
 {
 	var XHR = new XMLHttpRequest();
 	XHR.open("POST", url, true);

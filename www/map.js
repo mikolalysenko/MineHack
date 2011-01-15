@@ -440,10 +440,10 @@ Chunk.prototype.release = function(gl)
 var Map =
 {
 	index			: {},	//The chunk index
+	pending_chunks	: [],	//Chunks waiting to be fetched
 	terrain_tex		: null,
 	max_chunks		: 1024,
 	chunk_count 	: 0,
-	pending_chunks	: 0,
 	chunk_radius	: 2
 };
 
@@ -505,17 +505,14 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	//If there are no pending chunks, grab a few random chunks from the boundary to help speed up loading
-	if(Map.pending_chunks == 0)
-	{
-		//TODO: Precache chunks near player
-	}
-	
 	//If we are over the chunk count, remove old chunks
 	if(Map.chunk_count > Map.max_chunks)
 	{
 		//TODO: Purge old chunks
 	}
+
+	//Grab all pending chunks
+	Map.grab_chunks();	
 }
 
 //Draws the map
@@ -548,10 +545,10 @@ Map.draw = function(gl, camera)
 Map.decompress_chunk = function(arr, data)
 {
 	if(arr.length == 0)
-		return null;
+		return -1;
 
-	var i = 0;
-	for(var k=0; k<arr.length; )
+	var i = 0, k=0;
+	while(k<arr.length)
 	{
 		var n = arr[k];
 		++k;
@@ -569,13 +566,17 @@ Map.decompress_chunk = function(arr, data)
 		var c = arr[k];
 		++k;
 		
+		if(i + n > CHUNK_SIZE)
+			return -1;
+		
 		for(var j=0; j<n; ++j)
 		{
 			data[i++] = c;
 		}
+		
+		if(i == CHUNK_SIZE)
+			return k;
 	}
-	
-	return data;
 }
 
 //Downloads a chunk from the server
@@ -585,21 +586,72 @@ Map.fetch_chunk = function(x, y, z)
 	if(Map.lookup_chunk(x,y,z))
 		return;
 
-	++Map.pending_chunks;
-
 	//Add new chunk, though leave it empty
 	var chunk = new Chunk(x, y, z, new Uint8Array(CHUNK_SIZE));
 	Map.add_chunk(chunk);
+	Map.pending_chunks.push(chunk);
+}
 
-	asyncGetBinary("g?k="+Session.session_id+"&x="+x+"&y="+y+"&z="+z, function(arr)
-	{	
-		if(arr.length == 0)
-			Map.remove_chunk(chunk);
+Map.grab_chunks = function()
+{
+	if(Map.pending_chunks.length == 0)
+		return;
+
+	debugger;
+
+	var chunks = Map.pending_chunks;
+	Map.pending_chunks = [];
+	
+	var bb = new BlobBuilder();
+	bb.append(Session.get_session_id_arr().buffer);
+	
+	for(var i=0; i<chunks.length; i++)
+	{
+		var arr = new Uint8Array(12);
+		var k = 0;
 		
-		//Make sure chunk hasn't been unloaded
-		if(Map.lookup_chunk(x,y,z))
+		arr[k++] = (chunks[i].x)		& 0xff;
+		arr[k++] = (chunks[i].x >> 8)	& 0xff;
+		arr[k++] = (chunks[i].x >> 16)	& 0xff;
+		arr[k++] = (chunks[i].x >> 24)	& 0xff;
+		
+		arr[k++] = (chunks[i].y)		& 0xff;
+		arr[k++] = (chunks[i].y >> 8)	& 0xff;
+		arr[k++] = (chunks[i].y >> 16)	& 0xff;
+		arr[k++] = (chunks[i].y >> 24)	& 0xff;
+
+		arr[k++] = (chunks[i].z)		& 0xff;
+		arr[k++] = (chunks[i].z >> 8)	& 0xff;
+		arr[k++] = (chunks[i].z >> 16)	& 0xff;
+		arr[k++] = (chunks[i].z >> 24)	& 0xff;
+		
+		bb.append(arr.buffer);
+	}
+
+	asyncGetBinary("g", 
+	function(arr)
+	{	
+		debugger;
+	
+		for(var i=0; i<chunks.length; i++)
 		{
-			Map.decompress_chunk(arr, chunk.data);
+			var chunk = chunks[i];
+		
+			var res = Map.decompress_chunk(arr, chunk.data);
+			
+			//EOF, clear out remaining chunks
+			if(res < 0)
+			{
+				for(var j=i; j<chunks.length; j++)
+				{
+					Map.remove_chunk(chunks[j]);
+				}
+				return;
+			}
+
+			//Resize array
+			arr = arr.slice(res, arr.length);
+			
 			chunk.vb.set_dirty();
 			
 			//Regenerate vertex buffers for neighboring chunks
@@ -621,9 +673,15 @@ Map.fetch_chunk = function(x, y, z)
 			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
 			if(c)	c.vb.set_dirty();
 		}
-		
-		--Map.pending_chunks;
-	});
+	}, 
+	function()
+	{
+		for(var j=0; j<chunks.length; j++)
+		{
+			Map.remove_chunk(chunks[j]);
+		}
+	},
+	bb.getBlob("application/octet-stream"));
 }
 
 //Converts a block index into an indexable string
@@ -650,7 +708,7 @@ Map.lookup_chunk = function(x, y, z)
 //Just removes the chunk from the list
 Map.remove_chunk = function(chunk)
 {
-	if(Map.lookup_chunk)
+	if(Map.lookup_chunk(chunk.x, chunk.y, chunk.z))
 	{
 		--Map.chunk_count;
 		chunk.release(Game.gl);

@@ -44,6 +44,40 @@ struct HttpEvent
 	const mg_request_info* req;
 };
 
+//The HttpBlob reader just pulls all the text out of a body in binary form
+struct HttpBlobReader
+{
+	int len;
+	uint8_t* data;
+	
+	HttpBlobReader(mg_connection* conn) : len(-1), data(NULL)
+	{
+		//Read number of available bytes
+		int avail = mg_available_bytes(conn);
+		if(avail < 0)
+		{	avail = -1;
+			return;
+		}
+		
+		//Allocate buffer
+		data = (uint8_t*)malloc(avail);
+		len = mg_read(conn, (void*)data, avail);
+		
+		//Sanity check
+		assert(len == avail);
+	}
+	
+	//Free data
+	~HttpBlobReader()
+	{	
+		if(data != NULL)
+			free(data);
+	}
+};
+
+
+
+
 // --------------------------------------------------------------------------------
 //A client session has 3 states:
 //
@@ -171,39 +205,6 @@ bool get_session_id(
 	
 	return false;
 }
-
-//The HttpBlob reader just pulls all the text out of a body in binary form
-struct HttpBlobReader
-{
-	int len;
-	void* data;
-	
-	HttpBlobReader(mg_connection* conn) : len(-1), data(NULL)
-	{
-		//Read number of available bytes
-		int avail = mg_available_bytes(conn);
-		if(avail < 0)
-		{	avail = -1;
-			return;
-		}
-		
-		//Allocate buffer
-		data = malloc(avail);
-		len = mg_read(conn, data, avail);
-		
-		//Sanity check
-		assert(len == avail);
-	}
-	
-	//Free data
-	~HttpBlobReader()
-	{	
-		if(data != NULL)
-			free(data);
-	}
-};
-
-
 
 // --------------------------------------------------------------------------------
 //    Prelogin event handlers
@@ -417,48 +418,50 @@ void do_delete_player(HttpEvent& ev)
 //Retrieves a chunk
 void do_get_chunk(HttpEvent& ev)
 {
-	//Check session id here
-	SessionID session_id;
-	if(!get_session_id(ev.req, session_id))
+	HttpBlobReader blob(ev.conn);
+
+	cout << "Got get_chunk request" << endl;
+	
+	//Read out the session id
+	if(blob.len <= sizeof(SessionID) + 4)
 	{
-		cout << "Invalid session" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
 	
-	/*
-	//Extract the chunk index here
-	ChunkID idx;
-	idx.x = get_int("x", request_info);
-	idx.y = get_int("y", request_info);
-	idx.z = get_int("z", request_info);
+	SessionID session_id = *((SessionID*)blob.data);
+	printf("Got get_chunk request from %016lx\n", session_id.id);
 	
-	//Extract the chunk
 	uint8_t chunk_buf[MAX_CHUNK_BUFFER_LEN];
-	int len = game_instance->get_compressed_chunk(session_id, idx, chunk_buf, MAX_CHUNK_BUFFER_LEN);
-		
-	if(len < 0)
+	uint8_t	*buf_ptr = chunk_buf;
+	int		buf_len = 0;
+	
+	ChunkID* chunk_end = (ChunkID*)(blob.data + blob.len);
+	for(ChunkID* chunk_ptr = (ChunkID*)(blob.data + sizeof(SessionID)); chunk_ptr < chunk_end; ++chunk_ptr)
 	{
-		ajax_error(conn);
+	
+		printf("Grabbing chunk: %d, %d, %d\n", chunk_ptr->x, chunk_ptr->y, chunk_ptr->z);
+	
+		//Extract the chunk
+		int len = game_instance->get_compressed_chunk(
+			session_id, *chunk_ptr, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
+	
+		if(len < 0)
+			break;
+			
+		buf_ptr += len;
+		buf_len += len;
 	}
-	else
-	{
-		cout << "Sending chunk (" << idx.x << ',' << idx.y << ',' << idx.z << "): ";
-		for(int i=0; i<len; i++)
-			cout << (int)chunk_buf[i] << ',';
-		cout << endl;
 	
-		ajax_send_binary(conn, (const void*)chunk_buf, len);	
-	}
-	*/
-	
-	
+	ajax_send_binary(ev.conn, (const void*)chunk_buf, buf_len);
 }
 
 
 //Pulls pending events from client
 void do_heartbeat(HttpEvent& ev)
 {
+
+	ajax_send_binary(ev.conn, NULL, 0);
 
 	/*
 	//Check session id

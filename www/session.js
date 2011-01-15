@@ -11,6 +11,26 @@ Session.hash_password = function(username, password)
 	return Sha256.hash(username + password + "qytrh1nz");
 }
 
+Session.get_session_id_arr = function()
+{
+	debugger;
+
+	var arr = new Uint8Array(8);
+	var x 	= parseInt(Session.session_id.substr(8, 8), 16);
+	var y 	= parseInt(Session.session_id.substr(0, 8), 16);
+		
+	arr[0] = (x)	 	& 0xff;
+	arr[1] = (x >> 8) 	& 0xff;
+	arr[2] = (x >> 16) 	& 0xff;
+	arr[3] = (x >> 24) 	& 0xff;
+	arr[4] = (y) 		& 0xff;
+	arr[5] = (y >> 8) 	& 0xff;
+	arr[6] = (y >> 16) 	& 0xff;
+	arr[7] = (y >> 24) 	& 0xff;
+
+	return arr;
+}
+
 Session.handle_login = function(XHR)
 {
 	XHR.send(null);

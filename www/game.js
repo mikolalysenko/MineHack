@@ -158,6 +158,7 @@ Game.heartbeat = function()
 	//Sends a binary message to the server
 	asyncGetBinary("/h?k="+Session.session_id, 
 		UpdateHandler.handle_update_packet, 
+		function() {},
 		InputHandler.serialize());
 }
 
