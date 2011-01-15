@@ -13,13 +13,16 @@
 #include "login.h"
 #include "chunk.h"
 #include "input_event.h"
+#include "entity.h"
 
 namespace Game
 {
 	enum class UpdateEventType
 	{
-		SetBlock = 1,
-		Chat	 = 2
+		SetBlock		= 1,
+		Chat	 		= 2,
+		UpdateEntity	= 3,
+		DestroyEntity	= 4,
 	};
 	
 	struct UpdateBlockEvent
@@ -41,14 +44,32 @@ namespace Game
 		void* write(int& len) const;
 	};
 	
+	//Creates/updates an entity on the client
+	struct UpdateEntityEvent
+	{
+		Entity	entity;
+		
+		void* write(int& len) const;
+	};
+	
+	//Destroys an entity on the client
+	struct UpdateDestroyEntityEvent
+	{
+		EntityID	entity_id;
+		
+		void* write(int& len) const;
+	};
+	
 	struct UpdateEvent
 	{
 		UpdateEventType type;
 		
 		union
 		{
-			UpdateBlockEvent	block_event;
-			UpdateChatEvent		chat_event;
+			UpdateBlockEvent			block_event;
+			UpdateChatEvent				chat_event;
+			UpdateEntityEvent			entity_event;
+			UpdateDestroyEntityEvent	destroy_entity_event;
 		};
 		
 		//Writes output event to buffer

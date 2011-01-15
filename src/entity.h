@@ -9,10 +9,10 @@
 #include <pthread.h>
 
 #include <tcutil.h>
-#include <tchdb.h>
+#include <tctdb.h>
+
 
 #include "login.h"
-#include "player.h"
 #include "chunk.h"
 
 namespace Game
@@ -91,6 +91,18 @@ namespace Game
 		TCMAP*	to_map() const;
 	};
 	
+	//Entity iterator control (can be OR'd together to create multiple effects)
+	enum class EntityIterControl : int
+	{
+		Continue 	= 0,
+		Update		= TDBQPPUT,
+		Remove		= TDBQPOUT,
+		Break		= TDBQPSTOP
+	};
+	
+	//Entity iterator function
+	typedef EntityIterControl (*EntityIterFunc)(Entity&, void*);
+	
 	//Manages a collection of entities
 	struct EntityDB
 	{
@@ -106,15 +118,14 @@ namespace Game
 	
 		//Retrieves an entity's state
 		bool get_entity(EntityID const& id, Entity& state);
-		
-		//Sets the state for an entity
-		bool update_entity(EntityID const& id, Entity const& state);
-		
-		//Retrieves all entities in a region
-		std::vector<Entity> search_region(Region const&, uint8_t type_flags);
-		
-		
-		
+	
+		//Basic foreach loop on entity db
+		bool foreach_region(
+			EntityIterFunc func, 
+			void* data, 
+			Region const& region, 
+			uint8_t type_filter = 0);
+	
 	private:
 		
 		//Generates a unique identifier

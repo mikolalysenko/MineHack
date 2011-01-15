@@ -198,19 +198,29 @@ EntityID EntityDB::generate_uuid()
 }
 
 
-//Builds an entity list
-int query_list_builder(const void* key, int ksize, TCMAP* columns, void* ent_list)
+struct UserDelegate
 {
-	Entity ent;
-	ent.entity_id = *((const EntityID*)key);
-	ent.from_map(columns);
-	
-	((vector<Entity>*)ent_list)->push_back(ent);
-	return 0;
+	void* 				context;
+	EntityIterFunc 		func;
+};
+
+int query_list_translator(const void* key, int ksize, TCMAP* columns, void* data)
+{
+	//Extract entity
+	Entity entity;
+	entity.entity_id = *((const EntityID*)key);
+	entity.from_map(columns);
+
+	UserDelegate* dg = (UserDelegate*)data;
+	return (int)dg->func(entity, dg->context);
 }
 
 //Retrieves all entities in a list
-vector<Entity> EntityDB::search_region(Region const& r, uint8_t type_flags)
+bool EntityDB::foreach_region(
+	EntityIterFunc	user_func,
+	void*			user_data,
+	Region const& 	r, 
+	uint8_t 		type_flags)
 {
 	ScopeTCQuery Q(entity_db);
 	
@@ -225,7 +235,8 @@ vector<Entity> EntityDB::search_region(Region const& r, uint8_t type_flags)
 			}
 		}
 	}
-		
+	
+	//Add conditions to query
 	add_query_cond(Q, "x", TDBQCNUMGE, r.lo[0]);
 	add_query_cond(Q, "x", TDBQCNUMLE, r.hi[0]);
 	add_query_cond(Q, "y", TDBQCNUMGE, r.lo[1]);
@@ -233,13 +244,10 @@ vector<Entity> EntityDB::search_region(Region const& r, uint8_t type_flags)
 	add_query_cond(Q, "z", TDBQCNUMGE, r.lo[2]);
 	add_query_cond(Q, "z", TDBQCNUMLE, r.hi[2]);
 	
-	// Will this crazy idea work	?
-	vector<Entity>	result;
-	tctdbqryproc(Q.query, query_list_builder, &result);
-	
-	return result;
+	//Run the delegate
+	UserDelegate dg = { user_data, user_func };
+	return tctdbqryproc(Q.query, query_list_translator, (void*)&dg);
 }
-
 
 };
 
