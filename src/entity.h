@@ -1,6 +1,7 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
+#include <vector>
 #include <string>
 #include <cstdint>
 #include <cstdlib>
@@ -10,6 +11,9 @@
 #include <tcutil.h>
 #include <tchdb.h>
 
+#include "login.h"
+#include "player.h"
+#include "chunk.h"
 
 namespace Game
 {
@@ -29,15 +33,21 @@ namespace Game
 
 
 	//The entity type
+	// Must be power of two, are bitwise or'd together to create query flags
 	enum class EntityType : std::uint8_t
 	{
-		Player	= 1,
-		Monster	= 2,
+		NoType	= 0,
+		
+		Player	= (1 << 0),
+		Monster	= (1 << 1),
+		
+		MaxEntityType
 	};
 	
 	//Player specific entity data
 	struct PlayerEntity
 	{
+		char player_name[PLAYER_NAME_MAX_LEN];
 	};
 	
 	//Monster entity stuff
@@ -46,7 +56,7 @@ namespace Game
 	};
 	
 	//Common entity data
-	struct EntityHeader
+	struct EntityBase
 	{
 		//Entity type
 		EntityType	type;
@@ -64,7 +74,9 @@ namespace Game
 	//An entity object
 	struct Entity
 	{
-		EntityHeader header;
+		EntityID	entity_id;
+	
+		EntityBase	base;
 		
 		union
 		{
@@ -94,6 +106,13 @@ namespace Game
 	
 		//Retrieves an entity's state
 		bool get_entity(EntityID const& id, Entity& state);
+		
+		//Sets the state for an entity
+		bool update_entity(EntityID const& id, Entity const& state);
+		
+		//Retrieves all entities in a region
+		std::vector<Entity> search_region(Region const&, uint8_t type_flags);
+		
 		
 		
 	private:

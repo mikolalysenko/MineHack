@@ -56,12 +56,16 @@ namespace Game
 	private:
 		Map    			*game_map;
 		
+		//Mailbox for player updates
+		UpdateMailbox	player_updates;
+		
+		//Entity database
+		EntityDB		*entity_db;
+
 		//Event queues
 		std::vector< std::pair<std::string, InputEvent> > pending_events, events;
 		pthread_mutex_t		event_lock;
 		
-		//Mailbox for player updates
-		UpdateMailbox	player_updates;
 		
 		//Player database
 		std::map<std::string, Player*> players;

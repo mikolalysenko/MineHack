@@ -24,9 +24,16 @@ namespace Game
 World::World()
 {
 	running = true;
+	
+	//Create config stuff
 	auto c = new Config("data/mapconfig.tc");
+	
+	//Create map database
 	auto gen = new WorldGen(c);
 	game_map = new Map(gen, "data/map.tc");
+	
+	//Create entity database
+	entity_db = new EntityDB("data/entities.tc");
 	
 	//Initialize locks
 	pthread_mutex_init(&event_lock, NULL);
@@ -37,6 +44,7 @@ World::World()
 World::~World()
 {
 	delete game_map;
+	delete entity_db;
 }
 
 //Adds a player

@@ -35,6 +35,10 @@
 #define CHUNK_IDX_MASK		(CHUNK_IDX_MAX - 1)
 
 //Coordinate indexing stuff
+#define COORD_MIN_X			0
+#define COORD_MIN_Y			0
+#define COORD_MIN_Z			0
+
 #define COORD_MAX_X			(CHUNK_X + (CHUNK_IDX_MAX<<CHUNK_X_S))
 #define COORD_MAX_Y			(CHUNK_Y + (CHUNK_IDX_MAX<<CHUNK_Y_S))
 #define COORD_MAX_Z			(CHUNK_Z + (CHUNK_IDX_MAX<<CHUNK_Z_S))
@@ -101,6 +105,47 @@ namespace Game
 		int compress(void* target, size_t len);
 	};
 	
+	
+	
+	//A region in a map
+	struct Region
+	{
+		uint32_t lo[3], hi[3];
+		
+		Region()
+		{
+			lo[0] = COORD_MIN_X;
+			lo[1] = COORD_MIN_Y;
+			lo[2] = COORD_MIN_Z;
+			
+			hi[0] = COORD_MAX_X;
+			hi[1] = COORD_MAX_Y;
+			hi[2] = COORD_MAX_Z;
+		}
+		
+		Region(ChunkID const& id)
+		{
+			lo[0] = id.x << CHUNK_X_S;
+			lo[1] = id.y << CHUNK_Y_S;
+			lo[2] = id.z << CHUNK_Z_S;
+
+			hi[0] = lo[0] + CHUNK_X;
+			hi[1] = lo[1] + CHUNK_Y;
+			hi[2] = lo[2] + CHUNK_Z;
+		}
+		
+		Region(	int lo_x, int lo_y, int lo_z,
+				int hi_x, int hi_y,	int hi_z )
+		{
+			lo[0] = lo_x;
+			lo[1] = lo_y;
+			lo[2] = lo_z;
+			
+			hi[0] = hi_x;
+			hi[1] = hi_y;
+			hi[2] = hi_z;
+		}
+	};
 };
 
 #endif

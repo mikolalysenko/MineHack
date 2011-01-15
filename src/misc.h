@@ -1,10 +1,12 @@
 #ifndef MISC_H
 #define MISC_H
 
+#include <sstream>
 #include <cstdlib>
 #include <pthread.h>
 
-#include "mongoose.h"
+#include <tcutil.h>
+#include <tctdb.h>
 
 
 struct ReadLock
@@ -52,6 +54,51 @@ template<class T> struct ScopeDelete
 	T* ptr;
 	ScopeDelete(T* p) : ptr(p) {}
 	~ScopeDelete() { delete ptr; }
+};
+
+
+struct ScopeTCQuery
+{
+	TDBQRY* query;
+	
+	ScopeTCQuery(TCTDB* db) { query = tctdbqrynew(db); }
+	~ScopeTCQuery() { tctdbqrydel(query); }
+	
+};
+
+template<typename T>
+	void add_query_cond(ScopeTCQuery& Q, const char* name, int op, T v)
+{
+	std::stringstream ss;
+	ss << v;
+	tctdbqryaddcond(Q.query, name, op, ss.str().c_str());
+}
+
+struct ScopeTCList
+{
+	TCLIST*	list;
+	
+	ScopeTCList(TCLIST* l) : list(l) {}
+	ScopeTCList(ScopeTCQuery& q) : list(tctdbqrysearch(q.query)) {}
+	
+	~ScopeTCList()
+	{
+		if(list != NULL)
+			tclistdel(list);
+	}
+};
+
+struct ScopeTCMap
+{
+	TCMAP* map;
+	
+	ScopeTCMap(TCMAP* m) : map(m) {}
+	
+	~ScopeTCMap()
+	{
+		if(map != NULL)
+			tcmapdel(map);
+	}
 };
 
 

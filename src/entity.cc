@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iterator>
 #include <iostream>
+#include <vector>
 #include <cmath>
 #include <cstdlib>
 #include <cstdint>
@@ -75,27 +76,27 @@ bool Entity::from_map(const TCMAP* map)
 	int64_t type;
 	if(!get_int(map, "type", type))
 		return false;
-	header.type = (EntityType)type;
+	base.type = (EntityType)type;
 
-	if(!get_double(map, "x", header.x))
+	if(!get_double(map, "x", base.x))
 		return false;	
-	if(!get_double(map, "y", header.y))
+	if(!get_double(map, "y", base.y))
 		return false;	
-	if(!get_double(map, "z", header.z))
+	if(!get_double(map, "z", base.z))
 		return false;
 		
-	if(!get_double(map, "pitch", header.pitch))
+	if(!get_double(map, "pitch", base.pitch))
 		return false;	
-	if(!get_double(map, "yaw", header.yaw))
+	if(!get_double(map, "yaw", base.yaw))
 		return false;	
-	if(!get_double(map, "roll", header.roll))
+	if(!get_double(map, "roll", base.roll))
 		return false;	
 
-	if(!get_int(map, "health", header.health))
+	if(!get_int(map, "health", base.health))
 		return false;
 
 
-	switch(header.type)
+	switch(base.type)
 	{
 		case EntityType::Player:
 			if(!get_struct(map, "data", player))
@@ -115,19 +116,19 @@ TCMAP* Entity::to_map() const
 {
 	TCMAP* res = tcmapnew();
 
-	insert_int		(res, "type",	(int64_t)header.type);
+	insert_int		(res, "type",	(int64_t)base.type);
 
-	insert_double	(res, "x", 		header.x);
-	insert_double	(res, "y", 		header.y);
-	insert_double	(res, "z", 		header.z);
+	insert_double	(res, "x", 		base.x);
+	insert_double	(res, "y", 		base.y);
+	insert_double	(res, "z", 		base.z);
 
-	insert_double	(res, "pitch", 	header.pitch);
-	insert_double	(res, "yaw", 	header.yaw);
-	insert_double	(res, "roll", 	header.roll);
+	insert_double	(res, "pitch", 	base.pitch);
+	insert_double	(res, "yaw", 	base.yaw);
+	insert_double	(res, "roll", 	base.roll);
 	
-	insert_int	  	(res, "health",	header.health);
+	insert_int	  	(res, "health",	base.health);
 	
-	switch(header.type)
+	switch(base.type)
 	{
 		case EntityType::Player:
 			insert_struct(res, "data", player);
@@ -175,11 +176,68 @@ bool EntityDB::destroy_entity(EntityID const& entity_id)
 	return tctdbout(entity_db, (const void*)&entity_id, sizeof(EntityID));
 }
 
+//Retrieves an entity
+bool EntityDB::get_entity(EntityID const& entity_id, Entity& entity)
+{
+	entity.entity_id = entity_id;
+	
+	ScopeTCMap M(tctdbget(entity_db, (const void*)&entity_id, sizeof(EntityID)));
+	if(M.map == NULL)
+		return false;
+	
+	entity.from_map(M.map);
+	return true;
+}
+
+//Generates a unique identifier
 EntityID EntityDB::generate_uuid()
 {
 	EntityID res;
 	res.id = rand();
 	return res;
+}
+
+
+//Builds an entity list
+int query_list_builder(const void* key, int ksize, TCMAP* columns, void* ent_list)
+{
+	Entity ent;
+	ent.entity_id = *((const EntityID*)key);
+	ent.from_map(columns);
+	
+	((vector<Entity>*)ent_list)->push_back(ent);
+	return 0;
+}
+
+//Retrieves all entities in a list
+vector<Entity> EntityDB::search_region(Region const& r, uint8_t type_flags)
+{
+	ScopeTCQuery Q(entity_db);
+	
+	//Add additional query restriction on type flags
+	if(type_flags)
+	{
+		for(int i=1; i<=(int)EntityType::MaxEntityType; i<<=1)
+		{
+			if(type_flags & i)
+			{
+				add_query_cond(Q, "type", TDBQCNUMOREQ, i);
+			}
+		}
+	}
+		
+	add_query_cond(Q, "x", TDBQCNUMGE, r.lo[0]);
+	add_query_cond(Q, "x", TDBQCNUMLE, r.hi[0]);
+	add_query_cond(Q, "y", TDBQCNUMGE, r.lo[1]);
+	add_query_cond(Q, "y", TDBQCNUMLE, r.hi[1]);
+	add_query_cond(Q, "z", TDBQCNUMGE, r.lo[2]);
+	add_query_cond(Q, "z", TDBQCNUMLE, r.hi[2]);
+	
+	// Will this crazy idea work	?
+	vector<Entity>	result;
+	tctdbqryproc(Q.query, query_list_builder, &result);
+	
+	return result;
 }
 
 
