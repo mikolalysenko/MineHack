@@ -1,6 +1,5 @@
 #include <pthread.h>
 
-#include <utility>
 #include <cstring>
 #include <cassert>
 #include <utility>
@@ -30,7 +29,7 @@ World::World()
 	
 	//Initialize locks
 	pthread_mutex_init(&event_lock, NULL);
-	pthread_mutex_init(&player_lock, NULL);
+	pthread_mutex_init(&world_lock, NULL);
 }
 
 //Clean up/saving stuff
@@ -39,46 +38,16 @@ World::~World()
 	delete game_map;
 }
 
-//Adds a player
-bool World::add_player(std::string const& player_name)
-{
-	MutexLock lock(&player_lock);
-	
-	auto iter = players.find(player_name);
-	if(iter == players.end())
-	{
-		players[player_name] = new Player(player_name);
-		return true;
-	}
-	
-	return false;
-}
-
-//Removes a player
-bool World::remove_player(std::string const& player_name)
-{
-	MutexLock lock(&player_lock);
-	
-	auto iter = players.find(player_name);
-	if(iter != players.end())
-	{
-		players.erase(iter);
-	}
-	
-	return true;
-}
-
-
 //Adds an event to the world
-void World::add_event(string const& player_name, InputEvent const& ev)
+void World::add_event(InputEvent const& ev)
 {
 	MutexLock lock(&event_lock);
-	pending_events.push_back(make_pair(player_name, ev));
+	pending_events.push_back(ev);
 }
 
 //Retrieves a compressed chunk from the server
 int World::get_compressed_chunk(
-	string const& player_name,
+	Server::SessionID const& session_id, 
 	ChunkID const& chunk_id,
 	uint8_t* buf,
 	size_t buf_len)
@@ -93,10 +62,10 @@ int World::get_compressed_chunk(
 	
 //Sends queued messages to client
 void* World::heartbeat(
-	string const& player_name,
+	Server::SessionID const& session_id,
 	int& len)
 {
-	return player_updates.get_events(player_name, len);
+	return player_updates.get_events(session_id, len);
 }
 
 //Broadcasts an event to all players
@@ -104,17 +73,76 @@ void World::broadcast_update(UpdateEvent const& up, double x, double y, double z
 {
 	for(auto pl=players.begin(); pl!=players.end(); ++pl)
 	{
-		player_updates.send_event((*pl).first, up);
+		auto p = (*pl).second;
+		
+		auto dx = p->pos[0] - x,
+			 dy = p->pos[1] - y,
+			 dz = p->pos[2] - z;
+		
+		if( dx*dx+dy*dy+dz*dz < radius*radius )
+		{
+			player_updates.send_event((*pl).first, up);
+		}
 	}
+}
+
+//Handle a player join event
+void World::handle_add_player(Server::SessionID const& session_id, JoinEvent const& ev)
+{
+	cout << "Adding player: " << ev.name << ", session id: " << session_id.id << endl 
+		 << "-----------------------------------------------------------" << endl;
+	players[session_id] = new Player(session_id, ev.name);
+}
+
+//Handle removing a player
+void World::handle_remove_player(Player* p)
+{
+	cout << "Removing player: " << p->session_id.id << endl;
+	auto iter = players.find(p->session_id);
+	if(iter == players.end())
+	{
+		cout << "Player had bad session id?" << endl;
+		return;
+	}
+	players.erase(iter);
 }
 
 //Handle placing a block
 void World::handle_place_block(Player* p,  BlockEvent const& ev)
 {
+	int x = ev.x, y = ev.y, z = ev.z;
+	auto b = ev.b;
+
+	cout << "Setting block: " << x << "," << y << "," << z << " <- " << (uint8_t)b << "; by " << p->session_id.id << endl;
+
+	
+	//TODO: Sanity check event
+	//Future:  This event should take a reference to an inventory stack, not an arbitrary block type
+	
+	//Set block and broadcast event
+	game_map->set_block(x, y, z, b);
+	
+	UpdateEvent up;
+	up.type = UpdateEventType::SetBlock;
+	up.block_event.x = x;
+	up.block_event.y = y;
+	up.block_event.z = z;
+	up.block_event.b = b;
+	
+	broadcast_update(up, x, y, z, 256.0);
 }
 
 void World::handle_player_tick(Player* p, PlayerEvent const& ev)
 {
+	//TODO: Sanity check input values from client
+	// apply some prediction/filtering to infer new position
+	
+	p->pos[0] = ev.x;
+	p->pos[1] = ev.y;
+	p->pos[2] = ev.z;
+	p->pitch = ev.pitch;
+	p->yaw = ev.yaw;	
+	p->input_state = ev.input_state;
 }
 
 void World::handle_dig_block(Player* p, DigEvent const& dig)
@@ -179,38 +207,48 @@ void World::tick()
 	}
 	
 	//Acquire a lock on the game world
-	MutexLock pl(&player_lock);
+	MutexLock pl(&world_lock);
 	
 	//Handle all events
 	for(auto iter = events.begin(); iter!=events.end(); ++iter)
 	{
 		//Recover event pointer
-		auto player_name 	= (*iter).first;
-		auto input 			= (*iter).second;
+		auto ev = *iter;
+		
+		//Special case:  Join events don't have a player associated to them
+		if(ev.type == InputEventType::PlayerJoin)
+		{
+			handle_add_player(ev.session_id, ev.join_event);
+			continue;
+		}
 		
 		//Check player exists
-		auto piter = players.find(player_name);
-		if(piter == players.end())
+		auto iter = players.find(ev.session_id);
+		if(iter == players.end())
 			continue;
-		auto player = (*piter).second;
+		auto p = (*iter).second;
 		
 		//Dispatch event handler
-		switch(input.type)
+		switch(ev.type)
 		{
+			case InputEventType::PlayerLeave:
+				handle_remove_player(p);
+			break;
+		
 			case InputEventType::PlaceBlock:
-				handle_place_block(player, input.block_event);
+				handle_place_block(p, ev.block_event);
 			break;
 		
 			case InputEventType::DigBlock:
-				handle_dig_block(player, input.dig_event);
+				handle_dig_block(p, ev.dig_event);
 			break;
 			
 			case InputEventType::PlayerTick:
-				handle_player_tick(player, input.player_event);
+				handle_player_tick(p, ev.player_event);
 			break;
 			
 			case InputEventType::Chat:
-				handle_chat(player, input.chat_event);
+				handle_chat(p, ev.chat_event);
 			break;
 		
 			default:

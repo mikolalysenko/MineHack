@@ -18,19 +18,17 @@ static int grad3[12][3] = {
 {0,1,-1},
 {0,-1,-1}};
 
+int seed = 0;
+void setNoiseSeed(int i)
+{
+	seed = i;
+}
+
 //TODO: rand is really slow. This function should be replaced with a fast pseudorandom number generator. This
 //is just here for the time being, because it's easy to write and I want to get the noise function working
-int firstrand = 0;
 int pseudorand(int x)
-{
-	//crappy hack to make the map unique each time. This won't stay, it should die when pseudorand is replaced by a faster random number generator
-	if(firstrand == 0)
-	{
-		srand(time(NULL));
-		firstrand = rand();
-	}
-	
-	srand(x + firstrand);
+{	
+	srand(x + seed);
 	return rand();
 }
 

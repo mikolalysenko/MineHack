@@ -26,7 +26,7 @@ namespace Game
 		void storeInt(int i, std::string const& key);
 		
 		private:
-			
+		
 			//main config database
 			TCHDB* config_db;
 		

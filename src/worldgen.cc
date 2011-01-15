@@ -20,27 +20,53 @@ using namespace std;
 //how fine grained the features on land are (higher = more fine grained, but slower performance)
 #define OCTAVES                 4
 
-//padding around the current block to generate surface data
-#define SURFACE_GEN_PADDING     3
-
 namespace Game
 {
 
+WorldGen::WorldGen(Config* mapconfig)
+{
+	int mapseed = 0; //mapconfig->readInt("mapseed");
+	
+	if(mapseed == 0)
+	{
+		srand(time(NULL));
+		while(mapseed == 0)
+		{
+			mapseed = rand();
+			
+			if(mapseed != 0)
+				mapconfig->storeInt(mapseed, "mapseed");
+		}
+	}
+	
+	setNoiseSeed(mapseed);
+	
+	cout << "mapseed is " << mapseed << endl;
+}
+	
 Block WorldGen::generate_block(int x, int y, int z, SurfaceCell surface)
 {
-	if(y == surface.height && y > WATER_LEVEL)
-		return Block::Grass;
+	if(!surface.nearWater)
+	{
+		if(y == surface.height)
+			return Block::Grass;
+		
+		if(y < surface.height && y >= surface.height - 4)
+			return Block::Dirt;
+	}
+	else
+	{
+		if(y <= surface.height && y >= surface.height - 4)
+			return Block::Sand;
+	}
 	
-	if(y <= surface.height && y + 2 > WATER_LEVEL)
-		return Block::Sand;
-
 	if(y < surface.height)
 		return Block::Stone;
 	
-	if(y <= WATER_LEVEL)
-		return Block::Water;
+	if(y > WATER_LEVEL)
+		return Block::Air;
 	
-	return Block::Air;
+	return Block::Water;
 }
 
 SurfaceCell WorldGen::generate_surface_data(int cx, int cy)
@@ -52,10 +78,23 @@ SurfaceCell WorldGen::generate_surface_data(int cx, int cy)
 	
 	cell.height = (simplexNoise2D(fxp, fyp, OCTAVES) * (WORLD_MAX_HEIGHT - WORLD_MIN_HEIGHT)) + WORLD_MIN_HEIGHT;
 	
-	//cell.height = (cx % 5) + (cy % 5) + WATER_LEVEL + 3;
-	
 	return cell;
 }
+
+bool WorldGen::near_water(int x, int y, SurfaceCell surface[CHUNK_Z + (SURFACE_GEN_PADDING << 1)][CHUNK_X + (SURFACE_GEN_PADDING << 1)])
+{
+	for(int yp = y - 2; yp <= y + 2; yp++)
+	{
+		for(int xp = x - 2; xp <= x + 2; xp++)
+		{
+			if(surface[yp][xp].height <= WATER_LEVEL)
+				return true;
+		}
+	}
+	
+	return false;
+}
+
 
 void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 {
@@ -76,11 +115,12 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 	
 	//get the surface properties
 	y = (idx.z << CHUNK_Z_S);
-	for(int yp = 0; yp < CHUNK_Z; yp++)
+	for(int yp = SURFACE_GEN_PADDING; yp < CHUNK_Z + SURFACE_GEN_PADDING; yp++)
 	{
 		int x = (idx.x << CHUNK_X_S);
-		for(int xp = 0; xp < CHUNK_X; xp++)
+		for(int xp = SURFACE_GEN_PADDING; xp < CHUNK_X + SURFACE_GEN_PADDING; xp++)
 		{
+			surface[yp][xp].nearWater = near_water(xp, yp, surface);
 			x++;
 		}
 		y++;

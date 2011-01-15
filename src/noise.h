@@ -5,6 +5,8 @@
 extern "C" {
 #endif // __cplusplus
 
+void setNoiseSeed(int);
+	
 float simplexNoise2D(float xin, float yin, int octaves);
 float simplexNoise3D(float xin, float yin, float zin, int octaves);
 	
