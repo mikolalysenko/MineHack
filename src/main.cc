@@ -483,10 +483,19 @@ void do_heartbeat(HttpEvent& ev)
 		ajax_error(ev.conn);
 		return;
 	}
-
+	
+	cout << "Got update; len = " << blob.len << endl;
+	
+	cout << "Data = " << endl;
+	
+	for(int i=0; i<blob.len; i++)
+	{
+		cout << (int)blob.data[i] << ',';
+	}
+	cout << endl;
 
 	//Parse out the events
-	int p = 0, len = blob.len;
+	int p = sizeof(SessionID), len = blob.len;
 	while(true)
 	{
 		//Create event

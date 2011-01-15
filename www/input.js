@@ -84,8 +84,11 @@ InputHandler.serialize = function()
 	//Build a binary packet for the event
 	var bb = new BlobBuilder();
 	
+	//Add session id
+	bb.append(Session.get_session_id_arr().buffer);
+	
 	//Add player information
-	bb.append(Player.net_state().buffer);
+	//bb.append(Player.net_state().buffer);
 	
 	//Convert events to blob data
 	for(var i=0; i<InputHandler.events.length; i++)
