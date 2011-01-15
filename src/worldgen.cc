@@ -25,7 +25,7 @@ namespace Game
 
 WorldGen::WorldGen(Config* mapconfig)
 {
-	int mapseed = 0; //mapconfig->readInt("mapseed");
+	int mapseed = mapconfig->readInt("mapseed");
 	
 	if(mapseed == 0)
 	{
@@ -40,8 +40,6 @@ WorldGen::WorldGen(Config* mapconfig)
 	}
 	
 	setNoiseSeed(mapseed);
-	
-	cout << "mapseed is " << mapseed << endl;
 }
 	
 Block WorldGen::generate_block(int x, int y, int z, SurfaceCell surface)
