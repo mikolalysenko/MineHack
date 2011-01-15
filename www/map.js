@@ -597,8 +597,6 @@ Map.grab_chunks = function()
 	if(Map.pending_chunks.length == 0)
 		return;
 
-	debugger;
-
 	var chunks = Map.pending_chunks;
 	Map.pending_chunks = [];
 	
@@ -631,8 +629,6 @@ Map.grab_chunks = function()
 	asyncGetBinary("g", 
 	function(arr)
 	{	
-		debugger;
-	
 		for(var i=0; i<chunks.length; i++)
 		{
 			var chunk = chunks[i];
