@@ -198,7 +198,7 @@ bool get_session_id(
 		return false;
 	
 	//Scan in the session id
-	sscanf(session_id_str, "%llx", &session_id.id);
+	sscanf(session_id_str, "%lx", &session_id.id);
 	
 	if(valid_session_id(session_id))
 		return true;
@@ -258,7 +258,7 @@ void do_login(HttpEvent& ev)
 	
 		ajax_printf(ev.conn, 
 			"Ok\n"
-			"%016llx", session_id.id);
+			"%016lx", session_id.id);
 	}
 	else
 	{
@@ -430,7 +430,7 @@ void do_get_chunk(HttpEvent& ev)
 	}
 	
 	SessionID session_id = *((SessionID*)blob.data);
-	printf("Got get_chunk request from %016llx\n", session_id.id);
+	printf("Got get_chunk request from %016lx\n", session_id.id);
 	
 	uint8_t chunk_buf[MAX_CHUNK_BUFFER_LEN];
 	uint8_t	*buf_ptr = chunk_buf;

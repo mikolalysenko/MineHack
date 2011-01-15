@@ -13,8 +13,6 @@ Session.hash_password = function(username, password)
 
 Session.get_session_id_arr = function()
 {
-	debugger;
-
 	var arr = new Uint8Array(8);
 	var x 	= parseInt(Session.session_id.substr(8, 8), 16);
 	var y 	= parseInt(Session.session_id.substr(0, 8), 16);
