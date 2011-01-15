@@ -55,7 +55,9 @@ namespace Game
 		Grass,
 		Cobblestone,
 		Wood,
-		Log
+		Log,
+		Water,
+		Sand
 	};
 
 	//A chunk index into the map

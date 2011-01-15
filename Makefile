@@ -213,7 +213,7 @@ $(builddir)/%.o:	src/%.cc
 	$(CXX) -c $< $(CPPOPTS) $(CXXOPTS) $(CPPFLAGS) $(CXXFLAGS) -o $@
 
 $(builddir)/%.o:	src/%.c
-	$(CC) -c $< $(CPPOPTS) $(CXXOPTS) $(CPPFLAGS) $(CXXFLAGS) -o $@
+	$(CC) -c -std=c99 $< $(CPPOPTS) $(CXXOPTS) $(CPPFLAGS) $(CXXFLAGS) -o $@
 
 # Rule to build our included dependencies makefiles.
 # This rule is used by GNU Make because it automatically tries to (re)build
@@ -231,7 +231,7 @@ $(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file)
 
 
 $(builddir)/%.$(deps_suffix):	src/%.c $(goal_flag_file)
-	$(SHELL) -ec '$(CC) -MM $(CPPOPTS) $(CPPFLAGS) $< |\
+	$(SHELL) -ec '$(CC) -std=c99 -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 
