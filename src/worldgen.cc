@@ -47,8 +47,8 @@ SurfaceCell WorldGen::generate_surface_data(int cx, int cy)
 {
 	SurfaceCell cell;
 	
-	double fxp = ((double)cx) / NOISE_SCALAR;
-	double fyp = ((double)cy) / NOISE_SCALAR;
+	float fxp = ((float)cx) / NOISE_SCALAR;
+	float fyp = ((float)cy) / NOISE_SCALAR;
 	
 	cell.height = (simplexNoise2D(fxp, fyp, OCTAVES) * (WORLD_MAX_HEIGHT - WORLD_MIN_HEIGHT)) + WORLD_MIN_HEIGHT;
 	

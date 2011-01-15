@@ -197,6 +197,10 @@ test: $(exe) $(datadir)
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)
 
+testmap: $(exe) $(datadir)
+	rm -f data/* *.log
+	(sleep 2; $(BROWSER) $(URL)) &
+	./$(exe)
 
 $(datadir):
 	mkdir $(datadir)
