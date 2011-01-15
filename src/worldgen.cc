@@ -52,6 +52,8 @@ SurfaceCell WorldGen::generate_surface_data(int cx, int cy)
 	
 	cell.height = (simplexNoise2D(fxp, fyp, OCTAVES) * (WORLD_MAX_HEIGHT - WORLD_MIN_HEIGHT)) + WORLD_MIN_HEIGHT;
 	
+	//cell.height = (cx % 5) + (cy % 5) + WATER_LEVEL + 3;
+	
 	return cell;
 }
 

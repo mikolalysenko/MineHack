@@ -426,8 +426,6 @@ void do_get_chunk(HttpEvent& ev)
 {
 	HttpBlobReader blob(ev.conn);
 
-	cout << "Got get_chunk request" << endl;
-	
 	//Read out the session id
 	if(blob.len <= sizeof(SessionID) + 4)
 	{
@@ -436,7 +434,6 @@ void do_get_chunk(HttpEvent& ev)
 	}
 	
 	SessionID session_id = *((SessionID*)blob.data);
-	printf("Got get_chunk request from %016llx\n", session_id.id);
 	
 	uint8_t chunk_buf[MAX_CHUNK_BUFFER_LEN];
 	uint8_t	*buf_ptr = chunk_buf;
@@ -445,9 +442,6 @@ void do_get_chunk(HttpEvent& ev)
 	ChunkID* chunk_end = (ChunkID*)(blob.data + blob.len);
 	for(ChunkID* chunk_ptr = (ChunkID*)(blob.data + sizeof(SessionID)); chunk_ptr < chunk_end; ++chunk_ptr)
 	{
-	
-		printf("Grabbing chunk: %d, %d, %d\n", chunk_ptr->x, chunk_ptr->y, chunk_ptr->z);
-	
 		//Extract the chunk
 		int len = game_instance->get_compressed_chunk(
 			session_id, *chunk_ptr, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
@@ -549,13 +543,6 @@ static void *event_handler(mg_event event,
                            mg_connection *conn,
                            const mg_request_info *request_info)
 {
-
-	if(event == MG_NEW_REQUEST)
-	{
-		cout << "Got request: " << request_info->uri << endl;
-	}
-
-
 	if (event == MG_NEW_REQUEST && 
 		request_info->uri[0] == '/' &&
 		request_info->uri[1] != '\0' &&
