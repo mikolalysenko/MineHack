@@ -484,18 +484,8 @@ void do_heartbeat(HttpEvent& ev)
 		return;
 	}
 	
-	cout << "Got update; len = " << blob.len << endl;
-	
-	cout << "Data = " << endl;
-	
-	for(int i=0; i<blob.len; i++)
-	{
-		cout << (int)blob.data[i] << ',';
-	}
-	cout << endl;
-
 	//Parse out the events
-	int p = sizeof(SessionID), len = blob.len;
+	int p = sizeof(SessionID), len = blob.len - sizeof(SessionID);
 	while(true)
 	{
 		//Create event
@@ -506,7 +496,7 @@ void do_heartbeat(HttpEvent& ev)
 	
 		//Add event
 		game_instance->add_event(session.player_name, input);
-		p += d;
+		p 	+= d;
 		len -= d;
 	}
 
@@ -520,8 +510,6 @@ void do_heartbeat(HttpEvent& ev)
 		}
 		cout << endl;
 	}
-
-	
 	
 	{	//Generate client response
 		int mlen;
@@ -534,14 +522,6 @@ void do_heartbeat(HttpEvent& ev)
 		}
 		
 		ScopeFree guard(data);
-
-		if(mlen > 0)
-		{
-			cout << "Pushing update packet: ";
-			for(int i=0; i<mlen; i++)
-				cout << (int)((uint8_t*)data)[i] << ',';
-			cout << endl;
-		}
 
 		ajax_send_binary(ev.conn, data, mlen);
 	}

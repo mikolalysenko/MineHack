@@ -12,14 +12,25 @@ int DigEvent::extract(void* buf, size_t buf_len)
 {
 	uint8_t *ptr = (uint8_t*)buf;
 
-	if(buf_len < 9)
+	if(buf_len < 12)
 		return -1;
 	
-	x = ptr[0] + (ptr[1]<<8) + (ptr[2]<<16);
-	y = ptr[3] + (ptr[4]<<8) + (ptr[5]<<16);
-	z = ptr[6] + (ptr[7]<<8) + (ptr[8]<<16);
+	x  = *(ptr++);
+	x |= (*(ptr++)) <<  8;
+	x |= (*(ptr++)) << 16;
+	x |= (*(ptr++)) << 24;
 	
-	return 9;
+	y  = *(ptr++);
+	y |= (*(ptr++)) <<  8;
+	y |= (*(ptr++)) << 16;
+	y |= (*(ptr++)) << 24;
+	
+	z  = *(ptr++);
+	z |= (*(ptr++)) <<  8;
+	z |= (*(ptr++)) << 16;
+	z |= (*(ptr++)) << 24;
+	
+	return 12;
 }
 
 

@@ -9,7 +9,7 @@ InputHandler.serializers =
 {
 	"DigBlock" : function(ev)
 	{
-		var res = new Uint8Array(10);
+		var res = new Uint8Array(13);
 		var k = 0;
 		
 		res[k++] = 2;	//Event type code
@@ -21,6 +21,7 @@ InputHandler.serializers =
 			res[k++] = 	x 		 & 0xff;
 			res[k++] = (x >> 8)  & 0xff;
 			res[k++] = (x >> 16) & 0xff;
+			res[k++] = (x >> 24) & 0xff;
 		}
 		
 		return res.buffer;
