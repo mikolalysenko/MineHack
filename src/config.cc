@@ -8,8 +8,6 @@ namespace Game
 
 Config::Config(std::string const& filename)
 {
-	pthread_mutex_init(&config_lock, NULL);
-	
 	config_db = tchdbnew();
 	
 	tchdbsetmutex(config_db);
@@ -33,18 +31,9 @@ int Config::readInt(std::string const& key)
 
 void Config::storeInt(int i, std::string const& key)
 {
-	while(true)
-	{
-		if(!tchdbtranbegin(config_db))
-			return;
-		
-		tchdbput(config_db,
-			(const void*)key.data(), key.size(),
-			(void*)&i, sizeof(int));
-		
-		if(tchdbtrancommit(config_db))
-			return;
-	}
+	tchdbput(config_db,
+		(const void*)key.data(), key.size(),
+		(void*)&i, sizeof(int));
 }
 
 void Config::shutdown()

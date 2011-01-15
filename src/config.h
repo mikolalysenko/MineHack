@@ -29,9 +29,6 @@ namespace Game
 		
 			//main config database
 			TCHDB* config_db;
-		
-			//lock the database to prevent multiple writes / reading while writing
-			pthread_mutex_t config_lock;
 	};
 };
 
