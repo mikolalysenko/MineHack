@@ -253,24 +253,35 @@ var App =
 	state : DefaultState
 };
 
-/*
 App.do_test = function()
 {
+	//Generate dummy account
 	var user_txt = document.getElementById('userName');
 	var pass_txt = document.getElementById('password');
 	
 	user_txt.value = "user" + Math.floor(Math.random()*10000000);
 	pass_txt.value = "p" + Math.floor(Math.random()*10000000) + "." + Math.floor(Math.random()*10000000);
 	
-	do_register();
+	App.state.do_register();
+	
+	//Create player
+	var player_txt = document.getElementById('playerName');
+	player_txt.value = "player" + Math.floor(Math.random()*10000000);
+	App.state.do_create_player();
+	
+	//Join game
+	App.state.do_select_player(0);
 }
-*/
 
 
 App.init = function()
 {
 	Loader.start(LoadState.update_progress, App.crash);
 	App.set_state(LoginState);
+	
+	
+	//TODO: take this out for production
+	App.do_test();
 }
 
 App.shutdown = function()
