@@ -86,6 +86,11 @@ Session.valid_password = function(password)
 	return password.length > 6;
 }
 
+Session.valid_player_name = function(player_name)
+{
+	return 	player_name.length <= 20 &&
+			/^\w+$/i.test(player_name)
+}
 
 Session.do_action = function(url)
 {
@@ -112,6 +117,12 @@ Session.get_players = function()
 
 Session.add_player = function(player_name)
 {
+	if(player_name == "")
+		return ["Fail", "Must enter player name first"];
+		
+	if(!Session.valid_player_name(player_name))
+		return ["Fail", "Invalid player name"];
+
 	if(!Session.logged_in || Session.player_name != "")
 		return ["Fail", "Not logged in"];
 		

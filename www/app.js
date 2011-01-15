@@ -78,11 +78,12 @@ var CharacterSelectState = {};
 
 CharacterSelectState.init = function()
 {
+	//Regenerate players
 	CharacterSelectState.player_list = [];
+	CharacterSelectState.generate_players();
+
 	var selectElem = document.getElementById("selectElem");
-	selectElem.style.display = "block";
-	
-	CharacterSelectState.add_player("asshole");
+	selectElem.style.display = "block";	
 }
 
 CharacterSelectState.shutdown = function()
@@ -93,19 +94,48 @@ CharacterSelectState.shutdown = function()
 
 CharacterSelectState.do_select_player = function(player_num)
 {
-	alert("Select player: " + player_num);
+	var player_name = CharacterSelectState.players[player_num];
+	var result		= Session.join_game(player_name);
+	
+	if(result[0] == "Ok")
+	{
+		App.set_state(LoadState);
+	}
+	else
+	{
+		alert(result[1]);
+	}
 }
 
 CharacterSelectState.do_delete_player = function(player_num)
 {
-	alert("Delete player: " + player_num);
+	var player_name = CharacterSelectState.players[player_num];
+	var result 		= Session.remove_player(player_name);
+	
+	if(result[0] == "Ok")
+	{
+		CharacterSelectState.generate_players();
+	}
+	else
+	{
+		alert(result[1]);
+	}
 }
 
 CharacterSelectState.do_create_player = function()
 {
-	var player_name = document.getElementById("playerName");
+	var player_name	= document.getElementById("playerName");
+	var result		= Session.add_player(player_name.value);
 	
-	CharacterSelectState.add_player(player_name.value);	
+	if(result[0] == "Ok")
+	{
+		CharacterSelectState.generate_players();
+		player_name.value = "";
+	}
+	else if(result.length > 1)
+	{
+		alert(result[1]);
+	}
 }
 
 
@@ -114,9 +144,11 @@ CharacterSelectState.generate_players = function()
 	var listElem = document.getElementById("avatarList");
 	listElem.innerHTML = "";
 
-	for(var i in CharacterSelectState.player_list)
+	CharacterSelectState.players = Session.get_players();
+	
+	for(var i in CharacterSelectState.players)
 	{
-		var player_name = CharacterSelectState.player_list[i];
+		var player_name = CharacterSelectState.players[i];
 		
 		var div_elem = 
 			'<a class="avatarSelect" href="javascript:App.state.do_select_player(' + i + ');">' + player_name + '</a>' + 
@@ -125,12 +157,6 @@ CharacterSelectState.generate_players = function()
 			
 		listElem.innerHTML += div_elem;
 	}
-}
-
-CharacterSelectState.add_player = function(player_name)
-{
-	CharacterSelectState.player_list.push(player_name);
-	CharacterSelectState.generate_players();
 }
 
 

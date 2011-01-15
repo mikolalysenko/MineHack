@@ -212,34 +212,61 @@ bool get_player_names(string const& user_name, vector<string>& player_names)
 //Removes a player name from an account	
 bool remove_player_name(string const& user_name, string const& player_name)
 {
-	int len;
-	void* data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
-	if(data == NULL)
-		return false;
-	ScopeFree	guard(data);
-	
-	if(len < sizeof(LoginRecord))
-		return false;
-	
-	char* ptr = ((char*)data) + sizeof(LoginRecord);
-	for(int i=sizeof(LoginRecord); i<len; )
+	while(true)
 	{
-		cout << "Checking record: " << ptr << endl;
-		
-		int l = strlen(ptr) + 1;
-		i += l;
-		if(strcmp(ptr, player_name.c_str()) == 0)
+		if(!tchdbtranbegin(login_db))
 		{
-			memmove(ptr, ((char*)data) + i, len - i);
-			
-			return tchdbput(login_db,
-				(const void*)user_name.c_str(), user_name.size(),
-				data, len - l);
+			return false;
 		}
-		ptr += l;
-	}
+
+		int len;
+		void* data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
+		if(data == NULL)
+		{
+			tchdbtranabort(login_db);
+			return false;
+		}
+		ScopeFree	guard(data);
 	
-	return false;
+		if(len < sizeof(LoginRecord))
+		{
+			tchdbtranabort(login_db);
+			return false;
+		}
+	
+	
+		bool found_item = false;
+		char* ptr = ((char*)data) + sizeof(LoginRecord);
+		for(int i=sizeof(LoginRecord); i<len; )
+		{
+			cout << "Checking record: " << ptr << endl;
+		
+			int l = strlen(ptr) + 1;
+			i += l;
+			if(strcmp(ptr, player_name.c_str()) == 0)
+			{
+				memmove(ptr, ((char*)data) + i, len - i);
+			
+				tchdbput(login_db,
+					(const void*)user_name.c_str(), user_name.size(),
+					data, len - l);
+					
+				found_item = true;
+				break;
+			}
+			ptr += l;
+		}
+		
+		if(found_item)
+		{
+			if(tchdbtrancommit(login_db))
+				return true;
+			continue;
+		}
+	
+		tchdbtranabort(login_db);
+		return false;
+	}
 }
 
 };
