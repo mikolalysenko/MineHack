@@ -78,6 +78,8 @@ UpdateHandler.handlers =
 //Handles a block update packet
 UpdateHandler.handle_update_packet = function(arr)
 {
+	Game.wait_for_heartbeat = false;
+
 	var i = 0;
 	
 	while(i < arr.length)

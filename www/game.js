@@ -5,7 +5,7 @@ Game =
 	
 	tick_count : 0,
 	
-	TICKS_PER_HEARTBEAT : 2,
+	TICKS_PER_HEARTBEAT : 3,
 	
 	update_rate : 40,
 
@@ -14,6 +14,8 @@ Game =
 	fov   : 45.0,
 	
 	input_events : [],
+	
+	wait_for_heartbeat : false,
 	
 	enable_ao : true
 };
@@ -157,6 +159,8 @@ Game.shutdown = function()
 //Polls the server for events
 Game.heartbeat = function()
 {
+	Game.wait_for_heartbeat = true;
+	
 	//Sends a binary message to the server
 	asyncGetBinary("/h?k="+Session.session_id, 
 		UpdateHandler.handle_update_packet, 
@@ -166,7 +170,8 @@ Game.heartbeat = function()
 
 Game.tick = function()
 {
-	if(Game.tick_count % Game.TICKS_PER_HEARTBEAT == 0)
+	if(	Game.tick_count % Game.TICKS_PER_HEARTBEAT == 0 &&
+		!Game.wait_for_heartbeat )
 		Game.heartbeat();
 
 	++Game.tick_count;

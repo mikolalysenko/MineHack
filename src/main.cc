@@ -468,7 +468,7 @@ void do_heartbeat(HttpEvent& ev)
 {
 	HttpBlobReader blob(ev.conn);
 	
-	if(blob.len <= sizeof(SessionID))
+	if(blob.len < sizeof(SessionID))
 	{
 		ajax_error(ev.conn);
 		return;
@@ -480,6 +480,7 @@ void do_heartbeat(HttpEvent& ev)
 	if( !get_session_data(session_id, session) ||
 		session.state != SessionState::InGame )
 	{
+		cout << "not logged in" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
