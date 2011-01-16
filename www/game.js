@@ -136,7 +136,9 @@ Game.draw = function()
 	gl.clear(gl.COLOR_BUFFER_BIT |gl.DEPTH_BUFFER_BIT);
 	
 	gl.enable(gl.DEPTH_TEST);
-	gl.disable(gl.CULL_FACE);
+	
+	gl.frontFace(gl.CW);
+	gl.enable(gl.CULL_FACE);
 
 	Map.draw(gl, cam);
 	

@@ -151,7 +151,8 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,y  ,z  ],
 				[x,y+1,z  ],
 				[x,y+1,z+1],
-				[x,y  ,z+1] ]);
+				[x,y  ,z+1]				
+				]);
 				
 			add_tex_coord(block_id, 1);
 		}
@@ -167,10 +168,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_face();
 			
 			appendv([
-				[x+1,y,  z  ],
-				[x+1,y+1,z  ],
+				[x+1,y,  z+1],
 				[x+1,y+1,z+1],
-				[x+1,y,  z+1]
+				[x+1,y+1,z  ],
+				[x+1,y,  z  ]
 				]);
 				
 			add_tex_coord(block_id, 1);
@@ -226,10 +227,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_face();
 			
 			appendv([
-				[x,  y,  z],
-				[x,  y+1,z],
-				[x+1,y+1,z],
-				[x+1,y,  z]
+				[x+1,y,  z],
+				[x+1,y+1,z],				
+				[x,  y+1,z],				
+				[x,  y,  z]
 			]);
 				
 			add_tex_coord(block_id, 1);
