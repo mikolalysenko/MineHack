@@ -26,8 +26,12 @@ static map<string, SessionID>	user_table;
 static map<Game::EntityID, SessionID>	player_table;
 static map<SessionID, Session>	session_table;
 
+//UUID generator
+UUIDGenerator*	session_id_gen;
+
 void init_sessions()
 {
+	session_id_gen = new UUIDGenerator();
 }
 
 bool valid_session_id(const SessionID& session_id)
@@ -48,7 +52,7 @@ bool create_session(const string& user_name, SessionID& session_id)
 		return false;
 	
 	//Generate session id
-	session_id.id = (((uint64_t)mrand48())<<32) | (uint64_t)mrand48();
+	session_id.id = session_id_gen->gen_uuid();
 	
 	//Initialize session variable
 	Session s;

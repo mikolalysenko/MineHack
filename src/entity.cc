@@ -207,7 +207,7 @@ EntityDB::~EntityDB()
 //Creates an entity with the given initial state
 bool EntityDB::create_entity(Entity const& initial_state, EntityID& entity_id)
 {
-	entity_id = generate_uuid();
+	entity_id.id = uuid_gen.gen_uuid();
 	return tctdbputkeep(entity_db, 
 		(const void*)&entity_id, sizeof(EntityID), 
 		initial_state.to_map());
@@ -231,15 +231,6 @@ bool EntityDB::get_entity(EntityID const& entity_id, Entity& entity)
 	entity.from_map(M.map);
 	return true;
 }
-
-//Generates a unique identifier
-EntityID EntityDB::generate_uuid()
-{
-	EntityID res;
-	res.id = rand();
-	return res;
-}
-
 
 //Updates an entity in place
 bool EntityDB::update_entity(

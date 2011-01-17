@@ -11,8 +11,9 @@
 #include <tcutil.h>
 #include <tctdb.h>
 
-#include "config.h"
 #include "constants.h"
+#include "config.h"
+#include "uuid_gen.h"
 #include "chunk.h"
 
 namespace Game
@@ -164,7 +165,7 @@ namespace Game
 	private:
 		
 		//Generates a unique identifier
-		EntityID generate_uuid();
+		UUIDGenerator uuid_gen;
 		
 		//The entity database
 		TCTDB*	entity_db;

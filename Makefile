@@ -29,13 +29,13 @@ builddir = obj
 datadir = data
 
 # preprocessor options to find all included files
-INC_PATH = -I$(srcdir) -I/usr/local/include
+INC_PATH = -I$(srcdir) -I/usr/local/include -I$(srcdir)/dSFMTparams
 
 # libraries link options ('-lm' is common to link with the math library)
 LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lz -lbz2 -lrt -pthread -ldl -lm -lc
 
 # other compilation options
-COMPILE_OPTS = -pthread
+COMPILE_OPTS = -pthread -msse2 -DDSFMT_MEXP=521 -DHAVE_SSE2
 
 # basic compiler warning options (for GOAL_EXE)
 BWARN_OPTS = 
