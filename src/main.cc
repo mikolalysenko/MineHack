@@ -309,7 +309,8 @@ void do_create_player(HttpEvent& ev)
 		return;
 	}
 	
-	if( game_instance->player_create(player_name) &&
+	EntityID player_id;
+	if( game_instance->player_create(player_name, player_id) &&
 		add_player_name(session.user_name, player_name) )
 	{
 		ajax_printf(ev.conn, 
@@ -319,7 +320,7 @@ void do_create_player(HttpEvent& ev)
 	else
 	{
 		//Roll back changes
-		game_instance->player_delete(player_name);
+		game_instance->player_delete(player_id);
 		remove_player_name(session.user_name, player_name);
 	
 		ajax_printf(ev.conn,
@@ -349,8 +350,11 @@ void do_join_game(HttpEvent& ev)
 		return;
 	}
 
-	if( game_instance->player_join(player_name) &&	
-		set_session_player(session_id, player_name) )
+
+	EntityID player_id;
+	if( game_instance->get_player_entity(player_name, player_id) &&
+		game_instance->player_join(player_id) &&	
+		set_session_player(session_id, player_id) )
 	{
 		ajax_printf(ev.conn,
 			"Ok\n"
@@ -358,7 +362,7 @@ void do_join_game(HttpEvent& ev)
 	}
 	else
 	{
-		game_instance->player_leave(player_name);
+		game_instance->player_leave(player_id);
 		ajax_error(ev.conn);
 	}
 
@@ -393,18 +397,20 @@ void do_delete_player(HttpEvent& ev)
 	SessionID	session_id;
 	string		player_name;
 	Session		session;
+	EntityID	player_id;
 	
 	if( !get_session_id(ev.req, session_id) ||
 		!get_string(ev.req, "player_name", player_name) ||
 		!get_session_data(session_id, session) ||
-		session.state != SessionState::PreJoinGame ) 
+		session.state != SessionState::PreJoinGame ||
+		!game_instance->get_player_entity(player_name, player_id) ||
+		!remove_player_name(session.user_name, player_name) ) 
 	{
 		ajax_error(ev.conn);
 		return;
 	}
 	
-	game_instance->player_delete(player_name);
-	remove_player_name(session.user_name, player_name);
+	game_instance->player_delete(player_id);
 	
 	ajax_printf(ev.conn,
 		"Ok\n"
@@ -448,7 +454,7 @@ void do_get_chunk(HttpEvent& ev)
 	{
 		//Extract the chunk
 		int len = game_instance->get_compressed_chunk(
-			session.player_name, *chunk_ptr, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
+			session.player_id, *chunk_ptr, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
 	
 		if(len < 0)
 			break;
@@ -494,7 +500,7 @@ void do_heartbeat(HttpEvent& ev)
 			break;
 	
 		//Add event
-		game_instance->handle_input(session.player_name, input);
+		game_instance->handle_input(session.player_id, input);
 		p 	+= d;
 		len -= d;
 	}
@@ -512,7 +518,7 @@ void do_heartbeat(HttpEvent& ev)
 	
 	{	//Generate client response
 		int mlen;
-		void * data = game_instance->heartbeat(session.player_name, mlen);
+		void * data = game_instance->heartbeat(session.player_id, mlen);
 	
 		if(data == NULL)
 		{

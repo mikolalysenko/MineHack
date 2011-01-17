@@ -15,6 +15,7 @@
 #include <tctdb.h>
 
 #include "misc.h"
+#include "chunk.h"
 #include "entity.h"
 
 using namespace std;
@@ -70,48 +71,92 @@ template<typename T>
 	return true;
 }
 
-
-bool Entity::from_map(const TCMAP* map)
+bool MonsterEntity::from_map(const TCMAP* map)
 {
-	int64_t type;
-	if(!get_int(map, "type", type))
-		return false;
-	base.type = (EntityType)type;
+	return true;
+}
 
-	int64_t state;
-	if(!get_int(map, "state", state))
-		return false;
-	base.state = (EntityState)state;
+void MonsterEntity::to_map(TCMAP* map) const
+{
+}
 
-	if(!get_double(map, "x", base.x))
+bool PlayerEntity::from_map(const TCMAP* map)
+{
+	const char* str = tcmapget2(map, "player_name");
+	int vsiz = strlen(str);
+	if(str == NULL || vsiz > PLAYER_NAME_MAX_LEN)
+		return false;
+	memcpy(player_name, str, vsiz);
+	player_name[vsiz] = '\0';
+	
+	return true;
+}
+
+void PlayerEntity::to_map(TCMAP* map) const
+{
+	tcmapput2(map, "player_name", player_name);
+}
+
+
+bool EntityBase::from_map(const TCMAP* map)
+{
+	int64_t tmp;
+	if(!get_int(map, "type", tmp))
+		return false;
+	type = (EntityType)tmp;
+	
+	if(!get_int(map, "active", tmp))
+		return false;
+	active = (tmp != 0);
+
+	if(!get_double(map, "x", x))
 		return false;	
-	if(!get_double(map, "y", base.y))
+	if(!get_double(map, "y", y))
 		return false;	
-	if(!get_double(map, "z", base.z))
+	if(!get_double(map, "z", z))
 		return false;
 		
-	if(!get_double(map, "pitch", base.pitch))
+	if(!get_double(map, "pitch", pitch))
 		return false;	
-	if(!get_double(map, "yaw", base.yaw))
+	if(!get_double(map, "yaw", yaw))
 		return false;	
-	if(!get_double(map, "roll", base.roll))
+	if(!get_double(map, "roll", roll))
 		return false;	
 
-	if(!get_int(map, "health", base.health))
+	if(!get_int(map, "health", health))
 		return false;
+	
+	return true;
+}
 
+void EntityBase::to_map(TCMAP* res) const
+{
+	insert_int		(res, "type",	(int64_t)type);
+	insert_int		(res, "active",	(int64_t)active);
 
+	insert_double	(res, "x", 		x);
+	insert_double	(res, "y", 		y);
+	insert_double	(res, "z", 		z);
+
+	insert_double	(res, "pitch", 	pitch);
+	insert_double	(res, "yaw", 	yaw);
+	insert_double	(res, "roll", 	roll);
+	
+	insert_int	  	(res, "health",	health);
+}
+
+bool Entity::from_map(const TCMAP* res)
+{
+	if(!base.from_map(res))
+		return false;
+		
 	switch(base.type)
 	{
 		case EntityType::Player:
-			if(!get_struct(map, "data", player))
-				return false;
-		break;
-		
+			return player.from_map(res);
+
 		case EntityType::Monster:
-			if(!get_struct(map, "data", monster))
-				return false;
-		break;
+			return monster.from_map(res);
 	}
 	
 	return true;
@@ -120,33 +165,24 @@ bool Entity::from_map(const TCMAP* map)
 TCMAP* Entity::to_map() const
 {
 	TCMAP* res = tcmapnew();
-
-	insert_int		(res, "type",	(int64_t)base.type);
-	insert_int		(res, "state",	(int64_t)base.state);
-
-	insert_double	(res, "x", 		base.x);
-	insert_double	(res, "y", 		base.y);
-	insert_double	(res, "z", 		base.z);
-
-	insert_double	(res, "pitch", 	base.pitch);
-	insert_double	(res, "yaw", 	base.yaw);
-	insert_double	(res, "roll", 	base.roll);
 	
-	insert_int	  	(res, "health",	base.health);
+	base.to_map(res);
 	
 	switch(base.type)
 	{
 		case EntityType::Player:
-			insert_struct(res, "data", player);
+			player.to_map(res);
 		break;
 		
 		case EntityType::Monster:
-			insert_struct(res, "data", monster);
+			monster.to_map(res);
 		break;
 	}
-	
+
 	return res;
+
 }
+
 
 EntityDB::EntityDB(string const& path)
 {
@@ -204,46 +240,66 @@ EntityID EntityDB::generate_uuid()
 }
 
 
-struct UserDelegate
+//Updates an entity in place
+bool EntityDB::update_entity(
+	EntityID const& entity_id, 
+	entity_update_func callback, 
+	void* user_data)
 {
-	void* 				context;
-	EntityIterFunc 		func;
-};
-
-int query_list_translator(const void* key, int ksize, TCMAP* columns, void* data)
-{
-	//Extract entity
-	Entity entity;
-	entity.entity_id = *((const EntityID*)key);
-	entity.from_map(columns);
-
-	UserDelegate* dg = (UserDelegate*)data;
-	return (int)dg->func(entity, dg->context);
+	while(true)
+	{
+		if(!tctdbtranbegin(entity_db))
+		{
+			return false;
+		}
+		
+		
+		ScopeTCMap M(tctdbget(entity_db, &entity_id, sizeof(EntityID)));
+		if(M.map == NULL)
+		{
+			tctdbtranabort(entity_db);
+			return false;
+		}
+		
+		Entity entity;
+		entity.from_map(M.map);
+		entity.entity_id = entity_id;
+		
+		int rc = (int)((*callback)(entity, user_data));
+		
+		if(rc & (int)EntityUpdateControl::Update)
+		{
+			ScopeTCMap M(entity.to_map());
+			tctdbput(entity_db, &entity_id, sizeof(EntityID), M.map);
+		}
+		else if(rc & (int)EntityUpdateControl::Delete)
+		{
+			tctdbout(entity_db, &entity_id, sizeof(EntityID));
+		}
+		
+		if(tctdbtrancommit(entity_db))
+			return true;
+	}
 }
 
+
+
 //Retrieves all entities in a list
-bool EntityDB::foreach_region(
-	EntityIterFunc	user_func,
-	void*			user_data,
-	Region const& 	r, 
-	uint8_t			state_flags,
-	uint8_t 		type_flags)
+bool EntityDB::foreach(
+	entity_update_func	user_func,
+	void*				user_data,
+	Region const& 		r, 
+	uint8_t 			type_flags,
+	bool				only_active)
 {
 	ScopeTCQuery Q(entity_db);
 	
-	//Add query information for state flags
-	if(state_flags)
-	{
-		for(int i=1; i<=(int)EntityState::MaxEntityState; i<<=1)
-		{
-			if(state_flags & i)
-			{
-				add_query_cond(Q, "state", TDBQCNUMOREQ, i);
-			}
-		}
-	}
-	
-	//Add additional query restriction on type flags
+	//Add range conditions to query
+	static const char* AXIS_LABEL = "x\0y\0z";
+	static const int COORD_MIN[] = { COORD_MIN_X, COORD_MIN_Y, COORD_MIN_Z };
+	static const int COORD_MAX[] = { COORD_MAX_X, COORD_MAX_Y, COORD_MAX_Z };
+
+	//Add query restriction on type flags
 	if(type_flags)
 	{
 		for(int i=1; i<=(int)EntityType::MaxEntityType; i<<=1)
@@ -254,18 +310,65 @@ bool EntityDB::foreach_region(
 			}
 		}
 	}
+
+	//Add active restriction
+	if(only_active)
+	{
+		tctdbqryaddcond(Q.query, "active", TDBQCSTREQ, "1");
+	}
 	
-	//Add conditions to query
-	add_query_cond(Q, "x", TDBQCNUMGE, r.lo[0]);
-	add_query_cond(Q, "x", TDBQCNUMLE, r.hi[0]);
-	add_query_cond(Q, "y", TDBQCNUMGE, r.lo[1]);
-	add_query_cond(Q, "y", TDBQCNUMLE, r.hi[1]);
-	add_query_cond(Q, "z", TDBQCNUMGE, r.lo[2]);
-	add_query_cond(Q, "z", TDBQCNUMLE, r.hi[2]);
+	for(int i=0; i<3; i++)
+	{
+		if(r.lo[i] > COORD_MIN[i])
+			add_query_cond(Q, AXIS_LABEL+(i<<1), TDBQCNUMGE, r.lo[i]);
+		
+		if(r.hi[i] < COORD_MAX[i])
+			add_query_cond(Q, AXIS_LABEL+(i<<1), TDBQCNUMLE, r.hi[i]);
+	}
 	
-	//Run the delegate
+	//Define the call back structure locally
+	struct UserDelegate
+	{
+		void* 				context;
+		entity_update_func 	func;
+		
+		static int call(const void* key, int ksize, TCMAP* columns, void* data)
+		{
+			//Extract entity
+			Entity entity;
+			entity.entity_id = *((const EntityID*)key);
+			entity.from_map(columns);
+
+			UserDelegate* dg = (UserDelegate*)data;
+			return (int)dg->func(entity, dg->context);
+		}
+
+	};
+
+	//Construct delegate
 	UserDelegate dg = { user_data, user_func };
-	return tctdbqryproc(Q.query, query_list_translator, (void*)&dg);
+	
+	//Execute
+	return tctdbqryproc(Q.query, UserDelegate::call, &dg);
+}
+
+//Retrieves a player (if one exists)
+bool EntityDB::get_player(std::string const& player_name, EntityID& res)
+{
+	ScopeTCQuery Q(entity_db);
+	
+	tctdbqryaddcond(Q.query, "player_name", TDBQCSTREQ, player_name.c_str());
+	
+	ScopeTCList L(tctdbqrysearch(Q.query));
+	
+	int sz = 0;
+	ScopeFree E(tclistpop(L.list, &sz));
+	if(sz != sizeof(EntityID))
+		return false;
+	
+	res = *((EntityID*)E.ptr);
+	
+	return true;
 }
 
 };

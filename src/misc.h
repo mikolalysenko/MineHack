@@ -46,14 +46,14 @@ struct ScopeFree
 	void* ptr;
 	
 	ScopeFree(void* p) : ptr(p) {}
-	ScopeFree() { std::free(ptr); }
+	ScopeFree() { if(ptr != NULL) std::free(ptr); }
 };
 
 template<class T> struct ScopeDelete
 {
 	T* ptr;
 	ScopeDelete(T* p) : ptr(p) {}
-	~ScopeDelete() { delete ptr; }
+	~ScopeDelete() { if(ptr != NULL) delete ptr; }
 };
 
 

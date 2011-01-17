@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "login.h"
+#include "entity.h"
 
 namespace Server
 {
@@ -36,9 +37,8 @@ namespace Server
 	{
 		//The session state
 		SessionState	state;
-	
 		std::string 	user_name;
-		std::string		player_name;
+		Game::EntityID	player_id;
 	};
 
 	void init_sessions();
@@ -49,11 +49,9 @@ namespace Server
 		
 	bool logged_in(std::string const& user_name);
 	
-	bool get_player_session(std::string const& player_name, SessionID&);
-
 	bool create_session(std::string const& user_name, SessionID&);
 	
-	bool set_session_player(SessionID const&, std::string const& player_name);
+	bool set_session_player(SessionID const&, Game::EntityID const& player_id);
 	
 	bool get_session_data(SessionID const&, Session&);
 	

@@ -6,6 +6,7 @@
 
 #include "session.h"
 #include "misc.h"
+#include "entity.h"
 
 using namespace std;
 
@@ -22,7 +23,7 @@ static pthread_rwlock_t session_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 //Indexes
 static map<string, SessionID>	user_table;
-static map<string, SessionID>	player_table;
+static map<Game::EntityID, SessionID>	player_table;
 static map<SessionID, Session>	session_table;
 
 void init_sessions()
@@ -41,19 +42,6 @@ bool logged_in(const string& name)
 	return user_table.find(name) != user_table.end();
 }
 
-bool get_player_session(string const& player_name, SessionID& result)
-{
-	ReadLock L(&session_lock);
-	
-	auto iter = player_table.find(player_name);
-	if(iter == player_table.end())
-		return false;
-	
-	result = (*iter).second;
-	return true;
-}
-
-
 bool create_session(const string& user_name, SessionID& session_id)
 {
 	if( user_name.size() > USER_NAME_MAX_LEN )
@@ -66,7 +54,7 @@ bool create_session(const string& user_name, SessionID& session_id)
 	Session s;
 	s.state			= SessionState::PreJoinGame;
 	s.user_name		= user_name;
-	s.player_name	= "";
+	s.player_id.clear();
 	
 	{	WriteLock L(&session_lock);
 		
@@ -97,7 +85,7 @@ void delete_session(const SessionID& session_id)
 		if(u_iter != user_table.end())
 			user_table.erase(u_iter);
 		
-		auto p_iter = player_table.find(session.player_name);
+		auto p_iter = player_table.find(session.player_id);
 		if(p_iter != player_table.end())
 			player_table.erase(p_iter);
 	
@@ -105,18 +93,18 @@ void delete_session(const SessionID& session_id)
 	}
 }
 
-bool set_session_player(SessionID const& session_id, std::string const& player_name)
+bool set_session_player(SessionID const& session_id, Game::EntityID const& player_id)
 {
 	WriteLock L(&session_lock);
 	
 	auto iter = session_table.find(session_id);
 	if(	iter == session_table.end() ||
 		(*iter).second.state != SessionState::PreJoinGame ||
-		player_table.find(player_name) != player_table.end() )
+		player_table.find(player_id) != player_table.end() )
 		return false;
 
-	player_table[player_name] 	= session_id;
-	(*iter).second.player_name	= player_name;
+	player_table[player_id] 	= session_id;
+	(*iter).second.player_id	= player_id;
 	(*iter).second.state		= SessionState::InGame;
 	
 	return true;

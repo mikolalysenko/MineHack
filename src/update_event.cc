@@ -96,39 +96,27 @@ UpdateMailbox::~UpdateMailbox()
 }
 	
 //Sends an event to a terget
-void UpdateMailbox::send_event(string const& player_name, UpdateEvent const& up)
+void UpdateMailbox::send_event(EntityID const& player_id, UpdateEvent const& up)
 {
 	int len;
-	void* data = up.write(len);
-	if(data == NULL)
+	ScopeFree G(up.write(len));
+	if(G.ptr == NULL)
 		return;
-	
-	//Set scope handler for data
-	ScopeFree	data_guard(data);		
-		
-	cout << "writing event, len = " << len << ", data = ";
-	for(int i=0; i< len; i++)
-	{
-		cout << (int)((uint8_t*)data)[i] << ",";
-	}
-	cout << endl;
 	
 	//Lock database and add key	
 	{	SpinLock	guard(&lock);
-		tcmapputcat(mailboxes, (const void*)player_name.c_str(), player_name.size(), data, len);
+		tcmapputcat(mailboxes, &player_id, sizeof(EntityID), G.ptr, len);
 	}
 }
 		
 //Retrieves all events
-void* UpdateMailbox::get_events(string const& player_name, int& len)
+void* UpdateMailbox::get_events(EntityID const& player_id, int& len)
 {
 	void * result = NULL;
 	
 	{	SpinLock	guard(&lock);
 		
-		const void* data = tcmapget(mailboxes, 
-			(const void*)player_name.c_str(), player_name.size(), 
-			&len);
+		const void* data = tcmapget(mailboxes, &player_id, sizeof(EntityID), &len);
 			
 		if(data == NULL)
 			return NULL;
@@ -137,7 +125,7 @@ void* UpdateMailbox::get_events(string const& player_name, int& len)
 		result = malloc(len);
 		memcpy(result, data, len);
 		
-		tcmapout(mailboxes, (const void*)player_name.c_str(), player_name.size());
+		tcmapout(mailboxes, &player_id, sizeof(EntityID));
 	}
 	
 	return result;

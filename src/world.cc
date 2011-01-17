@@ -36,15 +36,11 @@ World::World()
 	
 	//Create entity database
 	entity_db = new EntityDB("data/entities.tc");
-	
-	//Create player database
-	player_db = new PlayerDB("data/players.tc");
 }
 
 //Clean up/saving stuff
 World::~World()
 {
-	delete player_db;
 	delete entity_db;
 	delete game_map;
 	delete world_gen;
@@ -52,123 +48,132 @@ World::~World()
 }
 
 //Creates a player
-bool World::player_create(string const& player_name)
+bool World::player_create(string const& player_name, EntityID& player_id)
 {
-	return player_db->create_player(player_name);
+	if(player_name.size() > PLAYER_NAME_MAX_LEN)
+		return false;
+
+	Entity player;
+	player.base.type	= EntityType::Player;
+	player.base.active	= false;
+	player.base.x		= PLAYER_START_X;
+	player.base.y		= PLAYER_START_Y;
+	player.base.z		= PLAYER_START_Z;
+	player.base.pitch	= 0;
+	player.base.yaw		= 0;
+	player.base.roll	= 0;
+	player.base.health	= 100;
+	
+	memcpy(player.player.player_name, player_name.c_str(), player_name.size());
+	player.player.player_name[player_name.size()] = 0;
+	
+	return entity_db->create_entity(player, player_id);
+}
+
+//Retrieves a player entity
+bool World::get_player_entity(string const& player_name, EntityID& player_id)
+{
+	return entity_db->get_player(player_name, player_id);
 }
 
 //Called to delete a player
-void World::player_delete(string const& player_name)
+void World::player_delete(EntityID const& player_id)
 {
-	player_db->remove_player(player_name);
+	entity_db->destroy_entity(player_id);
 }
 
-//Called when player joins game
-bool World::player_join(string const& player_name)
+//Attempt to add player to the game
+bool World::player_join(EntityID const& player_id)
 {
-	struct JoinAction
+	struct Join
 	{
 		bool success;
 	
-		static PlayerUpdate update(PlayerState& player_state, void* data)
+		static EntityUpdateControl call(Entity& entity, void* data)
 		{
-			JoinAction* action = (JoinAction*)data;
+			Join* J = (Join*)data;
 			
-			if(player_state.logged_in)
-			{
-				//Player already logged in
-				return PlayerUpdate::None;
+			if( entity.base.type != EntityType::Player ||
+				entity.base.active )
+			{	
+				return EntityUpdateControl::Continue;
 			}
 			else
 			{
-				//TODO: Create entity for player
-				
-				//Set initial state
-				player_state.logged_in		= true;
-				player_state.input_state	= 0;
-				
-				//Set success
-				action->success = true;
-				
-				//Return
-				return PlayerUpdate::Update;
+				entity.base.active = true;
+				J->success = true;
+				return EntityUpdateControl::Update;
 			}
 		}
 	};
 	
 	
-	JoinAction action;
-	action.success = false;
+	Join J = { false };
 	
-	if(!player_db->update_player(player_name, JoinAction::update, &action))
+	if(!entity_db->update_entity(player_id, Join::call, &J))
 		return false;
 		
-	return action.success;
+	return J.success;
 }
 
 
 //Handle a player leave event
-bool World::player_leave(std::string const& player_name)
+bool World::player_leave(EntityID const& player_id)
 {
-	struct LeaveAction
+	struct Leave
 	{
 		bool success;
 	
-		static PlayerUpdate update(PlayerState& player_state, void* data)
+		static EntityUpdateControl call(Entity& entity, void* data)
 		{
-			LeaveAction* action = (LeaveAction*)data;
+			Leave* L = (Leave*)data;
 			
-			if(player_state.logged_in)
-			{
-				//TODO: Remove player entity
-				
-				//Clear player state
-				player_state.entity_id.clear();
-				player_state.logged_in		= false;
-				player_state.input_state	= 0;
-				
-				//Set success
-				action->success = true;
-				
-				return PlayerUpdate::Update;
+			if( entity.base.type != EntityType::Player ||
+				!entity.base.active )
+			{	
+				return EntityUpdateControl::Continue;
 			}
 			else
 			{
-				return PlayerUpdate::None;
+				entity.base.active = false;
+				L->success = true;
+				return EntityUpdateControl::Update;
 			}
 		}
 	};
 	
 	
-	LeaveAction action;
-	action.success = false;
+	Leave L = { false };
 	
-	if(!player_db->update_player(player_name, LeaveAction::update, &action))
+	if(!entity_db->update_entity(player_id, Leave::call, &L))
 		return false;
-		
-	return action.success;
+	return L.success;
 }
 
 
 //Handles a client input event
 void World::handle_input(
-	string const& player_name, 
-	InputEvent const& ev)
+	EntityID const& player_id, 
+	InputEvent const& input)
 {
-	//TODO: Dispatch event here
 }
 
 
 
 //Retrieves a compressed chunk from the server
 int World::get_compressed_chunk(
-	string const& player_name,
+	EntityID const& player_id,
 	ChunkID const& chunk_id,
 	uint8_t* buf,
 	size_t buf_len)
 {
-	//TODO: Validate player coordinates
-
+	//Do sanity check on chunk request
+	Entity entity;
+	if( !entity_db->get_entity(player_id, entity) ||
+		entity.base.type != EntityType::Player )
+	{
+		return 0;
+	}
 
 	//Read the chunk from the map
 	Chunk chunk;
@@ -180,16 +185,16 @@ int World::get_compressed_chunk(
 	
 //Sends queued messages to client
 void* World::heartbeat(
-	string const& player_name,
+	EntityID const& player_id,
 	int& len)
 {
-	return player_updates.get_events(player_name, len);
+	return player_updates.get_events(player_id, len);
 }
 
 //Broadcasts an event to all players
 void World::broadcast_update(UpdateEvent const& update, Region const& r)
 {
-	//TODO: Implement this
+	//TODO: Implement
 }
 
 //Ticks the server

@@ -12,13 +12,16 @@
 #include <tcutil.h>
 
 #include "chunk.h"
+#include "entity.h"
 #include "input_event.h"
 #include "update_event.h"
 #include "worldgen.h"
 #include "map.h"
-#include "player.h"
 #include "config.h"
 
+#define PLAYER_START_X	(1 << 20)
+#define PLAYER_START_Y	(1 << 20)
+#define PLAYER_START_Z	(1 << 20)
 
 namespace Game
 {
@@ -31,31 +34,33 @@ namespace Game
 		World();
 		~World();
 		
-		//Player management events
-		bool player_create(std::string const& player_name);
-		void player_delete(std::string const& player_name);
-		bool player_join(std::string const& player_name);
-		bool player_leave(std::string const& player_name);
+		//Player management functions
+		bool player_create(std::string const& player_name, EntityID& player_id);
+		bool get_player_entity(std::string const& player_name, EntityID& player_id);
+		void player_delete(EntityID const& player_id);
+		bool player_join(EntityID const& player_id);
+		bool player_leave(EntityID const& player_id);
 		
 		//Adds an event to the server
 		void handle_input(
-			std::string const& player_name, 
+			EntityID const&, 
 			InputEvent const& ev);
 		
 		//Retrieves a compressed chunk from the server
 		int get_compressed_chunk(
-			std::string const& player_name,
+			EntityID const&,
 			ChunkID const&,
 			uint8_t* buf,
 			size_t buf_len);
 		
 		//Processes queued messages for a particular client
 		void* heartbeat(
-			std::string const& player_name,
-			int& len);
+			EntityID const&,
+			int&);
 		
 		//Ticks the server
 		void tick();
+		
 		
 	private:
 	
@@ -70,9 +75,6 @@ namespace Game
 		
 		//Entity database
 		EntityDB		*entity_db;
-
-		//Player database
-		PlayerDB		*player_db;
 
 		//Mailbox for player updates
 		UpdateMailbox	player_updates;

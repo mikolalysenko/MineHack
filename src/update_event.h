@@ -83,12 +83,13 @@ namespace Game
 		~UpdateMailbox();
 	
 		//Sends an event to a terget
-		void send_event(std::string const&, UpdateEvent const&);
+		void send_event(EntityID const& target, UpdateEvent const&);
 		
 		//Retrieves all events
-		void* get_events(std::string const&, int& len);
+		void* get_events(EntityID const& target, int& len);
 		
-		void clear_events(std::string const&);
+		//Clears all pending events for target entity
+		void clear_events(EntityID const& target);
 		
 	private:
 		
