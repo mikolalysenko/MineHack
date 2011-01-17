@@ -9,6 +9,8 @@
 #include <cstdio>
 
 #include "mongoose.h"
+
+#include "constants.h"
 #include "login.h"
 #include "session.h"
 #include "misc.h"
@@ -19,14 +21,6 @@ using namespace std;
 using namespace Server;
 using namespace Game;
 
-//Size of an integer query variable
-#define INT_QUERY_LEN		32
-
-//Length of the console command buffer
-#define COMMAND_BUFFER_LEN	256
-
-//Maximum size for an event packet
-#define EVENT_PACKET_SIZE	(1<<16)
 
 static const char *options[] = {
   "document_root", "www",
@@ -429,7 +423,7 @@ void do_get_chunk(HttpEvent& ev)
 	HttpBlobReader blob(ev.conn);
 	
 	//Read out the session id
-	if(blob.len <= sizeof(SessionID) + 4)
+	if(blob.len <= sizeof(SessionID) + sizeof(ChunkID))
 	{
 		ajax_error(ev.conn);
 		return;
@@ -650,7 +644,7 @@ void server_loop()
 				msg_buf[buf_ptr++] = c;
 		}
 		
-		usleep(1);
+		usleep(SLEEP_TIME);
 	}
 }
 

@@ -81,6 +81,10 @@ namespace Game
 		
 		Config			*config;
 		
+		//Input handlers
+		void handle_player_tick(EntityID const& player_id, PlayerEvent const& input);
+		void handle_chat(EntityID const& player_id, ChatEvent const& input);
+		
 		//Broadcasts an update to all players in radius
 		void broadcast_update(
 			UpdateEvent const&, 

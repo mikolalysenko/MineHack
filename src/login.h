@@ -4,14 +4,7 @@
 #include <vector>
 #include <string>
 
-//Constants for different buffer sizes
-
-#define PASSWORD_HASH_LEN		64
-#define USER_NAME_MAX_LEN		20
-#define USER_NAME_MIN_LEN		3
-
-//Player name info
-#define PLAYER_NAME_MAX_LEN		20
+#include "constants.h"
 
 namespace Server
 {

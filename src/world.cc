@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "constants.h"
 #include "misc.h"
 #include "chunk.h"
 #include "world.h"
@@ -35,7 +36,7 @@ World::World()
 	game_map = new Map(world_gen, "data/map.tc");
 	
 	//Create entity database
-	entity_db = new EntityDB("data/entities.tc");
+	entity_db = new EntityDB("data/entities.tc", config);
 }
 
 //Clean up/saving stuff
@@ -151,15 +152,6 @@ bool World::player_leave(EntityID const& player_id)
 }
 
 
-//Handles a client input event
-void World::handle_input(
-	EntityID const& player_id, 
-	InputEvent const& input)
-{
-}
-
-
-
 //Retrieves a compressed chunk from the server
 int World::get_compressed_chunk(
 	EntityID const& player_id,
@@ -167,7 +159,7 @@ int World::get_compressed_chunk(
 	uint8_t* buf,
 	size_t buf_len)
 {
-	//Do sanity check on chunk request
+	//TODO: Do sanity check on chunk request
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
 		entity.base.type != EntityType::Player )
@@ -194,13 +186,123 @@ void* World::heartbeat(
 //Broadcasts an event to all players
 void World::broadcast_update(UpdateEvent const& update, Region const& r)
 {
-	//TODO: Implement
+	struct Broadcast
+	{
+		const UpdateEvent*	update;
+		UpdateMailbox*		mailbox;
+		
+		static EntityUpdateControl call(Entity& entity, void* data)
+		{
+			Broadcast* broadcast = (Broadcast*)data;
+			broadcast->mailbox->send_event(entity.entity_id, *broadcast->update);
+			return EntityUpdateControl::Continue;
+		}
+	};
+	
+	Broadcast B = { &update, &player_updates };
+	entity_db->foreach(Broadcast::call, &B, r, (uint8_t)EntityType::Player, true);
 }
 
 //Ticks the server
 void World::tick()
 {
-	//TODO: Implement this
+	tick_count++;
+	
+	//TODO: Implement game tick stuff here
 }
+
+
+//Handles a client input event
+void World::handle_input(
+	EntityID const& player_id, 
+	InputEvent const& input)
+{
+	switch(input.type)
+	{
+		case InputEventType::PlayerTick:
+			handle_player_tick(player_id, input.player_event);
+		break;
+		
+		case InputEventType::Chat:
+			cout << "Got chat event: " << player_id.id << endl;
+			handle_chat(player_id, input.chat_event);
+		break;
+	}
+}
+
+void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& input)
+{
+	struct PlayerTick
+	{
+		const PlayerEvent* input;
+		uint64_t tick_count;
+		bool out_of_sync;
+		
+		static EntityUpdateControl call(Entity& entity, void* data)	
+		{
+			PlayerTick* player_tick 	= (PlayerTick*)data;
+			PlayerEntity* player 		= &entity.player;
+			const PlayerEvent* input	= player_tick->input;
+			
+			if(	abs(entity.base.x - input->x) > POSITION_RESYNC_RADIUS ||
+				abs(entity.base.y - input->y) > POSITION_RESYNC_RADIUS ||
+				abs(entity.base.z - input->z) > POSITION_RESYNC_RADIUS ||
+				player_tick->tick_count < input->tick ||
+				input->tick < player_tick->tick_count - TICK_RESYNC_TIME ||
+				input->tick < player->net_last_tick )
+			{
+				player_tick->out_of_sync = true;
+				return EntityUpdateControl::Continue;
+			}
+						
+			//Upate player network state
+			player->net_last_tick	= input->tick;
+			player->net_x			= input->x;
+			player->net_y			= input->y;
+			player->net_z			= input->z;
+			player->net_pitch		= input->pitch;
+			player->net_yaw			= input->yaw;
+			player->net_roll		= input->roll;
+			player->net_input		= input->input_state;
+			
+			return EntityUpdateControl::Update;
+		}
+	};
+	
+	
+	PlayerTick T = { &input, tick_count, false };
+	entity_db->update_entity(player_id, PlayerTick::call, &T);
+	
+	if(T.out_of_sync)
+	{
+		//TODO: Send a packet to resynchronize player
+	}
+}
+
+
+void World::handle_chat(EntityID const& player_id, ChatEvent const& input)
+{
+	Entity entity;
+	if(!entity_db->get_entity(player_id, entity))
+		return;
+	
+	UpdateEvent update;
+	update.type = UpdateEventType::Chat;
+	
+	update.chat_event.name_len = strlen(entity.player.player_name);
+	memcpy(update.chat_event.name, entity.player.player_name, update.chat_event.name_len);
+	update.chat_event.name[update.chat_event.name_len] = '\0';
+	
+	update.chat_event.msg_len = input.len;
+	memcpy(update.chat_event.msg, input.msg, input.len);
+	update.chat_event.msg[input.len] = '\0';
+	
+	
+	Region r(	entity.base.x - CHAT_RADIUS, entity.base.y - CHAT_RADIUS, entity.base.z - CHAT_RADIUS,  
+				entity.base.x + CHAT_RADIUS, entity.base.y + CHAT_RADIUS, entity.base.z + CHAT_RADIUS); 
+				
+	broadcast_update(update, r);
+}
+
 
 };

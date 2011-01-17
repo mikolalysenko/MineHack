@@ -36,10 +36,10 @@ namespace Game
 	struct UpdateChatEvent
 	{
 		uint8_t name_len;
-		char name[USER_NAME_MAX_LEN];
+		char name[PLAYER_NAME_MAX_LEN + 1];
 		
 		uint8_t msg_len;
-		char msg[CHAT_LINE_MAX_LEN];
+		char msg[CHAT_LINE_MAX_LEN + 1];
 
 		void* write(int& len) const;
 	};

@@ -11,8 +11,8 @@
 #include <tcutil.h>
 #include <tctdb.h>
 
-
-#include "login.h"
+#include "config.h"
+#include "constants.h"
 #include "chunk.h"
 
 namespace Game
@@ -54,6 +54,12 @@ namespace Game
 	{
 		//Player name
 		char		player_name[PLAYER_NAME_MAX_LEN + 1];
+
+		//Network state for player
+		uint64_t	net_last_tick;
+		double		net_x, net_y, net_z;
+		float		net_pitch, net_yaw, net_roll;
+		int			net_input;
 		
 		//Database serialization
 		bool 	from_map(const TCMAP*);
@@ -127,7 +133,7 @@ namespace Game
 	struct EntityDB
 	{
 		//Constructor/destructor stuff
-		EntityDB(std::string const& filename);
+		EntityDB(std::string const& filename, Config* config);
 		~EntityDB();
 		
 		//Creates an entity

@@ -14,6 +14,7 @@
 #include <tcutil.h>
 #include <tctdb.h>
 
+#include "constants.h"
 #include "misc.h"
 #include "chunk.h"
 #include "entity.h"
@@ -184,7 +185,7 @@ TCMAP* Entity::to_map() const
 }
 
 
-EntityDB::EntityDB(string const& path)
+EntityDB::EntityDB(string const& path, Config* config)
 {
 	//Create db
 	entity_db = tctdbnew();
