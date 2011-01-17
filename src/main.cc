@@ -309,9 +309,8 @@ void do_create_player(HttpEvent& ev)
 		return;
 	}
 	
-	//TODO: Add player record
-	
-	if( add_player_name(session.user_name, player_name) )
+	if( game_instance->player_create(player_name) &&
+		add_player_name(session.user_name, player_name) )
 	{
 		ajax_printf(ev.conn, 
 			"Ok\n"
@@ -319,8 +318,8 @@ void do_create_player(HttpEvent& ev)
 	}
 	else
 	{
-		//TODO: Roll back changes
-	
+		//Roll back changes
+		game_instance->player_delete(player_name);
 		remove_player_name(session.user_name, player_name);
 	
 		ajax_printf(ev.conn,
@@ -350,7 +349,7 @@ void do_join_game(HttpEvent& ev)
 		return;
 	}
 
-	if( game_instance->add_player(player_name) &&	
+	if( game_instance->player_join(player_name) &&	
 		set_session_player(session_id, player_name) )
 	{
 		ajax_printf(ev.conn,
@@ -359,7 +358,7 @@ void do_join_game(HttpEvent& ev)
 	}
 	else
 	{
-		game_instance->remove_player(player_name);
+		game_instance->player_leave(player_name);
 		ajax_error(ev.conn);
 	}
 
@@ -404,8 +403,7 @@ void do_delete_player(HttpEvent& ev)
 		return;
 	}
 	
-	//TODO: Remove player from database
-
+	game_instance->player_delete(player_name);
 	remove_player_name(session.user_name, player_name);
 	
 	ajax_printf(ev.conn,
@@ -496,7 +494,7 @@ void do_heartbeat(HttpEvent& ev)
 			break;
 	
 		//Add event
-		game_instance->add_event(session.player_name, input);
+		game_instance->handle_input(session.player_name, input);
 		p 	+= d;
 		len -= d;
 	}

@@ -17,7 +17,7 @@ namespace Game
 		Config(std::string const& filename);
 		
 		//closes the database
-		void shutdown();
+		~Config();
 		
 		//reading functions to get values from the database
 		int readInt(std::string const& key);

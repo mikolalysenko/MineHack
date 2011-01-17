@@ -27,6 +27,7 @@ namespace Game
 	{
 		//Map constructor
 		Map(WorldGen *w, std::string const& filename);
+		~Map();
 		
 		//Retrieves the specific chunk
 		void get_chunk(ChunkID const&, Chunk* res);
@@ -37,8 +38,6 @@ namespace Game
 		//Gets a block from a chunk
 		Block get_block(int x, int y, int z);
 		
-		//Stops the map
-		void shutdown();
 		
 	private:
 		TCHDB* map_db;

@@ -78,6 +78,11 @@ bool Entity::from_map(const TCMAP* map)
 		return false;
 	base.type = (EntityType)type;
 
+	int64_t state;
+	if(!get_int(map, "state", state))
+		return false;
+	base.state = (EntityState)state;
+
 	if(!get_double(map, "x", base.x))
 		return false;	
 	if(!get_double(map, "y", base.y))
@@ -117,6 +122,7 @@ TCMAP* Entity::to_map() const
 	TCMAP* res = tcmapnew();
 
 	insert_int		(res, "type",	(int64_t)base.type);
+	insert_int		(res, "state",	(int64_t)base.state);
 
 	insert_double	(res, "x", 		base.x);
 	insert_double	(res, "y", 		base.y);
@@ -220,9 +226,22 @@ bool EntityDB::foreach_region(
 	EntityIterFunc	user_func,
 	void*			user_data,
 	Region const& 	r, 
+	uint8_t			state_flags,
 	uint8_t 		type_flags)
 {
 	ScopeTCQuery Q(entity_db);
+	
+	//Add query information for state flags
+	if(state_flags)
+	{
+		for(int i=1; i<=(int)EntityState::MaxEntityState; i<<=1)
+		{
+			if(state_flags & i)
+			{
+				add_query_cond(Q, "state", TDBQCNUMOREQ, i);
+			}
+		}
+	}
 	
 	//Add additional query restriction on type flags
 	if(type_flags)

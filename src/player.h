@@ -4,14 +4,13 @@
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <cstdlib>
 
-#include "inventory.h"
+#include <tcutil.h>
+#include <tchdb.h>
 
-#include "session.h"
-
+#include "entity.h"
 #include "update_event.h"
-
-//Maximum name for a player/avatar
 
 //Player input constants
 #define INPUT_FORWARD		(1<<0)
@@ -23,32 +22,52 @@
 
 namespace Game
 {
-	//The player data structure
-	struct Player
+	//The player state data structure
+	//Stores both persistent information about player as well as network client data
+	struct PlayerState
 	{
-		float max_block_distance;
+		//Player entity id
+		EntityID			entity_id;
 	
-		//Player name
-		std::string			name;
-		
-		//Player position
-		double				pos[3];
-		
-		//View direction
-		float				pitch, yaw;
-		
 		//Current key presses
 		int 				input_state;
 		
-		Player(std::string const& n) :
-			name(n),
-			pitch(0),
-			yaw(0),
-			max_block_distance(10000000)
-		{ pos[0] = (1<<20); pos[1] = (1<<20); pos[2] = (1<<20); }
+		//If set, player is logged in
+		bool 				logged_in;
+	};
+	
+	//Player iterator return value
+	enum class PlayerUpdate : int
+	{
+		None	= 0,
+		Update	= (1 << 0),
+		Delete	= (1 << 1)
+	};
+	
+	//Player update call back
+	typedef PlayerUpdate (*update_player_callback)(PlayerState& state, void* user_data);
+	
+	//The player database
+	struct PlayerDB
+	{
+		PlayerDB(std::string const& path);
+		~PlayerDB();
+	
+		//Creates a player record
+		bool create_player(std::string const& player_name);
 		
-		~Player()
-		{ }
+		//Removes a player
+		void remove_player(std::string const& player_name);
+		
+		//Retrieves player state
+		bool get_state(std::string const& player_name, PlayerState& state);
+		
+		//Updates the player state
+		bool update_player(std::string const& player_name, update_player_callback callback, void* user_data);		
+		
+	private:
+	
+		TCHDB*	player_db;
 	};
 };
 

@@ -39,9 +39,18 @@ namespace Game
 		NoType	= 0,
 		
 		Player	= (1 << 0),
-		Monster	= (1 << 1),
+		Monster = (1 << 1),
 		
 		MaxEntityType
+	};
+	
+	enum class EntityState : std::uint8_t
+	{
+		Alive		= (1 << 0),
+		Dead		= (1 << 1),
+		Inactive	= (1 << 2),
+		
+		MaxEntityState
 	};
 	
 	//Player specific entity data
@@ -60,6 +69,9 @@ namespace Game
 	{
 		//Entity type
 		EntityType	type;
+		
+		//Entity state
+		EntityState	state;
 	
 		//Entity position
 		double x, y, z;
@@ -74,8 +86,10 @@ namespace Game
 	//An entity object
 	struct Entity
 	{
+		//The entity id
 		EntityID	entity_id;
 	
+		//Entity type base information
 		EntityBase	base;
 		
 		union
@@ -124,6 +138,7 @@ namespace Game
 			EntityIterFunc func, 
 			void* data, 
 			Region const& region, 
+			uint8_t state_filter = (uint8_t)EntityState::Alive | (uint8_t)EntityState::Dead,
 			uint8_t type_filter = 0);
 	
 	private:

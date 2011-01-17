@@ -17,6 +17,13 @@ Config::Config(std::string const& filename)
 	tchdbopen(config_db, filename.c_str(), HDBOWRITER | HDBOCREAT);
 }
 
+
+Config::~Config()
+{
+	tchdbclose(config_db);
+	tchdbdel(config_db);
+}
+
 int Config::readInt(std::string const& key)
 {
 	int retval = 0;
@@ -36,10 +43,5 @@ void Config::storeInt(int i, std::string const& key)
 		(void*)&i, sizeof(int));
 }
 
-void Config::shutdown()
-{
-	tchdbclose(config_db);
-	tchdbdel(config_db);
-}
 
 };

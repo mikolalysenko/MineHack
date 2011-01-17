@@ -39,7 +39,7 @@ Map::Map(WorldGen* gen, string const& filename) : world_gen(gen)
 	tchdbopen(map_db, filename.c_str(), HDBOWRITER | HDBOCREAT);
 }
 
-void Map::shutdown()
+Map::~Map()
 {
 	tchdbclose(map_db);
 	tchdbdel(map_db);
