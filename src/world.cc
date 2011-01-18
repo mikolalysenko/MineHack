@@ -193,14 +193,18 @@ void World::broadcast_update(UpdateEvent const& update, Region const& r)
 		
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
+			cout << "broadcasting to: " << entity.entity_id.id << endl;
+		
 			Broadcast* broadcast = (Broadcast*)data;
 			broadcast->mailbox->send_event(entity.entity_id, *broadcast->update);
 			return EntityUpdateControl::Continue;
 		}
 	};
 	
+	cout << "Broadcasting chat event" << endl;
+	
 	Broadcast B = { &update, &player_updates };
-	entity_db->foreach(Broadcast::call, &B, r, (uint8_t)EntityType::Player, true);
+	entity_db->foreach(Broadcast::call, &B, Region(), (uint8_t)EntityType::Player, true);
 }
 
 //Ticks the server
@@ -283,7 +287,9 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 void World::handle_chat(EntityID const& player_id, ChatEvent const& input)
 {
 	Entity entity;
-	if(!entity_db->get_entity(player_id, entity))
+	if( !entity_db->get_entity(player_id, entity) ||
+		!entity.base.active ||
+		entity.base.type != EntityType::Player )
 		return;
 	
 	UpdateEvent update;

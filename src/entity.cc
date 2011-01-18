@@ -133,7 +133,7 @@ bool EntityBase::from_map(const TCMAP* map)
 void EntityBase::to_map(TCMAP* res) const
 {
 	insert_int		(res, "type",	(int64_t)type);
-	insert_int		(res, "active",	(int64_t)active);
+	insert_int		(res, "active",	(int64_t)(active != 0));
 
 	insert_double	(res, "x", 		x);
 	insert_double	(res, "y", 		y);
@@ -261,6 +261,7 @@ bool EntityDB::update_entity(
 		
 		if(rc & (int)EntityUpdateControl::Update)
 		{
+			cout << "updating entity" << endl;
 			ScopeTCMap M(entity.to_map());
 			tctdbput(entity_db, &entity_id, sizeof(EntityID), M.map);
 		}
@@ -311,11 +312,12 @@ bool EntityDB::foreach(
 	
 	for(int i=0; i<3; i++)
 	{
-		if(r.lo[i] > COORD_MIN[i])
-			add_query_cond(Q, AXIS_LABEL+(i<<1), TDBQCNUMGE, r.lo[i]);
-		
-		if(r.hi[i] < COORD_MAX[i])
-			add_query_cond(Q, AXIS_LABEL+(i<<1), TDBQCNUMLE, r.hi[i]);
+		if(r.lo[i] == COORD_MIN[i] && r.hi[i] == COORD_MAX[i])
+			continue;
+			
+		stringstream ss;
+		ss << r.lo[i] << ' ' << r.hi[i];
+		tctdbqryaddcond(Q.query, AXIS_LABEL+(i<<1), TDBQCNUMBT, ss.str().c_str());
 	}
 	
 	//Define the call back structure locally
