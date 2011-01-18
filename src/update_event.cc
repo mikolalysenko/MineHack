@@ -131,3 +131,11 @@ void* UpdateMailbox::get_events(EntityID const& player_id, int& len)
 	return result;
 }
 
+//Sends an event to a terget
+void UpdateMailbox::clear_events(EntityID const& player_id)
+{
+	SpinLock	guard(&lock);
+	tcmapout(mailboxes, &player_id, sizeof(EntityID));
+}
+
+

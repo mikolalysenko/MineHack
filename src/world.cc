@@ -168,7 +168,7 @@ int World::get_compressed_chunk(
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
 		entity.base.type != EntityType::Player ||
-		!entity.active )
+		!entity.base.active )
 	{
 		return 0;
 	}
