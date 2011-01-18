@@ -150,6 +150,9 @@ bool World::player_leave(EntityID const& player_id)
 	
 	if(!entity_db->update_entity(player_id, Leave::call, &L))
 		return false;
+	if(L.success)
+		player_updates.clear_events(player_id);
+	
 	return L.success;
 }
 
@@ -164,7 +167,8 @@ int World::get_compressed_chunk(
 	//TODO: Do sanity check on chunk request
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
-		entity.base.type != EntityType::Player )
+		entity.base.type != EntityType::Player ||
+		!entity.active )
 	{
 		return 0;
 	}
@@ -183,6 +187,12 @@ void* World::heartbeat(
 	int& len)
 {
 	return player_updates.get_events(player_id, len);
+}
+
+//Sends a resynchronize packet to the player
+void World::resync_player(EntityID const& player_id)
+{
+	//TODO: Post a player resychronization message to the target player
 }
 
 //Broadcasts an event to all players
@@ -214,7 +224,20 @@ void World::tick()
 {
 	tick_count++;
 	
-	//TODO: Implement game tick stuff here
+	//The entity loop:  Updates all entities in the game
+	struct EntityHandler
+	{
+		World* world;
+		
+		static EntityUpdateControl call(Entity& entity, void* data)
+		{
+			return EntityUpdateControl::Continue;
+		}
+	};
+	
+	//Traverse all entities
+	EntityHandler H = { this };
+	entity_db->foreach(EntityHandler::call, &H); 
 }
 
 
@@ -249,7 +272,11 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 			PlayerTick* player_tick 	= (PlayerTick*)data;
 			PlayerEntity* player 		= &entity.player;
 			const PlayerEvent* input	= player_tick->input;
+
+			//Set player controls			
+			player->net_input		= input->input_state;
 			
+			//Do a sanity check on the player position
 			if(	abs(entity.base.x - input->x) > POSITION_RESYNC_RADIUS ||
 				abs(entity.base.y - input->y) > POSITION_RESYNC_RADIUS ||
 				abs(entity.base.z - input->z) > POSITION_RESYNC_RADIUS ||
@@ -269,7 +296,6 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 			player->net_pitch		= input->pitch;
 			player->net_yaw			= input->yaw;
 			player->net_roll		= input->roll;
-			player->net_input		= input->input_state;
 			
 			return EntityUpdateControl::Update;
 		}
@@ -281,7 +307,7 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 	
 	if(T.out_of_sync)
 	{
-		//TODO: Send a packet to resynchronize player
+		resync_player(player_id);
 	}
 }
 
@@ -294,6 +320,7 @@ void World::handle_chat(EntityID const& player_id, ChatEvent const& input)
 		entity.base.type != EntityType::Player )
 		return;
 	
+	//Unpack chat event
 	UpdateEvent update;
 	update.type = UpdateEventType::Chat;
 	
@@ -305,10 +332,11 @@ void World::handle_chat(EntityID const& player_id, ChatEvent const& input)
 	memcpy(update.chat_event.msg, input.msg, input.len);
 	update.chat_event.msg[input.len] = '\0';
 	
-	
+	//Construct region
 	Region r(	entity.base.x - CHAT_RADIUS, entity.base.y - CHAT_RADIUS, entity.base.z - CHAT_RADIUS,  
 				entity.base.x + CHAT_RADIUS, entity.base.y + CHAT_RADIUS, entity.base.z + CHAT_RADIUS); 
-				
+	
+	//Push the update
 	broadcast_update(update, r);
 }
 

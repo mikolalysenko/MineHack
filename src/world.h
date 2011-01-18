@@ -77,6 +77,7 @@ namespace Game
 		//Mailbox for player updates
 		UpdateMailbox	player_updates;
 		
+		//Configuration stuff
 		Config			*config;
 		
 		//Input handlers
@@ -87,6 +88,9 @@ namespace Game
 		void broadcast_update(
 			UpdateEvent const&, 
 			Region const& r);
+			
+		//Sends a resynchronize packet to the target player
+		void resync_player(EntityID const&);
 	};
 };
 
