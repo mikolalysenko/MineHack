@@ -12,6 +12,8 @@
 #include "constants.h"
 #include "misc.h"
 #include "chunk.h"
+#include "entity.h"
+#include "entity_db.h"
 #include "world.h"
 
 using namespace std;
@@ -204,7 +206,7 @@ void World::broadcast_update(UpdateEvent const& update, Region const& r)
 	cout << "Broadcasting chat event" << endl;
 	
 	Broadcast B = { &update, &player_updates };
-	entity_db->foreach(Broadcast::call, &B, Region(), (uint8_t)EntityType::Player, true);
+	entity_db->foreach(Broadcast::call, &B, r, (uint8_t)EntityType::Player, true);
 }
 
 //Ticks the server

@@ -56,6 +56,9 @@
 //Radius for chat events
 #define CHAT_RADIUS				128
 
+//Bounds on chat line
+#define CHAT_LINE_MAX_LEN		128
+
 //Radius beyond which the client needs to be resynchronized
 #define POSITION_RESYNC_RADIUS	8
 
@@ -65,13 +68,8 @@
 #define PLAYER_START_Y			(1 << 20)
 #define PLAYER_START_Z			(1 << 20)
 
-
-//Bounds on chat
-#define CHAT_LINE_MAX_LEN		128
-
 //Sleep time for the main loop
 #define SLEEP_TIME				40
-
 
 //Size of an integer query variable
 #define INT_QUERY_LEN			32
@@ -81,6 +79,7 @@
 
 //Maximum size for an event packet
 #define EVENT_PACKET_SIZE		(1<<16)
+
 
 #endif
 

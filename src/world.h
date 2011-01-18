@@ -11,17 +11,15 @@
 
 #include <tcutil.h>
 
+#include "constants.h"
 #include "chunk.h"
 #include "entity.h"
+#include "entity_db.h"
 #include "input_event.h"
 #include "update_event.h"
 #include "worldgen.h"
 #include "map.h"
 #include "config.h"
-
-#define PLAYER_START_X	(1 << 20)
-#define PLAYER_START_Y	(1 << 20)
-#define PLAYER_START_Z	(1 << 20)
 
 namespace Game
 {
