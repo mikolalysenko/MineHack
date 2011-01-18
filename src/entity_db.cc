@@ -43,13 +43,10 @@ EntityDB::EntityDB(string const& path, Config* config)
 	tctdbgenuid(entity_db);
 	
 	//Set indices
-	tctdbsetindex(entity_db, "x", TDBITDECIMAL);
-	tctdbsetindex(entity_db, "y", TDBITDECIMAL);
-	tctdbsetindex(entity_db, "z", TDBITDECIMAL);
-	
-	tctdbsetindex(entity_db, "player_name", TDBITQGRAM);
-
-
+	tctdbsetindex(entity_db, "bucket", TDBITLEXICAL | TDBITKEEP);
+	tctdbsetindex(entity_db, "player_name", TDBITLEXICAL  | TDBITKEEP);
+	tctdbsetindex(entity_db, "type", TDBITLEXICAL | TDBITKEEP);
+	tctdbsetindex(entity_db, "active", TDBITLEXICAL | TDBITKEEP);
 }
 
 
@@ -137,49 +134,107 @@ bool EntityDB::foreach(
 	entity_update_func	user_func,
 	void*				user_data,
 	Region const& 		r, 
-	uint8_t 			type_flags,
+	vector<EntityType>	types,
 	bool				only_active)
 {
 	ScopeTCQuery Q(entity_db);
 	
-	//Add range conditions to query
-	static const char* AXIS_LABEL[] = { "x", "y", "z" };
-	static const int COORD_MIN[] = { COORD_MIN_X, COORD_MIN_Y, COORD_MIN_Z };
-	static const int COORD_MAX[] = { COORD_MAX_X, COORD_MAX_Y, COORD_MAX_Z };
-
-	//Add query restriction on type flags
-	if(type_flags)
+	//Add range query
+	if(r.lo[0] != 0)
 	{
-		stringstream ss;
-	
-		for(int i=1; i<=(int)EntityType::MaxEntityType; i<<=1)
 		{
-			if(type_flags & i)
+		int bmin_x = (int)(r.lo[0] / BUCKET_X),
+			bmin_y = (int)(r.lo[1] / BUCKET_Y),
+			bmin_z = (int)(r.lo[2] / BUCKET_Z),
+			bmax_x = (int)(r.hi[0] / BUCKET_X),
+			bmax_y = (int)(r.hi[1] / BUCKET_Y),
+			bmax_z = (int)(r.hi[2] / BUCKET_Z);
+			
+		//String size
+		int size =	(bmax_x - bmin_x + 1) *
+					(bmax_y - bmin_y + 1) *
+					(bmax_z - bmin_z + 1) * 19;
+		
+		//The bucket string
+		ScopeFree guard(NULL);
+		char* bucket_str = (char*)alloca(size);
+			
+		//Insufficient stack space, need to do malloc
+		if(bucket_str == NULL)
+		{
+			bucket_str = (char*)malloc(size);
+			guard.ptr = bucket_str;
+		}
+		
+		char* ptr = bucket_str;
+		
+		for(int bx=bmin_x; bx<=bmax_x; bx++)
+		{
+			for(int by=bmin_y; by<=bmax_y; by++)
 			{
-				if(i != 1)
-					ss << ' ';
-				ss << i;
+				for(int bz=bmin_z; bz<=bmax_z; bz++)
+				{
+					int t = bx;
+					for(int i=0; i<BUCKET_STR_LEN; i++)
+					{
+						*(ptr++) = '0' + (t & BUCKET_MASK_X);
+						t >>= BUCKET_SHIFT_X;
+					}
+					
+					t = by;
+					for(int i=0; i<BUCKET_STR_LEN; i++)
+					{
+						*(ptr++) = '0' + (t & BUCKET_MASK_Y);
+						t >>= BUCKET_SHIFT_Y;
+					}
+				
+					t = bz;
+					for(int i=0; i<BUCKET_STR_LEN; i++)
+					{
+						*(ptr++) = '0' + (t & BUCKET_MASK_Z);
+						t >>= BUCKET_SHIFT_Z;
+					}
+					
+					*(ptr++) = ' ';
+				}
 			}
 		}
 		
-		tctdbqryaddcond(Q.query, "type", TDBQCNUMOREQ, ss.str().c_str()); 
+		*(--ptr) = '\0';
+		
+		cout << "Bucket string = " << bucket_str << endl;
+		
+		tctdbqryaddcond(Q.query, "bucket", TDBQCSTROREQ, bucket_str);
+		}
+		
+		//Add fine grained range conditions to query
+		static const char* AXIS_LABEL[] = { "x", "y", "z" };
+		static const int COORD_MIN[] = { COORD_MIN_X, COORD_MIN_Y, COORD_MIN_Z };
+		static const int COORD_MAX[] = { COORD_MAX_X, COORD_MAX_Y, COORD_MAX_Z };
+	
+		for(int i=0; i<3; i++)
+		{
+			stringstream ss;
+			ss << r.lo[i] << ' ' << r.hi[i];
+			tctdbqryaddcond(Q.query, AXIS_LABEL[i], TDBQCNUMBT, ss.str().c_str());
+		}
+	}
+	
+	//Add query restriction on type flags
+	if(types.size() > 0)
+	{
+		stringstream ss;
+		for(int i=0; i<types.size(); i++)
+		{
+			ss << (int)(types[i]) << ' ';
+		}
+		tctdbqryaddcond(Q.query, "type", TDBQCSTROREQ, ss.str().c_str()); 
 	}
 
 	//Add active restriction
 	if(only_active)
 	{
 		tctdbqryaddcond(Q.query, "active", TDBQCSTREQ, "1");
-	}
-	
-	for(int i=0; i<3; i++)
-	{
-		if(r.lo[i] <= COORD_MIN[i] && r.hi[i] >= COORD_MAX[i])
-			continue;
-			
-		stringstream ss;
-		ss << r.lo[i] << ' ' << r.hi[i];
-		
-		tctdbqryaddcond(Q.query, AXIS_LABEL[i], TDBQCNUMBT, ss.str().c_str());
 	}
 	
 	//Define the call back structure locally
@@ -205,7 +260,14 @@ bool EntityDB::foreach(
 	UserDelegate dg = { user_data, user_func };
 	
 	//Execute
-	return tctdbqryproc(Q.query, UserDelegate::call, &dg);
+	bool res = tctdbqryproc(Q.query, UserDelegate::call, &dg);
+	
+	
+	//Print hint string	
+	cout << "Hint: " << tctdbqryhint(Q.query) << endl;
+
+
+	return res;
 }
 
 //Retrieves a player (if one exists)

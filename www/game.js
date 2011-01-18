@@ -142,7 +142,11 @@ Game.draw = function()
 	gl.frontFace(gl.CW);
 	gl.enable(gl.CULL_FACE);
 
+	//Draw map
 	Map.draw(gl, cam);
+	
+	//Draw entities
+	EntityDB.draw(gl, cam);
 	
 	gl.flush();
 }
@@ -181,6 +185,9 @@ Game.tick = function()
 
 	//Update cache
 	Map.update_cache();
+	
+	//Tick entities
+	EntityDB.tick();
 	
 	//Redraw
 	Game.draw();

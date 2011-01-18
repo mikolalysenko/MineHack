@@ -91,6 +91,9 @@ namespace Game
 			
 		//Sends a resynchronize packet to the target player
 		void resync_player(EntityID const&);
+		
+		//Pushes updates for all entities in a particular region to target player
+		void push_entity_updates(EntityID const& player_id, Region const& region);
 	};
 };
 

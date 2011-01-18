@@ -47,6 +47,8 @@
 #define COORD_MAX_Y				(CHUNK_Y + (CHUNK_IDX_MAX<<CHUNK_Y_S))
 #define COORD_MAX_Z				(CHUNK_Z + (CHUNK_IDX_MAX<<CHUNK_Z_S))
 
+#define COORD_BITS				(CHUNK_X_S + CHUNK_IDX_S)
+
 //Converts a coordinate into a chunk index
 #define COORD2CHUNKID(X,Y,Z)	(Game::ChunkID( ((X)>>(CHUNK_X_S)) & CHUNK_IDX_MASK, \
 												((Y)>>(CHUNK_Y_S)) & CHUNK_IDX_MASK, \
@@ -80,6 +82,20 @@
 //Maximum size for an event packet
 #define EVENT_PACKET_SIZE		(1<<16)
 
+//Grid bucket sizes for range searching
+#define BUCKET_SHIFT_X			6
+#define BUCKET_SHIFT_Y			6
+#define BUCKET_SHIFT_Z			6
+
+#define BUCKET_MASK_X			((1<<BUCKET_SHIFT_X)-1)
+#define BUCKET_MASK_Y			((1<<BUCKET_SHIFT_Y)-1)
+#define BUCKET_MASK_Z			((1<<BUCKET_SHIFT_Z)-1)
+
+#define BUCKET_X				(1<<BUCKET_SHIFT_X)
+#define BUCKET_Y				(1<<BUCKET_SHIFT_Y)
+#define BUCKET_Z				(1<<BUCKET_SHIFT_Z)
+
+#define BUCKET_STR_LEN			5
 
 #endif
 

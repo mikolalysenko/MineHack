@@ -15,11 +15,8 @@ using namespace std;
 using namespace Server;
 using namespace Game;
 
-void* UpdateBlockEvent::write(int& len) const
+int UpdateBlockEvent::write(uint8_t* buf) const
 {
-	len = 14;
-
-	uint8_t* buf = (uint8_t*)malloc(len);
 	uint8_t* ptr = buf;
 	
 	*(ptr++) = (uint8_t)UpdateEventType::SetBlock;
@@ -37,17 +34,16 @@ void* UpdateBlockEvent::write(int& len) const
 	*(ptr++) = (z >> 16)& 0xff;
 	*(ptr++) = (z >> 24)& 0xff;
 	
-	return (void*)buf;
+	return 14;
 }
 
-void* UpdateChatEvent::write(int& len) const
+int UpdateChatEvent::write(uint8_t* buf) const
 {
 	assert(name_len <= USER_NAME_MAX_LEN);
 	assert(msg_len <= CHAT_LINE_MAX_LEN);
 	
-	len = 3 + name_len + msg_len;
+	int len = 3 + name_len + msg_len;
 
-	uint8_t* buf = (uint8_t*)malloc(len);
 	uint8_t* ptr = buf;
 	
 	//Set type
@@ -60,25 +56,55 @@ void* UpdateChatEvent::write(int& len) const
 	*(ptr++) = msg_len;
 	memcpy(ptr, msg, msg_len);
 	
-	return (void*)buf;
+	return len;
+}
+
+
+int UpdateEntityEvent::write(uint8_t* buf) const
+{
+	uint8_t* ptr = buf;
+	
+	//Serialize entity header
+	*(ptr++) = (uint8_t) UpdateEventType::UpdateEntity;
+	*((EntityID*)ptr) = entity.entity_id;
+	ptr += sizeof(EntityID);
+	
+	//TODO: Serialize entity base
+	
+	return (int)(ptr - buf);
+}
+
+int UpdateDeleteEvent::write(uint8_t* buf) const
+{
+	uint8_t* ptr = buf;
+	
+	*(ptr++) = (uint8_t) UpdateEventType::DeleteEntity;
+	*((EntityID*)ptr) = entity_id;
+	ptr += sizeof(EntityID);
+	
+	return (int)(ptr - buf);
 }
 
 
 //Update event serialization
-void* UpdateEvent::write(int& len) const
+int UpdateEvent::write(uint8_t* buf) const
 {
 	switch(type)
 	{
 		case UpdateEventType::SetBlock:
-			return block_event.write(len);
-		break;
+			return block_event.write(buf);
 		
 		case UpdateEventType::Chat:
-			return chat_event.write(len);
-		break;
+			return chat_event.write(buf);
+		
+		case UpdateEventType::UpdateEntity:
+			return entity_event.write(buf);
+		
+		case UpdateEventType::DeleteEntity:
+			return delete_event.write(buf);
 		
 		default:
-			return NULL;
+			return -1;
 	}
 }
 
@@ -98,14 +124,14 @@ UpdateMailbox::~UpdateMailbox()
 //Sends an event to a terget
 void UpdateMailbox::send_event(EntityID const& player_id, UpdateEvent const& up)
 {
-	int len;
-	ScopeFree G(up.write(len));
-	if(G.ptr == NULL)
+	uint8_t data[sizeof(UpdateEvent)];
+	int len = up.write(data);
+	if(len <= 0)
 		return;
 	
 	//Lock database and add key	
 	{	SpinLock	guard(&lock);
-		tcmapputcat(mailboxes, &player_id, sizeof(EntityID), G.ptr, len);
+		tcmapputcat(mailboxes, &player_id, sizeof(EntityID), data, len);
 	}
 }
 		

@@ -56,7 +56,7 @@ namespace Game
 			entity_update_func func, 
 			void* data,
 			Region const& 	region = Region(), 
-			uint8_t			type_filter = 0,
+			std::vector<EntityType> types = std::vector<EntityType>(0),
 			bool 			only_active = true);
 	
 		//Retrieves a player (if one exists)

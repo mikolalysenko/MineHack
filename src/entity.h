@@ -39,12 +39,8 @@ namespace Game
 	// Must be power of two, are bitwise or'd together to create query flags
 	enum class EntityType : std::uint8_t
 	{
-		NoType	= 0,
-		
-		Player	= (1 << 0),
-		Monster = (1 << 1),
-		
-		MaxEntityType
+		Player	= 0,
+		Monster = 1,
 	};
 	
 	//Player specific entity data

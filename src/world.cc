@@ -116,6 +116,10 @@ bool World::player_join(EntityID const& player_id)
 	if(!entity_db->update_entity(player_id, Join::call, &J))
 		return false;
 		
+	//Send a resync message to the player
+	if(J.success)
+		resync_player(player_id);
+		
 	return J.success;
 }
 
@@ -177,6 +181,8 @@ int World::get_compressed_chunk(
 	Chunk chunk;
 	game_map->get_chunk(chunk_id, &chunk);
 	
+	push_entity_updates(player_id, Region(chunk_id));
+	
 	//Return the compressed chunk
 	return chunk.compress((void*)buf, buf_len);
 }
@@ -192,8 +198,19 @@ void* World::heartbeat(
 //Sends a resynchronize packet to the player
 void World::resync_player(EntityID const& player_id)
 {
-	//TODO: Post a player resychronization message to the target player
+	UpdateEvent update;
+	update.type = UpdateEventType::UpdateEntity;
+	if(entity_db->get_entity(player_id, update.entity_event.entity))
+	{
+		player_updates.send_event(player_id, update);
+	}
 }
+
+//Pushes entity updates to target player
+void World::push_entity_updates(EntityID const& player_id, Region const& region)
+{
+}
+
 
 //Broadcasts an event to all players
 void World::broadcast_update(UpdateEvent const& update, Region const& r)
@@ -216,7 +233,7 @@ void World::broadcast_update(UpdateEvent const& update, Region const& r)
 	cout << "Broadcasting chat event" << endl;
 	
 	Broadcast B = { &update, &player_updates };
-	entity_db->foreach(Broadcast::call, &B, r, (uint8_t)EntityType::Player, true);
+	entity_db->foreach(Broadcast::call, &B, r, { EntityType::Player }, true);
 }
 
 //Ticks the server
@@ -237,7 +254,7 @@ void World::tick()
 	
 	//Traverse all entities
 	EntityHandler H = { this };
-	entity_db->foreach(EntityHandler::call, &H); 
+	//entity_db->foreach(EntityHandler::call, &H); 
 }
 
 

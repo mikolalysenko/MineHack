@@ -23,6 +23,35 @@ using namespace std;
 namespace Game
 {
 
+void bucket_str(double x, double y, double z, char* res)
+{
+	int ix = (int)(x / BUCKET_X),
+		iy = (int)(y / BUCKET_Y),
+		iz = (int)(z / BUCKET_Z);
+
+	for(int i=0; i<BUCKET_STR_LEN; i++)
+	{
+		*(res++) = '0' + (ix & BUCKET_MASK_X);
+		ix >>= BUCKET_SHIFT_X;
+	}
+
+	for(int i=0; i<BUCKET_STR_LEN; i++)
+	{
+		*(res++) = '0' + (iy & BUCKET_MASK_Y);
+		iy >>= BUCKET_SHIFT_Y;
+	}
+	
+	for(int i=0; i<BUCKET_STR_LEN; i++)
+	{
+		*(res++) = '0' + (iz & BUCKET_MASK_Z);
+		iz >>= BUCKET_SHIFT_Z;
+	}
+		
+	
+	*(res++) = 0;
+}
+
+
 void insert_int(TCMAP* map, const char* key, int64_t x)
 {
 	char buf[64];
@@ -108,7 +137,7 @@ bool EntityBase::from_map(const TCMAP* map)
 	if(!get_int(map, "active", tmp))
 		return false;
 	active = (tmp != 0);
-
+	
 	if(!get_double(map, "x", x))
 		return false;	
 	if(!get_double(map, "y", y))
@@ -133,6 +162,13 @@ void EntityBase::to_map(TCMAP* res) const
 {
 	insert_int		(res, "type",	(int64_t)type);
 	insert_int		(res, "active",	(int64_t)(active != 0));
+	
+	{	//Add position bucket field
+		char str[20];
+		bucket_str(x, y, z, str);
+		tcmapput2(res, "bucket", str);
+	}
+	
 
 	insert_double	(res, "x", 		x);
 	insert_double	(res, "y", 		y);

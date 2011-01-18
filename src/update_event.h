@@ -22,7 +22,7 @@ namespace Game
 		SetBlock		= 1,
 		Chat	 		= 2,
 		UpdateEntity	= 3,
-		DestroyEntity	= 4,
+		DeleteEntity	= 4,
 	};
 	
 	struct UpdateBlockEvent
@@ -30,7 +30,7 @@ namespace Game
 		int x, y, z;
 		Block b;
 		
-		void* write(int& len) const;
+		int write(uint8_t*) const;
 	};
 	
 	struct UpdateChatEvent
@@ -41,7 +41,7 @@ namespace Game
 		uint8_t msg_len;
 		char msg[CHAT_LINE_MAX_LEN + 1];
 
-		void* write(int& len) const;
+		int write(uint8_t*) const;
 	};
 	
 	//Creates/updates an entity on the client
@@ -49,15 +49,15 @@ namespace Game
 	{
 		Entity	entity;
 		
-		void* write(int& len) const;
+		int write(uint8_t*) const;
 	};
 	
 	//Destroys an entity on the client
-	struct UpdateDestroyEntityEvent
+	struct UpdateDeleteEvent
 	{
 		EntityID	entity_id;
 		
-		void* write(int& len) const;
+		int write(uint8_t*) const;
 	};
 	
 	struct UpdateEvent
@@ -69,12 +69,12 @@ namespace Game
 			UpdateBlockEvent			block_event;
 			UpdateChatEvent				chat_event;
 			UpdateEntityEvent			entity_event;
-			UpdateDestroyEntityEvent	destroy_entity_event;
+			UpdateDeleteEvent			delete_event;
 		};
 		
 		//Writes output event to buffer
 		//Client must release pointer with free
-		void* write(int& len) const;
+		int write(uint8_t*) const;
 	};
 	
 	struct UpdateMailbox
