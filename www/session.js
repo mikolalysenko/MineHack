@@ -164,6 +164,8 @@ Session.join_game = function(player_name)
 		return ["Fail", response[1]];
 		
 	Session.player_name = player_name;
+	Player.set_entity_id(response[2]);
+	
 	return ["Ok", "Successfully joined game"];
 }
 

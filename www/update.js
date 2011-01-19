@@ -3,6 +3,8 @@ var UpdateHandler =
 	//Add global variables here
 };
 
+
+
 UpdateHandler.handlers = 
 {
 	
@@ -69,8 +71,35 @@ UpdateHandler.handlers =
 		chat_log.innerHTML += html_str;
 		
 		return len;
-	}
+	},
 	
+	//Update entity
+	3 : function(arr)
+	{
+		//Read out entity id and length
+		if(arr.length < 10)
+			return -1;
+		var entity_id = arr2str(arr.slice(0, 8));
+		
+		//Read out length of data
+		var len = arr[8] + (arr[9] << 8);
+		if(arr.length < 10 + len)
+			return -1;
+		
+		EntityDB.update_entity(entity_id, arr.slice(10, 10 + len));
+		return 10+len;
+	},
+	
+	//Delete entity
+	4 : function(arr)
+	{
+		//Read out entity id
+		if(arr.length < 8)
+			return -1;
+		var entity_id = arr2str(arr.slice(0, 8));
+		EntityDB.destroy_entity(entity_id);
+		return 8;
+	}
 	
 };
 

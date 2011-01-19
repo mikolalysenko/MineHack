@@ -352,7 +352,8 @@ void do_join_game(HttpEvent& ev)
 	{
 		ajax_printf(ev.conn,
 			"Ok\n"
-			"Successfully joined game\n");
+			"Successfully joined game\n"
+			"%016llx\n", player_id.id);
 	}
 	else
 	{
@@ -670,6 +671,8 @@ void shutdown_app()
 //Program start point
 int main(int argc, char** argv)
 {
+	assert(sizeof(long long int) == sizeof(int64_t));
+
 	init_app();
 	
 	//Start web server

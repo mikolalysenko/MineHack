@@ -105,6 +105,16 @@ asyncGetBinary = function(url, handler, err_handler, body)
 	XHR.send(body);
 }
 
+arr2str = function(arr)
+{
+	var str = "";
+	for(var i=0; i<arr.length; i++)
+	{
+		str += String.fromCharCode(arr[i] + 0xB0);
+	}
+	return str;
+}
+
 mmult = function(A, B)
 {
 	var C = new Float32Array(16);

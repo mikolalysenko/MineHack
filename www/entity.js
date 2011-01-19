@@ -4,6 +4,9 @@
 Entity = function(packet)
 {
 	//Initialize the entity from a packet
+	this.type = packet[0];
+	
+	//Unpack position coordinates
 }
 
 //Updates entity state from network packet
@@ -44,6 +47,12 @@ EntityDB.shutdown = function()
 //Update an entity using the given network packet
 EntityDB.update_entity = function(entity_id, packet)
 {
+	if(entity_id == Player.entity_id)
+	{
+		Player.net_update(packet);
+		return;
+	}
+
 	var ent = EntityDB.index[entity_id];
 	if(ent)
 	{
@@ -58,6 +67,12 @@ EntityDB.update_entity = function(entity_id, packet)
 //Destroy an entity
 EntityDB.destroy_entity = function(entity_id)
 {
+	if(entity_id == Player.entity_id)
+	{
+		App.crash("PLAYER DESTROYED");
+		return;
+	}
+
 	if(entity_id in EntityDB.index)
 	{
 		delete EntityDB.index[entity_id];

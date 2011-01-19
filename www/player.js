@@ -1,5 +1,8 @@
 var Player =
 {
+	//Entity ID
+	entity_id : "",
+
 	//Units / tick walk speed
 	speed : 0.1,
 
@@ -108,6 +111,27 @@ Player.net_state = function()
 	return res;
 }
 
+Player.set_entity_id = function(str)
+{
+	debugger;
+	var res = "";
+	for(var i=14; i>=0; i-=2)
+	{
+		var x = parseInt(str.slice(i, i+2), 16);
+		res += String.fromCharCode(x + 0xB0);
+	}
+	Player.entity_id = res;
+}
+
+
+Player.net_update = function(packet)
+{
+	alert("got net update");
+
+	var entity = new Entity(packet);
+}
+
+
 Player.show_chat_input = function()
 {
 	var chatBox = document.getElementById("chatBox");
@@ -212,6 +236,7 @@ Player.tick = function()
 
 }
 
+
 //Returns the player's chunk
 Player.chunk = function()
 {
@@ -264,5 +289,6 @@ Player.eye_ray = function()
 	var d = [ -view_m[2], -view_m[6], -view_m[10] ];
 	return [ Player.pos, d ];
 }
+
 
 

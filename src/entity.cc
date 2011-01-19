@@ -163,7 +163,9 @@ void EntityBase::to_map(TCMAP* res) const
 	insert_int		(res, "type",	(int64_t)type);
 	insert_int		(res, "active",	(int64_t)(active != 0));
 	
-	{	//Add position bucket field
+	if(active)
+	{
+		//Add position bucket field, used for optimizing range searches
 		char str[20];
 		bucket_str(x, y, z, str);
 		tcmapput2(res, "bucket", str);

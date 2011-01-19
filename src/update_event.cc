@@ -69,9 +69,17 @@ int UpdateEntityEvent::write(uint8_t* buf) const
 	*((EntityID*)ptr) = entity.entity_id;
 	ptr += sizeof(EntityID);
 	
+	//Write length of packet
+	int len = 0;
+	
 	//TODO: Serialize entity base
 	
-	return (int)(ptr - buf);
+	
+	//Write the data out for the length
+	*(ptr++) = len & 0xff;
+	*(ptr++) = (len >> 8) & 0xff;
+	
+	return len + 11;
 }
 
 int UpdateDeleteEvent::write(uint8_t* buf) const
