@@ -92,13 +92,14 @@ Player.net_state = function()
 	
 	for(var j=0; j<3; j++)
 	{
-		var x = Math.round(Player.pos[j]);
+		var x = Math.round(Player.pos[j] * COORD_NET_PRECISION);
 		res[i++] =  x     &0xff;
 		res[i++] = (x>>8) &0xff;
 		res[i++] = (x>>16)&0xff;
+		res[i++] = (x>>24)&0xff;
 	}
 	res[i++] = Math.round((180.0 + Player.yaw) * 255.0 / 360.0);
-	res[i++] = Math.round(Player.pitch + 45.0);
+	res[i++] = Math.round((Player.pitch + 45.0) * 255.0 / 360.0);
 	res[i++] = 
 		(Player.input["forward"]	<< 0) |
 		(Player.input["back"] 		<< 1) |
@@ -113,7 +114,6 @@ Player.net_state = function()
 
 Player.set_entity_id = function(str)
 {
-	debugger;
 	var res = "";
 	for(var i=14; i>=0; i-=2)
 	{

@@ -27,6 +27,9 @@ namespace Game
 	{
 		//World data
 		bool		running;
+		
+		//The game's current tick count
+		uint64_t		tick_count;
 						
 		//Ctor
 		World();
@@ -62,9 +65,6 @@ namespace Game
 		
 	private:
 	
-		//The game's current tick count
-		uint64_t		tick_count;
-	
 		//World generator
 		WorldGen		*world_gen;
 	
@@ -93,7 +93,7 @@ namespace Game
 		void resync_player(EntityID const&);
 		
 		//Pushes updates for all entities in a particular region to target player
-		void get_entity_updates(EntityID const& player_id, Region const& region);
+		void get_entity_updates(EntityID const& player_id, Region const& region, bool initialize);
 	};
 };
 

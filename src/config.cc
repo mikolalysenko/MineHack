@@ -24,23 +24,22 @@ Config::~Config()
 	tchdbdel(config_db);
 }
 
-int Config::readInt(std::string const& key)
+int64_t Config::readInt(std::string const& key)
 {
-	int retval = 0;
+	int64_t retval = 0;
+	int l = tchdbget3(config_db, (const void*)key.data(), key.size(), (void*)&retval, sizeof(int64_t));
 	
-	int l = tchdbget3(config_db, (const void*)key.data(), key.size(), (void*)&retval, sizeof(int));
-	
-	if(l != sizeof(int))
+	if(l != sizeof(int64_t))
 		return 0;
 	
 	return retval;
 }
 
-void Config::storeInt(int i, std::string const& key)
+void Config::storeInt(int64_t i, std::string const& key)
 {
 	tchdbput(config_db,
 		(const void*)key.data(), key.size(),
-		(void*)&i, sizeof(int));
+		(void*)&i, sizeof(int64_t));
 }
 
 

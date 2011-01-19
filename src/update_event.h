@@ -23,6 +23,7 @@ namespace Game
 		Chat	 		= 2,
 		UpdateEntity	= 3,
 		DeleteEntity	= 4,
+		SyncClock		= 5
 	};
 	
 	struct UpdateBlockEvent
@@ -61,6 +62,13 @@ namespace Game
 		int write(uint8_t*) const;
 	};
 	
+	struct UpdateClockEvent
+	{
+		uint64_t	tick_count;
+		
+		int write(uint8_t*) const;
+	};
+	
 	struct UpdateEvent
 	{
 		UpdateEventType type;
@@ -71,6 +79,7 @@ namespace Game
 			UpdateChatEvent				chat_event;
 			UpdateEntityEvent			entity_event;
 			UpdateDeleteEvent			delete_event;
+			UpdateClockEvent			clock_event;
 		};
 		
 		//Writes output event to buffer

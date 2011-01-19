@@ -43,9 +43,9 @@
 #define COORD_MIN_Y				0
 #define COORD_MIN_Z				0
 
-#define COORD_MAX_X				(CHUNK_X + (CHUNK_IDX_MAX<<CHUNK_X_S))
-#define COORD_MAX_Y				(CHUNK_Y + (CHUNK_IDX_MAX<<CHUNK_Y_S))
-#define COORD_MAX_Z				(CHUNK_Z + (CHUNK_IDX_MAX<<CHUNK_Z_S))
+#define COORD_MAX_X				(CHUNK_IDX_MAX<<CHUNK_X_S)
+#define COORD_MAX_Y				(CHUNK_IDX_MAX<<CHUNK_Y_S)
+#define COORD_MAX_Z				(CHUNK_IDX_MAX<<CHUNK_Z_S)
 
 #define COORD_BITS				(CHUNK_X_S + CHUNK_IDX_S)
 

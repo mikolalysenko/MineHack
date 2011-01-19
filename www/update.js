@@ -99,6 +99,18 @@ UpdateHandler.handlers =
 		var entity_id = arr2str(arr.slice(0, 8));
 		EntityDB.destroy_entity(entity_id);
 		return 8;
+	},
+	
+	//Clock synchronize event
+	5 : function(arr)
+	{
+		if(arr.length < 8)
+			return -1;
+			
+		Game.tick_lo = arr[0] + (arr[1]<<8) + (arr[2]<<16) + (arr[3]<<24);
+		Game.tick_hi = arr[4] + (arr[5]<<8) + (arr[6]<<16) + (arr[7]<<24);
+		
+		return 8;
 	}
 	
 };
@@ -119,7 +131,7 @@ UpdateHandler.handle_update_packet = function(arr)
 		
 		if(handler)
 		{
-			var l = handler(arr.slice(1, arr.length));
+			var l = handler(arr.slice(i));
 			if(l < 0)
 			{
 				alert("dropping packet");

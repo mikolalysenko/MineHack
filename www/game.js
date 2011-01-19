@@ -3,7 +3,8 @@ Game =
 	crashed : false,
 	running : false,
 	
-	tick_count : 0,
+	tick_lo : 0,
+	tick_hi : 0,
 	
 	TICKS_PER_HEARTBEAT : 3,
 	
@@ -174,11 +175,19 @@ Game.heartbeat = function()
 
 Game.tick = function()
 {
-	if(	Game.tick_count % Game.TICKS_PER_HEARTBEAT == 0 &&
+	if(	Game.tick_lo % Game.TICKS_PER_HEARTBEAT == 0 &&
 		!Game.wait_for_heartbeat )
 		Game.heartbeat();
 
-	++Game.tick_count;
+	if(Game.tick_lo == (1<<32) - 1)
+	{
+		Game.tick_lo = 0;
+		++Game.tick_hi;
+	}
+	else
+	{
+		++Game.tick_lo;
+	}
 
 	//Update game state
 	Player.tick();

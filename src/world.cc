@@ -27,9 +27,6 @@ World::World()
 {
 	running = true;
 	
-	//Clear tick count
-	tick_count = 0;
-	
 	//Create config stuff
 	config = new Config("data/mapconfig.tc");
 	
@@ -39,11 +36,17 @@ World::World()
 	
 	//Create entity database
 	entity_db = new EntityDB("data/entities.tc", config);
+
+	//Recover tick count
+	tick_count = config->readInt("tick_count");
 }
 
 //Clean up/saving stuff
 World::~World()
 {
+	//Save tick count
+	config->storeInt(tick_count, "tick_count");
+
 	delete entity_db;
 	delete game_map;
 	delete world_gen;
@@ -222,10 +225,14 @@ void World::resync_player(EntityID const& player_id)
 	{
 		player_updates.send_event(player_id, update);
 	}
+	
+	update.type = UpdateEventType::SyncClock;
+	update.clock_event.tick_count = tick_count;
+	player_updates.send_event(player_id, update);
 }
 
 //Pushes entity updates to target player
-void World::get_entity_updates(EntityID const& player_id, Region const& region, bool initial)
+void World::get_entity_updates(EntityID const& player_id, Region const& region, bool initialize)
 {
 	struct Visitor
 	{
@@ -240,7 +247,7 @@ void World::get_entity_updates(EntityID const& player_id, Region const& region, 
 			//TODO: Check if we need to replicate entity
 			
 			//Send update to player
-			v->update.entity = entity;
+			v->update.entity_event.entity = entity;
 			v->player_updates->send_event(v->player_id, v->update);
 			
 			return EntityUpdateControl::Continue;
@@ -251,11 +258,10 @@ void World::get_entity_updates(EntityID const& player_id, Region const& region, 
 	Visitor V;
 	V.player_id = player_id;
 	V.update.type = UpdateEventType::UpdateEntity;
-	V.update.initial = initial;
-	V.player_updates = player_updates;
+	V.update.entity_event.initialize = initialize;
+	V.player_updates = &player_updates;
 	
-	entity_db->foreach(Visitor::call, &V
-
+	entity_db->foreach(Visitor::call, &V);
 }
 
 
@@ -351,7 +357,7 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 				player_tick->out_of_sync = true;
 				return EntityUpdateControl::Continue;
 			}
-						
+			
 			//Upate player network state
 			player->net_last_tick	= input->tick;
 			player->net_x			= input->x;

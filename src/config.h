@@ -20,10 +20,10 @@ namespace Game
 		~Config();
 		
 		//reading functions to get values from the database
-		int readInt(std::string const& key);
+		int64_t readInt(std::string const& key);
 		
 		//storing functions to store into the database
-		void storeInt(int i, std::string const& key);
+		void storeInt(int64_t i, std::string const& key);
 		
 		private:
 		

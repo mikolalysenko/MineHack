@@ -22,4 +22,12 @@ const CHUNK_SIZE	= CHUNK_X * CHUNK_Y * CHUNK_Z;
 
 const CHUNK_DIMS	= [ CHUNK_X, CHUNK_Y, CHUNK_Z ];
 
+//Network precision
+const NET_COORD_PRECISION = 128;
+
+
+//Entity type codes
+const PLAYER_ENTITY		= 1;
+const MONSTER_ENTITY	= 2;
+
 

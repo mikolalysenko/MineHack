@@ -1,5 +1,6 @@
 #include <pthread.h>
 
+#include <cmath>
 #include <cstring>
 #include <cassert>
 #include <cstdlib>
@@ -60,22 +61,16 @@ int UpdateChatEvent::write(uint8_t* buf) const
 }
 
 
-void serialize_coord(uint8_t*& ptr, double d)
-{
-	*((uint32_t)ptr) = (uint32_t)(d * COORD_NET_PRECISION);
-	ptr += sizeof(uint32_t);
-}
-
 template<typename T> void net_serialize(uint8_t*& ptr, T v)
 {
-	*((T*)ptr) = v;
+	*((T*)(void*)ptr) = v;
 	ptr += sizeof(T);
 }
 
 //Serialize the base state for an entity
 int serialize_entity(Entity const& entity, uint8_t* buf, bool initialize)
 {
-	if(!active)
+	if(!entity.base.active)
 		return 0;
 	
 	
@@ -88,14 +83,25 @@ int serialize_entity(Entity const& entity, uint8_t* buf, bool initialize)
 	net_serialize(ptr, (uint32_t)(entity.base.y * COORD_NET_PRECISION));
 	net_serialize(ptr, (uint32_t)(entity.base.z * COORD_NET_PRECISION));
 	
-	*(ptr++) = (uint8_t)((int)(entity.base.pitch * 256. / (2. * pi) + (1<<16)) & 0xff);
-	*(ptr++) = (uint8_t)((int)(entity.base.yaw * 256. / (2. * pi) + (1<<16)) & 0xff);
-	*(ptr++) = (uint8_t)((int)(entity.base.roll * 256. / (2. * pi) + (1<<16)) & 0xff);
+	*(ptr++) = (uint8_t)((int)(entity.base.pitch * 256. / (2. * M_PI) + (1<<16)) & 0xff);
+	*(ptr++) = (uint8_t)((int)(entity.base.yaw * 256. / (2. * M_PI) + (1<<16)) & 0xff);
+	*(ptr++) = (uint8_t)((int)(entity.base.roll * 256. / (2. * M_PI) + (1<<16)) & 0xff);
 	
 	//TODO: Serialize other relevant data
 	if(entity.base.type == EntityType::Player && initialize)
 	{
+		uint8_t* name_len = ptr++;
 		
+		for(int i=0; i<20; i++)
+		{
+			char c = entity.player.player_name[i];
+			if(c == '\0')
+			{
+				*name_len = i;
+				break;
+			}
+			*(ptr++) = c;
+		}
 	}
 	
 	
@@ -110,17 +116,20 @@ int UpdateEntityEvent::write(uint8_t* buf) const
 	
 	//Serialize entity header
 	*(ptr++) = (uint8_t) UpdateEventType::UpdateEntity;
-	*((EntityID*)ptr) = entity.entity_id;
-	ptr += sizeof(EntityID);
+	net_serialize(ptr, entity.entity_id);
 	
 	//Write length of packet
-	int len = serialize_entity_base(entity, ptr + 2, initialize);
+	uint16_t* len_ptr = (uint16_t*)(void*)ptr;
+	ptr += sizeof(uint16_t);
 	
-	//Write the data out for the length
-	*(ptr++) = len & 0xff;
-	*(ptr++) = (len >> 8) & 0xff;
+	int len = serialize_entity(entity, ptr, initialize);
+	ptr += len;	
 	
-	return len + 3 + sizeof(EntityID);
+	cout << "len = " << len << endl;
+	*len_ptr = (uint16_t)len;
+	
+	
+	return (int)(ptr - buf);
 }
 
 int UpdateDeleteEvent::write(uint8_t* buf) const
@@ -128,9 +137,19 @@ int UpdateDeleteEvent::write(uint8_t* buf) const
 	uint8_t* ptr = buf;
 	
 	*(ptr++) = (uint8_t) UpdateEventType::DeleteEntity;
-	*((EntityID*)ptr) = entity_id;
-	ptr += sizeof(EntityID);
+	net_serialize(ptr, entity_id);
 	
+	return (int)(ptr - buf);
+}
+
+
+int UpdateClockEvent::write(uint8_t* buf) const
+{
+	uint8_t* ptr = buf;
+	
+	*(ptr++) = (uint8_t) UpdateEventType::SyncClock;
+	net_serialize(ptr, tick_count);
+
 	return (int)(ptr - buf);
 }
 
@@ -151,6 +170,10 @@ int UpdateEvent::write(uint8_t* buf) const
 		
 		case UpdateEventType::DeleteEntity:
 			return delete_event.write(buf);
+		
+		case UpdateEventType::SyncClock:
+			return clock_event.write(buf);
+
 		
 		default:
 			return -1;

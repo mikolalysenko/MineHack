@@ -318,9 +318,6 @@ function Chunk(x, y, z, data)
 	//Set chunk data
 	this.data = data;
 	
-	//Update last tick
-	this.last_tick = Game.tick_count;
-	
 	//Set position
 	this.x = x;
 	this.y = y;
@@ -417,8 +414,6 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam)
 	if(!this.in_frustum(cam))
 		return;
 		
-	this.last_tick = Game.tick_count;
-
 	var c = Player.chunk();
 
 	var pos = new Float32Array([1, 0, 0, 0,
