@@ -60,6 +60,50 @@ int UpdateChatEvent::write(uint8_t* buf) const
 }
 
 
+void serialize_coord(uint8_t*& ptr, double d)
+{
+	*((uint32_t)ptr) = (uint32_t)(d * COORD_NET_PRECISION);
+	ptr += sizeof(uint32_t);
+}
+
+template<typename T> void net_serialize(uint8_t*& ptr, T v)
+{
+	*((T*)ptr) = v;
+	ptr += sizeof(T);
+}
+
+//Serialize the base state for an entity
+int serialize_entity(Entity const& entity, uint8_t* buf, bool initialize)
+{
+	if(!active)
+		return 0;
+	
+	
+	uint8_t* ptr = buf;
+	
+	*(ptr++) = (uint8_t)entity.base.type;
+	
+	//TODO: Check if entity is physical, if so need to replicate position
+	net_serialize(ptr, (uint32_t)(entity.base.x * COORD_NET_PRECISION));
+	net_serialize(ptr, (uint32_t)(entity.base.y * COORD_NET_PRECISION));
+	net_serialize(ptr, (uint32_t)(entity.base.z * COORD_NET_PRECISION));
+	
+	*(ptr++) = (uint8_t)((int)(entity.base.pitch * 256. / (2. * pi) + (1<<16)) & 0xff);
+	*(ptr++) = (uint8_t)((int)(entity.base.yaw * 256. / (2. * pi) + (1<<16)) & 0xff);
+	*(ptr++) = (uint8_t)((int)(entity.base.roll * 256. / (2. * pi) + (1<<16)) & 0xff);
+	
+	//TODO: Serialize other relevant data
+	if(entity.base.type == EntityType::Player && initialize)
+	{
+		
+	}
+	
+	
+	//Return length of written region
+	return (int)(ptr - buf);
+}
+
+
 int UpdateEntityEvent::write(uint8_t* buf) const
 {
 	uint8_t* ptr = buf;
@@ -70,16 +114,13 @@ int UpdateEntityEvent::write(uint8_t* buf) const
 	ptr += sizeof(EntityID);
 	
 	//Write length of packet
-	int len = 0;
-	
-	//TODO: Serialize entity base
-	
+	int len = serialize_entity_base(entity, ptr + 2, initialize);
 	
 	//Write the data out for the length
 	*(ptr++) = len & 0xff;
 	*(ptr++) = (len >> 8) & 0xff;
 	
-	return len + 11;
+	return len + 3 + sizeof(EntityID);
 }
 
 int UpdateDeleteEvent::write(uint8_t* buf) const

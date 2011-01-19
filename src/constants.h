@@ -55,6 +55,10 @@
 												((Z)>>(CHUNK_Z_S)) & CHUNK_IDX_MASK ) )
 
 
+//Precision for network coordinates
+#define COORD_NET_PRECISION_S	(32ULL - COORD_BITS)
+#define COORD_NET_PRECISION		(1ULL<<COORD_NET_PRECISION_S)
+
 //Radius for chat events
 #define CHAT_RADIUS				128
 
@@ -63,6 +67,10 @@
 
 //Radius beyond which the client needs to be resynchronized
 #define POSITION_RESYNC_RADIUS	8
+
+//Size of the update region for a heartbeat
+#define UPDATE_RADIUS			128
+
 
 #define TICK_RESYNC_TIME		100
 
@@ -96,6 +104,7 @@
 #define BUCKET_Z				(1<<BUCKET_SHIFT_Z)
 
 #define BUCKET_STR_LEN			5
+
 
 #endif
 

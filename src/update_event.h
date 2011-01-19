@@ -47,6 +47,7 @@ namespace Game
 	//Creates/updates an entity on the client
 	struct UpdateEntityEvent
 	{
+		bool initialize;
 		Entity	entity;
 		
 		int write(uint8_t*) const;

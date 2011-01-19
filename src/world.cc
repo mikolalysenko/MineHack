@@ -120,6 +120,8 @@ bool World::player_join(EntityID const& player_id)
 	if(J.success)
 		resync_player(player_id);
 		
+	//TODO: Push an initialize update to all players in region
+		
 	return J.success;
 }
 
@@ -156,6 +158,8 @@ bool World::player_leave(EntityID const& player_id)
 		return false;
 	if(L.success)
 		player_updates.clear_events(player_id);
+		
+	//TODO: Push destroy entity update to all players in region
 	
 	return L.success;
 }
@@ -181,7 +185,7 @@ int World::get_compressed_chunk(
 	Chunk chunk;
 	game_map->get_chunk(chunk_id, &chunk);
 	
-	push_entity_updates(player_id, Region(chunk_id));
+	get_entity_updates(player_id, Region(chunk_id), true);
 	
 	//Return the compressed chunk
 	return chunk.compress((void*)buf, buf_len);
@@ -192,6 +196,20 @@ void* World::heartbeat(
 	EntityID const& player_id,
 	int& len)
 {
+	//Retrieve player entity
+	Entity player;
+	if(!entity_db->get_entity(player_id, player))
+	{
+		len = 0;
+		return NULL;
+	}
+	
+	//Get all entity updates in the player's region
+	Region r( player.base.x - UPDATE_RADIUS, player.base.y - UPDATE_RADIUS, player.base.z - UPDATE_RADIUS,
+			  player.base.x + UPDATE_RADIUS, player.base.y + UPDATE_RADIUS, player.base.z + UPDATE_RADIUS );
+	get_entity_updates(player_id, r, false);
+
+	//Push the events back to the player
 	return player_updates.get_events(player_id, len);
 }
 
@@ -207,8 +225,37 @@ void World::resync_player(EntityID const& player_id)
 }
 
 //Pushes entity updates to target player
-void World::push_entity_updates(EntityID const& player_id, Region const& region)
+void World::get_entity_updates(EntityID const& player_id, Region const& region, bool initial)
 {
+	struct Visitor
+	{
+		EntityID player_id;
+		UpdateEvent update;
+		UpdateMailbox* player_updates;
+	
+		static EntityUpdateControl call(Entity& entity, void* data)
+		{
+			Visitor* v = (Visitor*)data;
+			
+			//TODO: Check if we need to replicate entity
+			
+			//Send update to player
+			v->update.entity = entity;
+			v->player_updates->send_event(v->player_id, v->update);
+			
+			return EntityUpdateControl::Continue;
+		}
+	};
+
+
+	Visitor V;
+	V.player_id = player_id;
+	V.update.type = UpdateEventType::UpdateEntity;
+	V.update.initial = initial;
+	V.player_updates = player_updates;
+	
+	entity_db->foreach(Visitor::call, &V
+
 }
 
 
@@ -244,7 +291,7 @@ void World::tick()
 	//The entity loop:  Updates all entities in the game
 	struct EntityHandler
 	{
-		World* world;
+		World*		world;
 		
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
