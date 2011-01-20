@@ -47,6 +47,7 @@ EntityDB::EntityDB(string const& path, Config* config)
 	tctdbsetindex(entity_db, "player_name", TDBITLEXICAL  | TDBITKEEP);
 	tctdbsetindex(entity_db, "type", TDBITLEXICAL | TDBITKEEP);
 	tctdbsetindex(entity_db, "active", TDBITLEXICAL | TDBITKEEP);
+	tctdbsetindex(entity_db, "net_last_tick", TDBITDECIMAL | TDBITKEEP);
 }
 
 
@@ -264,8 +265,7 @@ bool EntityDB::foreach(
 	
 	
 	//Print hint string	
-	cout << "Hint: " << tctdbqryhint(Q.query) << endl;
-
+	//cout << "Hint: " << tctdbqryhint(Q.query) << endl;
 
 	return res;
 }

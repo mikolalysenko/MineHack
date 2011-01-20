@@ -94,6 +94,7 @@ bool World::player_join(EntityID const& player_id)
 	struct Join
 	{
 		bool success;
+		uint64_t tick_count;
 	
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
@@ -107,6 +108,17 @@ bool World::player_join(EntityID const& player_id)
 			else
 			{
 				entity.base.active = true;
+				
+				//Set initial network data
+				entity.player.net_last_tick = J->tick_count;
+				entity.player.net_x = entity.base.x;
+				entity.player.net_y = entity.base.y;
+				entity.player.net_z = entity.base.z;
+				entity.player.net_pitch = entity.base.pitch;
+				entity.player.net_yaw	= entity.base.yaw;
+				entity.player.net_roll	= entity.base.roll;
+				entity.player.net_input = 0;
+				
 				J->success = true;
 				return EntityUpdateControl::Update;
 			}
@@ -114,7 +126,7 @@ bool World::player_join(EntityID const& player_id)
 	};
 	
 	
-	Join J = { false };
+	Join J = { false, tick_count };
 	
 	if(!entity_db->update_entity(player_id, Join::call, &J))
 		return false;
@@ -188,6 +200,7 @@ int World::get_compressed_chunk(
 	Chunk chunk;
 	game_map->get_chunk(chunk_id, &chunk);
 	
+	//Initialize all entities in the chunk for the client
 	get_entity_updates(player_id, Region(chunk_id), true);
 	
 	//Return the compressed chunk
@@ -206,6 +219,12 @@ void* World::heartbeat(
 		len = 0;
 		return NULL;
 	}
+	
+	//Push a clock update to the player
+	UpdateEvent update;
+	update.type = UpdateEventType::SyncClock;
+	update.clock_event.tick_count = tick_count;
+	player_updates.send_event(player_id, update);
 	
 	//Get all entity updates in the player's region
 	Region r( player.base.x - UPDATE_RADIUS, player.base.y - UPDATE_RADIUS, player.base.z - UPDATE_RADIUS,
@@ -275,15 +294,11 @@ void World::broadcast_update(UpdateEvent const& update, Region const& r)
 		
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
-			cout << "broadcasting to: " << entity.entity_id.id << endl;
-		
 			Broadcast* broadcast = (Broadcast*)data;
 			broadcast->mailbox->send_event(entity.entity_id, *broadcast->update);
 			return EntityUpdateControl::Continue;
 		}
 	};
-	
-	cout << "Broadcasting chat event" << endl;
 	
 	Broadcast B = { &update, &player_updates };
 	entity_db->foreach(Broadcast::call, &B, r, { EntityType::Player }, true);
@@ -295,19 +310,51 @@ void World::tick()
 	tick_count++;
 	
 	//The entity loop:  Updates all entities in the game
-	struct EntityHandler
+	struct Visitor
 	{
-		World*		world;
+		World*				world;
+		vector<EntityID>	dead_players;
 		
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
+			Visitor *V = (Visitor*)data;
+		
+			if(entity.base.type == EntityType::Player)
+			{
+				//Check timeout condition
+				if(V->world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
+				{
+					//Log out player and post a delete event
+					V->dead_players.push_back(entity.entity_id);					
+					return EntityUpdateControl::Continue;
+				}
+			
+				//Update network state (dumb, no interpolation, no using input)
+				entity.base.x = entity.player.net_x;
+				entity.base.y = entity.player.net_y;
+				entity.base.z = entity.player.net_z;
+				
+				entity.base.pitch = entity.player.net_pitch;
+				entity.base.yaw = entity.player.net_yaw;
+				entity.base.roll = 0.0;
+				
+				return EntityUpdateControl::Update;				
+			}
+		
 			return EntityUpdateControl::Continue;
 		}
 	};
 	
 	//Traverse all entities
-	EntityHandler H = { this };
-	//entity_db->foreach(EntityHandler::call, &H); 
+	Visitor V;
+	V.world = this;
+	
+	for(int i=0; i<V.dead_players.size(); i++)
+	{
+		player_leave(V.dead_players[i]);
+	}
+	
+	entity_db->foreach(Visitor::call, &V); 
 }
 
 

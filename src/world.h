@@ -17,6 +17,7 @@
 #include "entity_db.h"
 #include "input_event.h"
 #include "update_event.h"
+#include "mailbox.h"
 #include "worldgen.h"
 #include "map.h"
 #include "config.h"
@@ -61,7 +62,6 @@ namespace Game
 		
 		//Ticks the server
 		void tick();
-		
 		
 	private:
 	

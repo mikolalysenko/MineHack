@@ -55,14 +55,21 @@ void bucket_str(double x, double y, double z, char* res)
 void insert_int(TCMAP* map, const char* key, int64_t x)
 {
 	char buf[64];
-	int len = snprintf(buf, 64, "%ld", x);
+	int len = snprintf(buf, 64, "%lld", x);
+	tcmapput(map, key, strlen(key), buf, len);
+}
+
+void insert_uint(TCMAP* map, const char* key, uint64_t x)
+{
+	char buf[64];
+	int len = snprintf(buf, 64, "%llu", x);
 	tcmapput(map, key, strlen(key), buf, len);
 }
 
 void insert_double(TCMAP* map, const char* key, long double d)
 {
 	char buf[128];
-	int len = snprintf(buf, 128, "%Lf", d);
+	int len = snprintf(buf, 128, "%lf", d);
 	tcmapput(map, key, strlen(key), buf, len);
 }
 
@@ -77,7 +84,15 @@ bool get_int(const TCMAP* map, const char* key, int64_t& x)
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	return sscanf(str, "%ld", &x) > 0;
+	return sscanf(str, "%lld", &x) > 0;
+}
+
+bool get_uint(const TCMAP* map, const char* key, uint64_t& x)
+{
+	const char* str = tcmapget2(map, key);
+	if(str == NULL)
+		return false;
+	return sscanf(str, "%llu", &x) > 0;
 }
 
 bool get_double(const TCMAP* map, const char* key, double& d)
@@ -85,7 +100,17 @@ bool get_double(const TCMAP* map, const char* key, double& d)
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	return sscanf(str, "%le", &d) > 0;
+	return sscanf(str, "%lf", &d) > 0;
+}
+
+
+
+bool get_float(const TCMAP* map, const char* key, float& d)
+{
+	const char* str = tcmapget2(map, key);
+	if(str == NULL)
+		return false;
+	return sscanf(str, "%f", &d) > 0;
 }
 
 template<typename T>
@@ -117,6 +142,18 @@ bool PlayerEntity::from_map(const TCMAP* map)
 		return false;
 	memcpy(player_name, str, vsiz);
 	player_name[vsiz] = '\0';
+
+	get_uint(map, "net_last_tick", net_last_tick);
+	get_double(map, "net_x", net_x);
+	get_double(map, "net_y", net_y);
+	get_double(map, "net_z", net_z);
+	get_float(map, "net_pitch", net_pitch);
+	get_float(map, "net_yaw", net_yaw);
+	get_float(map, "net_roll", net_roll);
+	
+	int64_t inp;
+	get_int(map, "net_input", inp);	
+	net_input = inp;
 	
 	return true;
 }
@@ -124,6 +161,15 @@ bool PlayerEntity::from_map(const TCMAP* map)
 void PlayerEntity::to_map(TCMAP* map) const
 {
 	tcmapput2(map, "player_name", player_name);
+	
+	insert_uint(map, "net_last_tick", net_last_tick);
+	insert_double(map, "net_x", net_x);
+	insert_double(map, "net_y", net_y);
+	insert_double(map, "net_z", net_z);
+	insert_double(map, "net_pitch", net_pitch);
+	insert_double(map, "net_yaw", net_yaw);
+	insert_double(map, "net_roll", net_roll);
+	insert_int(map, "net_input", net_input);
 }
 
 
@@ -180,7 +226,7 @@ void EntityBase::to_map(TCMAP* res) const
 	insert_double	(res, "yaw", 	yaw);
 	insert_double	(res, "roll", 	roll);
 	
-	insert_int	  	(res, "health",	health);
+	insert_int	  	(res, "health",	(unsigned)health);
 }
 
 bool Entity::from_map(const TCMAP* res)
