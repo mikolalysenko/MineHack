@@ -94,20 +94,38 @@
 #define EVENT_PACKET_SIZE		(1<<16)
 
 //Grid bucket sizes for range searching
-#define BUCKET_SHIFT_X			7
-#define BUCKET_SHIFT_Y			7
-#define BUCKET_SHIFT_Z			7
+#define BUCKET_SHIFT_X			7ULL
+#define BUCKET_SHIFT_Y			7ULL
+#define BUCKET_SHIFT_Z			7ULL
 
-#define BUCKET_MASK_X			((1<<BUCKET_SHIFT_X)-1)
-#define BUCKET_MASK_Y			((1<<BUCKET_SHIFT_Y)-1)
-#define BUCKET_MASK_Z			((1<<BUCKET_SHIFT_Z)-1)
+#define BUCKET_X				(1ULL<<BUCKET_SHIFT_X)
+#define BUCKET_Y				(1ULL<<BUCKET_SHIFT_Y)
+#define BUCKET_Z				(1ULL<<BUCKET_SHIFT_Z)
 
-#define BUCKET_X				(1<<BUCKET_SHIFT_X)
-#define BUCKET_Y				(1<<BUCKET_SHIFT_Y)
-#define BUCKET_Z				(1<<BUCKET_SHIFT_Z)
+//Bucket string stuff
+#define BUCKET_STR_BITS			6ULL
+#define BUCKET_STR_MASK			((1ULL<<BUCKET_STR_BITS)-1ULL)
+#define BUCKET_STR_LEN			5ULL
 
-#define BUCKET_STR_LEN			5
+//Converts a triples into a bucket index
+#define BUCKET_BITS_X			(32ULL - BUCKET_SHIFT_X)
+#define BUCKET_BITS_Y			(32ULL - BUCKET_SHIFT_Y)
+#define BUCKET_BITS_Z			(32ULL - BUCKET_SHIFT_Z)
 
+#define BUCKET_MASK_X			((1ULL<<BUCKET_BITS_X) - 1)
+#define BUCKET_MASK_Y			((1ULL<<BUCKET_BITS_Y) - 1)
+#define BUCKET_MASK_Z			((1ULL<<BUCKET_BITS_Z) - 1)
+
+#define TO_BUCKET(X,Y,Z) \
+	((((uint64_t)(X)>>BUCKET_SHIFT_X) & BUCKET_MASK_X) | \
+	((((uint64_t)(Y)>>BUCKET_SHIFT_Y) & BUCKET_MASK_Y)<<BUCKET_BITS_X) | \
+	((((uint64_t)(Z)>>BUCKET_SHIFT_Z) & BUCKET_MASK_Z)<<(BUCKET_BITS_X+BUCKET_BITS_Y)))
+
+
+#define BUCKET_IDX(X,Y,Z) \
+	((uint64_t)(X) | \
+	((uint64_t)(Y) << BUCKET_BITS_X) | \
+	((uint64_t)(Z) << (BUCKET_BITS_X+BUCKET_BITS_Y)))
 
 #endif
 

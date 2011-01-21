@@ -192,7 +192,8 @@ bool get_session_id(
 		return false;
 	
 	//Scan in the session id
-	sscanf(session_id_str, "%llx", &session_id.id);
+	char* ptr;
+	session_id.id = strtoul(session_id_str, &ptr, 16);
 	
 	if(valid_session_id(session_id))
 		return true;
@@ -252,7 +253,7 @@ void do_login(HttpEvent& ev)
 	
 		ajax_printf(ev.conn, 
 			"Ok\n"
-			"%016llx", session_id.id);
+			"%016llx", (unsigned long long int)session_id.id);
 	}
 	else
 	{

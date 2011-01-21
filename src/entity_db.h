@@ -30,7 +30,14 @@ namespace Game
 	//Entity iterator function
 	typedef EntityUpdateControl (*entity_update_func)(Entity&, void*);
 	
+	//Entity update handler
+	struct EntityEventHandler
+	{
+		virtual void call(Entity const& ev) = 0;
+	};
+	
 	//Manages a collection of entities
+	//TODO: Add callbacks to track entity creation/deletion events
 	struct EntityDB
 	{
 		//Constructor/destructor stuff
@@ -57,14 +64,26 @@ namespace Game
 			void* data,
 			Region const& 	region = Region(), 
 			std::vector<EntityType> types = std::vector<EntityType>(0),
-			bool 			only_active = true);
+			bool 			only_active = true,
+			bool			only_poll = false);
 	
 		//Retrieves a player (if one exists)
 		bool get_player(std::string const& player_name, EntityID& res);
 		
+		//Event handler functions
+		void set_create_handler(EntityEventHandler* h) { create_handler = h; }
+		void set_update_handler(EntityEventHandler* h) { update_handler = h; }
+		void set_delete_handler(EntityEventHandler* h) { delete_handler = h; }
+		
 	private:
 		//The entity database
 		TCTDB*	entity_db;
+		
+		//Event handlers
+		EntityEventHandler* create_handler;
+		EntityEventHandler* update_handler;
+		EntityEventHandler* delete_handler;
+		
 	};
 };
 

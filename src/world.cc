@@ -34,11 +34,21 @@ World::World()
 {
 	running = true;
 	
+	//Initialize subsystems
 	config = new Config("data/mapconfig.tc");
 	world_gen = new WorldGen(config);
 	game_map = new Map(world_gen, "data/map.tc");
 	entity_db = new EntityDB("data/entities.tc", config);
 	mailbox = new Mailbox();
+	
+	//Set event handlers
+	create_handler = new CreateHandler(this);
+	update_handler = new UpdateHandler(this);
+	delete_handler = new DeleteHandler(this);
+	
+	entity_db->set_create_handler(create_handler);
+	entity_db->set_update_handler(update_handler);
+	entity_db->set_delete_handler(delete_handler);
 
 	//Restore tick count
 	tick_count = config->readInt("tick_count");
@@ -55,6 +65,10 @@ World::~World()
 	delete game_map;
 	delete world_gen;
 	delete config;
+	
+	delete create_handler;
+	delete update_handler;
+	delete delete_handler;
 }
 
 
@@ -71,7 +85,7 @@ bool World::player_create(string const& player_name, EntityID& player_id)
 	//Initialize player entity
 	Entity player;
 	player.base.type	= EntityType::Player;
-	player.base.active	= false;
+	player.base.flags	= EntityFlags::Inactive;
 	player.base.x		= PLAYER_START_X;
 	player.base.y		= PLAYER_START_Y;
 	player.base.z		= PLAYER_START_Z;
@@ -107,6 +121,7 @@ bool World::get_player_entity(string const& player_name, EntityID& player_id)
 //Called to delete a player
 void World::player_delete(EntityID const& player_id)
 {
+	cout << "DESTROYING PLAYER: " << player_id.id << endl;
 	entity_db->destroy_entity(player_id);
 }
 
@@ -115,58 +130,53 @@ bool World::player_join(EntityID const& player_id)
 {
 	struct Visitor
 	{
-		bool success;
 		uint64_t tick_count;
-		double x, y, z;
+		bool success;
+		Entity player;
 	
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
 			Visitor* V = (Visitor*)data;
-			
-			if( entity.base.type != EntityType::Player ||
-				entity.base.active )
+			if( !(entity.base.flags & EntityFlags::Inactive) )
 			{	
 				return EntityUpdateControl::Continue;
 			}
-			else
-			{
-				//Activate player
-				entity.base.active = true;
-				
-				//Set initial network data
-				entity.player.net_last_tick = V->tick_count;
-				entity.player.net_x = entity.base.x;
-				entity.player.net_y = entity.base.y;
-				entity.player.net_z = entity.base.z;
-				entity.player.net_pitch = entity.base.pitch;
-				entity.player.net_yaw	= entity.base.yaw;
-				entity.player.net_roll	= entity.base.roll;
-				entity.player.net_input = 0;
+			
+			//Set flags
+			entity.base.flags = EntityFlags::Poll | EntityFlags::Persist;
+			
+			//Set initial network data
+			entity.player.net_last_tick = V->tick_count;
+			entity.player.net_x = entity.base.x;
+			entity.player.net_y = entity.base.y;
+			entity.player.net_z = entity.base.z;
+			entity.player.net_pitch = entity.base.pitch;
+			entity.player.net_yaw	= entity.base.yaw;
+			entity.player.net_roll	= entity.base.roll;
+			entity.player.net_input = 0;
 
-				//Set coordinates
-				V->x = entity.base.x;
-				V->y = entity.base.y;
-				V->z = entity.base.z;
-				
-				//Set success code			
-				V->success = true;
-				return EntityUpdateControl::Update;
-			}
+			//Set return values
+			V->player = entity;
+			V->success = true;
+			
+			return EntityUpdateControl::Update;
 		}
 	};
 	
 	//Initialize player
-	Visitor V = { false, tick_count, 0., 0., 0. };
+	Visitor V;
+	V.success		= false;
+	V.tick_count	= tick_count;
 	if(!entity_db->update_entity(player_id, Visitor::call, &V) || !V.success)
 		return false;
 	
 	//Register player mail box
-	mailbox->add_player(player_id);
-	mailbox->set_origin(player_id, (int)V.x, (int)V.y, (int)V.z);
+	mailbox->add_player(player_id, 
+		(int)V.player.base.x, 
+		(int)V.player.base.y, 
+		(int)V.player.base.z);
+	mailbox->send_entity(player_id, V.player);
 		
-	//Resynchronize player position
-	resync_player(player_id);
-	
 	return true;
 }
 
@@ -176,75 +186,32 @@ bool World::player_leave(EntityID const& player_id)
 {
 	struct Visitor
 	{
-		bool success;
 		double x, y, z;
-		string name;
 	
-		static EntityUpdateControl call(Entity& entity, void* data)
+		static EntityUpdateControl visit(Entity& entity, void* data)
 		{
-			Visitor* V = (Visitor*)data;
-			
-			if( entity.base.type != EntityType::Player ||
-				!entity.base.active )
-			{	
+			if( entity.base.flags & EntityFlags::Inactive )
 				return EntityUpdateControl::Continue;
-			}
-			else
-			{
-				//Deactivate player
-				entity.base.active = false;
-				
-				//Set return value
-				V->success = true;
-				V->x = entity.base.x;
-				V->y = entity.base.y;
-				V->z = entity.base.z;
-				V->name = entity.player.player_name;
-				
-				return EntityUpdateControl::Update;
-			}
+			
+			Visitor *V = (Visitor*)data;
+			
+			entity.base.flags = EntityFlags::Inactive;
+			
+			V->x = entity.base.x;
+			V->y = entity.base.y;
+			V->z = entity.base.z;
+			
+			return EntityUpdateControl::Update;
 		}
 	};
 	
-	//Destroy player's mailbox
 	mailbox->del_player(player_id);
-
-	//Log player out
-	Visitor V = { false };
-	if(!entity_db->update_entity(player_id, Visitor::call, &V))
+	
+	Visitor V;
+	if(!entity_db->update_entity(player_id, Visitor::visit, &V))
 		return false;
 	
-	//Post kill event to all players in range
-	if(V.success)
-	{
-		Region r(
-			V.x - UPDATE_RADIUS, V.y - UPDATE_RADIUS, V.z - UPDATE_RADIUS,
-			V.x + UPDATE_RADIUS, V.y + UPDATE_RADIUS, V.z + UPDATE_RADIUS);
-	
-		stringstream ss;
-		ss << V.name << " left the game.<br/>";
-	
-		struct KillVisitor
-		{
-			EntityID	casualty_id;
-			Mailbox*	mailbox;
-			string		logout_txt;
-			
-			static EntityUpdateControl call(Entity& entity, void* data)
-			{
-				KillVisitor* KV = (KillVisitor*)data;
-				KV->mailbox->send_kill(entity.entity_id, KV->casualty_id);
-				KV->mailbox->send_chat(entity.entity_id, KV->logout_txt, false);
-				return EntityUpdateControl::Continue;
-			}
-		};
-		
-		KillVisitor KV = { player_id, mailbox, ss.str() };
-		entity_db->foreach(KillVisitor::call, &KV, r, { EntityType::Player });
-	}
-
-	
-	return V.success;
+	return true;
 }
 
 
@@ -258,10 +225,14 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 	{
 		const PlayerEvent* input;
 		uint64_t tick_count;
-		bool out_of_sync;
 		
 		static EntityUpdateControl call(Entity& entity, void* data)	
 		{
+			//Sanity check player object
+			if( (entity.base.flags & EntityFlags::Inactive) ||
+				 entity.base.type != EntityType::Player )
+				return EntityUpdateControl::Continue;
+		
 			Visitor* V					= (Visitor*)data;
 			PlayerEntity* player 		= &entity.player;
 			const PlayerEvent* input	= V->input;
@@ -277,7 +248,6 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 				input->tick < V->tick_count - TICK_RESYNC_TIME ||
 				input->tick < player->net_last_tick )
 			{
-				V->out_of_sync = true;
 				return EntityUpdateControl::Continue;
 			}
 			
@@ -294,22 +264,17 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 		}
 	};
 	
-	
-	Visitor V = { &input, tick_count, false };
+	Visitor V = { &input, tick_count };
 	entity_db->update_entity(player_id, Visitor::call, &V);
-	
-	if(V.out_of_sync)
-	{
-		resync_player(player_id);
-	}
 }
 
 
 void World::handle_chat(EntityID const& player_id, std::string const& msg)
 {
+	//Sanity check chat message
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
-		!entity.base.active ||
+		(entity.base.flags & EntityFlags::Inactive) ||
 		entity.base.type != EntityType::Player )
 		return;
 	
@@ -317,8 +282,16 @@ void World::handle_chat(EntityID const& player_id, std::string const& msg)
 	stringstream ss;
 	ss << entity.player.player_name << ": " << msg;
 	
+	//Construct region
+	Region r(	entity.base.x - CHAT_RADIUS,
+				entity.base.y - CHAT_RADIUS,
+				entity.base.z - CHAT_RADIUS,
+				entity.base.x + CHAT_RADIUS,
+				entity.base.y + CHAT_RADIUS,
+				entity.base.z + CHAT_RADIUS  );
+				
 	//Broadcast to players
-	broadcast_chat(entity.base.x, entity.base.y, entity.base.z, ss.str(), true);
+	mailbox->broadcast_chat(r, ss.str(), true);
 }
 
 
@@ -337,19 +310,35 @@ int World::get_compressed_chunk(
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
 		entity.base.type != EntityType::Player ||
-		!entity.base.active || 
-		abs(entity.base.x - (chunk_id.x + .5) * CHUNK_X) >= UPDATE_RADIUS ||
-		abs(entity.base.y - (chunk_id.y + .5) * CHUNK_Y) >= UPDATE_RADIUS ||
-		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) >= UPDATE_RADIUS )
+		(entity.base.flags & EntityFlags::Inactive) || 
+		abs(entity.base.x - (chunk_id.x + .5) * CHUNK_X) > (UPDATE_RADIUS+CHUNK_X) ||
+		abs(entity.base.y - (chunk_id.y + .5) * CHUNK_Y) > (UPDATE_RADIUS+CHUNK_Y) ||
+		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) > (UPDATE_RADIUS+CHUNK_Z) )
 	{
 		return 0;
 	}
+	
+	//Refresh all existing entities in the chunk region for the client
+	struct Visitor
+	{
+		EntityID player_id;
+		Mailbox* mailbox;
+		
+		static EntityUpdateControl call(Entity& entity, void* data)
+		{
+			Visitor* v = (Visitor*)data;
+			v->mailbox->send_entity(v->player_id, entity);
+			return EntityUpdateControl::Continue;
+		}
+	};
+	
+	Visitor V = { player_id, mailbox };
+	entity_db->foreach(Visitor::call, &V, Region(chunk_id), vector<EntityType>(), true, false);
+	
 
 	//Read the chunk from the map
 	Chunk chunk;
 	game_map->get_chunk(chunk_id, &chunk);
-	
-	//Return the compressed chunk
 	return chunk.compress((void*)buf, buf_len);
 }
 
@@ -363,69 +352,104 @@ void World::heartbeat(
 	EntityID const& player_id,
 	int socket)
 {
-	//Retrieve player entity
+	//Sanity check player
 	Entity player;
-	if(!entity_db->get_entity(player_id, player))
+	if( !entity_db->get_entity(player_id, player) ||
+		player.base.type != EntityType::Player ||
+		(player.base.flags & EntityFlags::Inactive) )
 	{
 		return;
 	}
 
-	//Create range
-	Region r( 
-		player.base.x - UPDATE_RADIUS, player.base.y - UPDATE_RADIUS, player.base.z - UPDATE_RADIUS,
-		player.base.x + UPDATE_RADIUS, player.base.y + UPDATE_RADIUS, player.base.z + UPDATE_RADIUS);
+	//Poll radius
+	Region r(	player.base.x - UPDATE_RADIUS, 
+				player.base.y - UPDATE_RADIUS,
+				player.base.z - UPDATE_RADIUS,
+				player.base.x + UPDATE_RADIUS,
+				player.base.y + UPDATE_RADIUS,
+				player.base.z + UPDATE_RADIUS );
 
-	//Start bulk update
+	//Start polling
 	//When destructor fires, will send the http event to the client
-	BulkUpdater bu(
+	HeartbeatPoll poll(
 		mailbox,
 		player_id,
 		socket,
-		tick_count,
 		player.base.x, player.base.y, player.base.z);
+		
+	assert(poll.get_data());
 
-	//Traverse all entities which need to be updated
-	entity_db->foreach(BulkUpdater::send_entity, bu.get_data(), r);
+	//Poll all entities within radius and post event to the player
+	entity_db->foreach(
+		HeartbeatPoll::send_entity, 
+		poll.get_data(), 
+		r,
+		vector<EntityType>(),
+		false,
+		true);
 }
 
-//Sends a resynchronize packet to the player
-void World::resync_player(EntityID const& player_id)
+//---------------------------------------------------------------
+// Entity event handler functions
+//---------------------------------------------------------------
+
+void World::CreateHandler::call(Entity const& entity)
 {
-	Entity player;
-	if(entity_db->get_entity(player_id, player))
+	if(entity.base.flags & EntityFlags::Inactive)
+		return;
+
+	Region r( entity.base.x - UPDATE_RADIUS, 
+			  entity.base.y - UPDATE_RADIUS,
+			  entity.base.z - UPDATE_RADIUS,
+			  entity.base.x + UPDATE_RADIUS, 
+			  entity.base.y + UPDATE_RADIUS,
+			  entity.base.z + UPDATE_RADIUS);
+
+	world->mailbox->broadcast_entity(r, entity);
+}
+
+void World::UpdateHandler::call(Entity const& entity)
+{
+	if( (entity.base.flags & EntityFlags::Inactive) ||
+		(entity.base.flags & EntityFlags::Temporary) )
+		return;
+
+	//Polling entities only get updated when we do a heartbeat.
+	if( !(entity.base.flags & EntityFlags::Poll) )
 	{
-		mailbox->send_entity(player_id, player);
+		Region r( entity.base.x - UPDATE_RADIUS, 
+				  entity.base.y - UPDATE_RADIUS,
+				  entity.base.z - UPDATE_RADIUS,
+				  entity.base.x + UPDATE_RADIUS, 
+				  entity.base.y + UPDATE_RADIUS,
+				  entity.base.z + UPDATE_RADIUS);
+	
+		world->mailbox->broadcast_entity(r, entity);		
+	}
+	
+	//Update origin for players
+	if(entity.base.type == EntityType::Player)
+	{
+		world->mailbox->set_origin(entity.entity_id, 
+			entity.base.x, 
+			entity.base.y, 
+			entity.base.z);
 	}
 }
 
-
-//---------------------------------------------------------------
-// Misc. game stuff (admin commands, chat stuff, etc.)
-//---------------------------------------------------------------
-
-void World::broadcast_chat(double x, double y, double z, string const& msg, bool escape_xml)
+void World::DeleteHandler::call(Entity const& entity)
 {
-	//Construct region
-	Region r(	x - CHAT_RADIUS, y - CHAT_RADIUS, z - CHAT_RADIUS,  
-				x + CHAT_RADIUS, y + CHAT_RADIUS, z + CHAT_RADIUS); 
+	if((entity.base.flags & EntityFlags::Temporary))
+		return;
 	
-	//Post event to all players in radius
-	struct Visitor
-	{
-		Mailbox* mailbox;
-		string chat_string;
-		bool escape;
-	
-		static EntityUpdateControl call(Entity& p, void* data)
-		{
-			Visitor* V = (Visitor*)data;
-			V->mailbox->send_chat(p.entity_id, V->chat_string, V->escape);
-			return EntityUpdateControl::Continue;
-		}
-	};
-	
-	Visitor V = { mailbox, msg, escape_xml };
-	entity_db->foreach(Visitor::call, &V, r, { EntityType::Player } );
+	Region r( entity.base.x - UPDATE_RADIUS, 
+			  entity.base.y - UPDATE_RADIUS,
+			  entity.base.z - UPDATE_RADIUS,
+			  entity.base.x + UPDATE_RADIUS, 
+			  entity.base.y + UPDATE_RADIUS,
+			  entity.base.z + UPDATE_RADIUS);
+
+	world->mailbox->broadcast_kill(r, entity.entity_id);
 }
 
 
@@ -436,54 +460,62 @@ void World::broadcast_chat(double x, double y, double z, string const& msg, bool
 //Ticks the server
 void World::tick()
 {
-	tick_count++;
+	//Increment tick counter
+	mailbox->set_tick_count(++tick_count);
 	
-	//The entity loop:  Updates all entities in the game
+	tick_players();
+	tick_mobs();
+	
+	//TODO: Add tick events for other major game systems here
+}
+
+//Player loop:  Updates all players in the game
+void World::tick_players()
+{
 	struct Visitor
 	{
 		World*				world;
-		vector<EntityID>	dead_players;
 		
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
 			Visitor *V = (Visitor*)data;
 		
-			if(entity.base.type == EntityType::Player)
+			//Check for timed out players
+			if(V->world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
 			{
-				//Check timeout condition
-				if(V->world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
-				{
-					//Log out player and post a delete event
-					V->dead_players.push_back(entity.entity_id);					
-					return EntityUpdateControl::Continue;
-				}
-			
-				//Update network state (dumb, no interpolation, no using input)
-				entity.base.x = entity.player.net_x;
-				entity.base.y = entity.player.net_y;
-				entity.base.z = entity.player.net_z;
-				
-				entity.base.pitch = entity.player.net_pitch;
-				entity.base.yaw = entity.player.net_yaw;
-				entity.base.roll = 0.0;
-				
-				return EntityUpdateControl::Update;				
+				entity.base.flags = EntityFlags::Inactive;
+				V->world->mailbox->del_player(entity.entity_id);
+				return EntityUpdateControl::Update;
 			}
 		
-			return EntityUpdateControl::Continue;
+			//Update network state
+			//TODO: Add some interpolation / sanity checking here.
+			//	Need to guard against speed hacking
+			entity.base.x = entity.player.net_x;
+			entity.base.y = entity.player.net_y;
+			entity.base.z = entity.player.net_z;
+			
+			entity.base.pitch = entity.player.net_pitch;
+			entity.base.yaw = entity.player.net_yaw;
+			entity.base.roll = 0.0;
+			
+			return EntityUpdateControl::Update;				
 		}
 	};
 	
-	//Traverse all entities
-	Visitor V;
-	V.world = this;
-	
-	for(int i=0; i<V.dead_players.size(); i++)
-	{
-		player_leave(V.dead_players[i]);
-	}
-	
-	entity_db->foreach(Visitor::call, &V); 
+	Visitor V = { this };
+	entity_db->foreach(
+		Visitor::call, 
+		&V,
+		Region(),
+		vector<EntityType>({ EntityType::Player }), 
+		true, 
+		false); 
+}
+
+void World::tick_mobs()
+{
+	//Updates all mobs in the game (not yet implemented)
 }
 
 };

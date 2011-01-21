@@ -70,9 +70,6 @@ namespace Game
 		//Ticks the server
 		void tick();
 		
-		//Misc functions
-		void broadcast_chat(double x, double y, double z, std::string const& msg, bool escape_xml = true);
-		
 	private:
 	
 		//Various systems
@@ -82,10 +79,35 @@ namespace Game
 		Mailbox			*mailbox;		//Mailbox for player updates
 		Config			*config;		//Configuration stuff
 		
+		//Event handlers
+		struct CreateHandler : EntityEventHandler
+		{
+			World *world;
+			CreateHandler(World* w) : world(w) {}
+			virtual void call(Entity const& ev);
+		};
+
+		struct UpdateHandler : EntityEventHandler
+		{
+			World *world;			
+			UpdateHandler(World* w) : world(w) {}
+			virtual void call(Entity const& ev);
+		};
+
+		struct DeleteHandler : EntityEventHandler
+		{
+			World *world;			
+			DeleteHandler(World* w) : world(w) {}
+			virtual void call(Entity const& ev);
+		};
 	
-			
-		//Sends a resynchronize packet to the target player
-		void resync_player(EntityID const&);
+		CreateHandler	*create_handler;
+		UpdateHandler	*update_handler;
+		DeleteHandler	*delete_handler;
+		
+		//The update loops
+		void tick_players();
+		void tick_mobs();
 	};
 };
 

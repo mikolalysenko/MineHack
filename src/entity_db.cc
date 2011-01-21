@@ -26,7 +26,10 @@ using namespace std;
 namespace Game
 {
 
-EntityDB::EntityDB(string const& path, Config* config)
+EntityDB::EntityDB(string const& path, Config* config) :
+	create_handler(NULL),
+	update_handler(NULL),
+	delete_handler(NULL)
 {
 	//Create db
 	entity_db = tctdbnew();
@@ -47,7 +50,7 @@ EntityDB::EntityDB(string const& path, Config* config)
 	tctdbsetindex(entity_db, "player_name", TDBITLEXICAL  | TDBITKEEP);
 	tctdbsetindex(entity_db, "type", TDBITLEXICAL | TDBITKEEP);
 	tctdbsetindex(entity_db, "active", TDBITLEXICAL | TDBITKEEP);
-	tctdbsetindex(entity_db, "net_last_tick", TDBITDECIMAL | TDBITKEEP);
+	tctdbsetindex(entity_db, "poll", TDBITLEXICAL | TDBITKEEP);
 }
 
 
@@ -63,13 +66,26 @@ bool EntityDB::create_entity(Entity const& initial_state, EntityID& entity_id)
 	entity_id.id = (uint64_t)tctdbgenuid(entity_db);
 	ScopeTCMap	M;
 	initial_state.to_map(M.map);
-	return tctdbputkeep(entity_db, (const void*)&entity_id, sizeof(EntityID), M.map);
+	
+	bool res = tctdbputkeep(entity_db, &entity_id, sizeof(EntityID), M.map);
+	if(res)
+		create_handler->call(initial_state);
+	
+	return res;
 }
 
 //Destroys an entity
 bool EntityDB::destroy_entity(EntityID const& entity_id)
 {
-	return tctdbout(entity_db, (const void*)&entity_id, sizeof(EntityID));
+	Entity entity;
+	if(!get_entity(entity_id, entity))
+		return false;
+
+	bool res = tctdbout(entity_db, &entity_id, sizeof(EntityID));
+	if(res)
+		delete_handler->call(entity);
+	
+	return res;
 }
 
 //Retrieves an entity
@@ -77,7 +93,7 @@ bool EntityDB::get_entity(EntityID const& entity_id, Entity& entity)
 {
 	entity.entity_id = entity_id;
 	
-	ScopeTCMap M(tctdbget(entity_db, (const void*)&entity_id, sizeof(EntityID)));
+	ScopeTCMap M(tctdbget(entity_db, &entity_id, sizeof(EntityID)));
 	if(M.map == NULL)
 		return false;
 	
@@ -91,6 +107,9 @@ bool EntityDB::update_entity(
 	entity_update_func callback, 
 	void* user_data)
 {
+	Entity entity;
+	bool created, deleted, updated;
+
 	while(true)
 	{
 		if(!tctdbtranbegin(entity_db))
@@ -98,6 +117,9 @@ bool EntityDB::update_entity(
 			return false;
 		}
 		
+		created = false;
+		deleted = false;
+		updated = false;
 		
 		ScopeTCMap M(tctdbget(entity_db, &entity_id, sizeof(EntityID)));
 		if(M.map == NULL)
@@ -106,27 +128,50 @@ bool EntityDB::update_entity(
 			return false;
 		}
 		
-		Entity entity;
 		entity.from_map(M.map);
 		entity.entity_id = entity_id;
 		
+		bool palive = !(entity.base.flags & EntityFlags::Inactive);
 		int rc = (int)((*callback)(entity, user_data));
+		bool nalive = !(entity.base.flags & EntityFlags::Inactive);
 		
-		if(rc & (int)EntityUpdateControl::Update)
+		if(rc & (int)EntityUpdateControl::Delete)
 		{
-			cout << "updating entity" << endl;
+			if(tctdbout(entity_db, &entity_id, sizeof(EntityID)))
+				deleted = true;
+		}
+		else if(rc & (int)EntityUpdateControl::Update)
+		{
 			tcmapclear(M.map);
 			entity.to_map(M.map);
 			tctdbput(entity_db, &entity_id, sizeof(EntityID), M.map);
-		}
-		else if(rc & (int)EntityUpdateControl::Delete)
-		{
-			tctdbout(entity_db, &entity_id, sizeof(EntityID));
+		
+			//Check state transition
+			if(nalive && palive)
+			{
+				updated = true;
+			}
+			else if(nalive && !palive)
+			{
+				created = true;
+			}
+			else if(!nalive && palive)
+			{
+				deleted = true;
+			}
 		}
 		
 		if(tctdbtrancommit(entity_db))
-			return true;
+		{
+			break;
+		}
 	}
+	
+	if(updated)		update_handler->call(entity);
+	if(deleted)		delete_handler->call(entity);
+	if(created)		create_handler->call(entity);
+	
+	return true;
 }
 
 
@@ -137,12 +182,13 @@ bool EntityDB::foreach(
 	void*				user_data,
 	Region const& 		r, 
 	vector<EntityType>	types,
-	bool				only_active)
+	bool				only_active,
+	bool				only_poll)
 {
 	ScopeTCQuery Q(entity_db);
 	
 	//Add range query
-	if(r.lo[0] != 0)
+	if(r.lo[0] > 0)
 	{
 		{
 		int bmin_x = (int)(r.lo[0] / BUCKET_X),
@@ -171,35 +217,31 @@ bool EntityDB::foreach(
 		char* ptr = bucket_str;
 		
 		for(int bx=bmin_x; bx<=bmax_x; bx++)
+		for(int by=bmin_y; by<=bmax_y; by++)
+		for(int bz=bmin_z; bz<=bmax_z; bz++)
 		{
-			for(int by=bmin_y; by<=bmax_y; by++)
+			int t = bx;
+			for(int i=0; i<BUCKET_STR_LEN; i++)
 			{
-				for(int bz=bmin_z; bz<=bmax_z; bz++)
-				{
-					int t = bx;
-					for(int i=0; i<BUCKET_STR_LEN; i++)
-					{
-						*(ptr++) = '0' + (t & BUCKET_MASK_X);
-						t >>= BUCKET_SHIFT_X;
-					}
-					
-					t = by;
-					for(int i=0; i<BUCKET_STR_LEN; i++)
-					{
-						*(ptr++) = '0' + (t & BUCKET_MASK_Y);
-						t >>= BUCKET_SHIFT_Y;
-					}
-				
-					t = bz;
-					for(int i=0; i<BUCKET_STR_LEN; i++)
-					{
-						*(ptr++) = '0' + (t & BUCKET_MASK_Z);
-						t >>= BUCKET_SHIFT_Z;
-					}
-					
-					*(ptr++) = ' ';
-				}
+				*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+				t >>= BUCKET_STR_BITS;
 			}
+			
+			t = by;
+			for(int i=0; i<BUCKET_STR_LEN; i++)
+			{
+				*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+				t >>= BUCKET_STR_BITS;
+			}
+		
+			t = bz;
+			for(int i=0; i<BUCKET_STR_LEN; i++)
+			{
+				*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+				t >>= BUCKET_STR_BITS;
+			}
+			
+			*(ptr++) = ' ';
 		}
 		
 		*(--ptr) = '\0';
@@ -209,9 +251,6 @@ bool EntityDB::foreach(
 		
 		//Add fine grained range conditions to query
 		static const char* AXIS_LABEL[] = { "x", "y", "z" };
-		static const int COORD_MIN[] = { COORD_MIN_X, COORD_MIN_Y, COORD_MIN_Z };
-		static const int COORD_MAX[] = { COORD_MAX_X, COORD_MAX_Y, COORD_MAX_Z };
-	
 		for(int i=0; i<3; i++)
 		{
 			stringstream ss;
@@ -237,11 +276,19 @@ bool EntityDB::foreach(
 		tctdbqryaddcond(Q.query, "active", TDBQCSTREQ, "1");
 	}
 	
+	//Add polling condition
+	if(only_poll)
+	{
+		tctdbqryaddcond(Q.query, "poll", TDBQCSTREQ, "1");
+	}
+	
 	//Define the call back structure locally
 	struct UserDelegate
 	{
 		void* 				context;
 		entity_update_func 	func;
+		EntityEventHandler	*create_handler, *update_handler, *delete_handler;
+		
 		
 		static int call(const void* key, int ksize, TCMAP* columns, void* data)
 		{
@@ -249,16 +296,38 @@ bool EntityDB::foreach(
 			Entity entity;
 			entity.entity_id = *((const EntityID*)key);
 			entity.from_map(columns);
+			
+			bool palive = !(entity.base.flags & EntityFlags::Inactive);
 
 			//Call user function
 			UserDelegate* dg = (UserDelegate*)data;
 			int rc = (int)dg->func(entity, dg->context);
 			
+			bool nalive = !(entity.base.flags & EntityFlags::Inactive);
+
+			
 			//If executing update, then need to pack entity into columns
-			if(rc & TDBQPPUT)
+			if(rc & TDBQPOUT)
+			{
+				dg->delete_handler->call(entity);
+			}
+			else if(rc & TDBQPPUT)
 			{
 				tcmapclear(columns);
 				entity.to_map(columns);
+				
+				if(nalive && palive)
+				{
+					dg->update_handler->call(entity);
+				}
+				else if(nalive && !palive)
+				{
+					dg->create_handler->call(entity);
+				}
+				else if(!nalive && palive)
+				{
+					dg->delete_handler->call(entity);
+				}
 			}
 			
 			return rc;
@@ -267,7 +336,12 @@ bool EntityDB::foreach(
 	};
 
 	//Construct delegate
-	UserDelegate dg = { user_data, user_func };
+	UserDelegate dg = { 
+		user_data, 
+		user_func, 
+		create_handler, 
+		update_handler, 
+		delete_handler };
 	
 	//Execute
 	bool res = tctdbqryproc(Q.query, UserDelegate::call, &dg);

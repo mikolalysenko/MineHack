@@ -10,7 +10,6 @@
 
 #include "constants.h"
 #include "config.h"
-#include "uuid_gen.h"
 #include "chunk.h"
 
 namespace Game
@@ -68,6 +67,29 @@ namespace Game
 		void	to_map(TCMAP*) const;
 	};
 	
+	//Entity control flags
+	struct EntityFlags
+	{
+		//Toggles entity state, set to 0 to disable entity 
+		// (used for logging player off)
+		const static int Inactive		= (1 << 0);
+		
+		//If set, will post update to entity constantly.  Expensive.
+		//Only use with players, MOBs, other highly dynamic, net-relevant entity
+		//Other entities will instead be updated on a per-event basis
+		const static int Poll			= (1 << 1);
+		
+		//If set, then the client has no authority to delete this entity
+		// Use for MOBs, players, static objects, etc. 
+		// Do not use for projectiles, temporary objects etc.
+		const static int Persist 		= (1 << 2);
+		
+		//If set, then only the creation event for this entity is sent to the
+		//client.  This is used for projectiles or other short lived objects.
+		const static int Temporary		= (1 << 3);
+		
+	};
+	
 	//Common entity data
 	struct EntityBase
 	{
@@ -75,7 +97,7 @@ namespace Game
 		EntityType	type;
 		
 		//If set, entity is active (ie recieves updates, etc.)
-		bool active;
+		int			flags;
 		
 		//Entity position
 		double x, y, z;

@@ -33,20 +33,20 @@ void bucket_str(double x, double y, double z, char* res)
 
 	for(int i=0; i<BUCKET_STR_LEN; i++)
 	{
-		*(res++) = '0' + (ix & BUCKET_MASK_X);
-		ix >>= BUCKET_SHIFT_X;
+		*(res++) = '0' + (ix & BUCKET_STR_MASK);
+		ix >>= BUCKET_STR_BITS;
 	}
 
 	for(int i=0; i<BUCKET_STR_LEN; i++)
 	{
-		*(res++) = '0' + (iy & BUCKET_MASK_Y);
-		iy >>= BUCKET_SHIFT_Y;
+		*(res++) = '0' + (iy & BUCKET_STR_MASK);
+		iy >>= BUCKET_STR_BITS;
 	}
 	
 	for(int i=0; i<BUCKET_STR_LEN; i++)
 	{
-		*(res++) = '0' + (iz & BUCKET_MASK_Z);
-		iz >>= BUCKET_SHIFT_Z;
+		*(res++) = '0' + (iz & BUCKET_STR_MASK);
+		iz >>= BUCKET_STR_BITS;
 	}
 		
 	
@@ -173,11 +173,11 @@ bool EntityBase::from_map(const TCMAP* map)
 	if(!get_int(map, "type", tmp))
 		return false;
 	type = (EntityType)tmp;
-	
-	if(!get_int(map, "active", tmp))
+
+	if(!get_int(map, "flags", tmp))
 		return false;
-	active = (tmp != 0);
-	
+	flags = tmp;
+
 	if(!get_double(map, "x", x))
 		return false;	
 	if(!get_double(map, "y", y))
@@ -198,15 +198,17 @@ bool EntityBase::from_map(const TCMAP* map)
 void EntityBase::to_map(TCMAP* res) const
 {
 	insert_str		(res, "type",	(int)type);
-	insert_str		(res, "active",	(int)(active != 0));
 	
-	if(active)
-	{
-		//Add position bucket field, used for optimizing range searches
-		char str[20];
-		bucket_str(x, y, z, str);
-		tcmapput2(res, "bucket", str);
-	}
+	//Set flags and search strings
+	insert_str (res, "active",	(int)((flags & EntityFlags::Inactive) == 0));
+	bool poll = (flags & (EntityFlags::Poll | EntityFlags::Inactive)) == EntityFlags::Poll;
+	insert_str (res, "poll", 	(int)(poll));
+	insert_str (res, "flags",	(int)flags);
+
+	//Add position bucket field, used for optimizing range searches
+	char str[20];
+	bucket_str(x, y, z, str);
+	tcmapput2(res, "bucket", str);
 	
 
 	insert_str(res, "x", 		x);
