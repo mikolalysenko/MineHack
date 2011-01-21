@@ -51,7 +51,6 @@ bool create_session(const string& user_name, SessionID& session_id)
 	if( user_name.size() > USER_NAME_MAX_LEN )
 		return false;
 	
-	
 	//Initialize session variable
 	Session s;
 	s.state			= SessionState::PreJoinGame;
@@ -61,7 +60,7 @@ bool create_session(const string& user_name, SessionID& session_id)
 	{	WriteLock L(&session_lock);
 	
 		//Generate session id
-		session_id.id = session_id_gen->gen_uuid();
+		session_id.id = ((uint64_t)rand()) | (((uint64_t)rand())<<32ULL);
 		
 		if(user_table.find(user_name) != user_table.end())
 			return false;
