@@ -105,22 +105,15 @@ bool verify_user_name(const string& user_name, const string& password_hash)
 	}
 	
 	int len;
-	void * data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
+	ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
 		
-	if(data == NULL)
-	{
-		return false;
-	}
-	
-	ScopeFree guard(data);
-
-	if(len < sizeof(LoginRecord))
+	if(G.ptr == NULL || len < sizeof(LoginRecord))
 	{
 		return false;
 	}
 	
 	//Read in the login record
-	LoginRecord* account = (LoginRecord*)data;
+	LoginRecord* account = (LoginRecord*)G.ptr;
 	return (strncmp(account->password_hash, password_hash.c_str(), PASSWORD_HASH_LEN) == 0);
 }
 
@@ -128,21 +121,15 @@ bool verify_user_name(const string& user_name, const string& password_hash)
 bool get_login_record(const string& user_name, LoginRecord& result)
 {
 	int len;
-	void * data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
+	ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
 		
-	if(data == NULL)
+	if(G.ptr == NULL || len < sizeof(LoginRecord))
 	{
 		return false;
 	}
 	
-	ScopeFree guard(data);
-
-	if(len < sizeof(LoginRecord))
-	{
-		return false;
-	}
 	
-	result = *(LoginRecord*)data;
+	result = *(LoginRecord*)G.ptr;
 	return true;
 }
 
@@ -188,21 +175,18 @@ bool get_player_names(string const& user_name, vector<string>& player_names)
 	player_names.clear();
 
 	int len;
-	void* data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
-	if(data == NULL)
-		return false;
-	ScopeFree	guard(data);
-
-	if(len < sizeof(LoginRecord))
+	ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
+	
+	if(G.ptr == NULL || len < sizeof(LoginRecord))
 		return false;
 	
-	char* ptr = ((char*)data) + sizeof(LoginRecord);
+	char* ptr = ((char*)G.ptr) + sizeof(LoginRecord);
 	for(int i=sizeof(LoginRecord); i<len; ++i)
 	{
-		if( ((char*)data)[i] == '\0' )
+		if( ((char*)G.ptr)[i] == '\0' )
 		{
 			player_names.push_back(ptr);
-			ptr = ((char*)data) + i + 1;
+			ptr = ((char*)G.ptr) + i + 1;
 		}
 	}
 	
@@ -220,15 +204,8 @@ bool remove_player_name(string const& user_name, string const& player_name)
 		}
 
 		int len;
-		void* data = tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len);
-		if(data == NULL)
-		{
-			tchdbtranabort(login_db);
-			return false;
-		}
-		ScopeFree	guard(data);
-	
-		if(len < sizeof(LoginRecord))
+		ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
+		if(G.ptr == NULL || len < sizeof(LoginRecord))
 		{
 			tchdbtranabort(login_db);
 			return false;
@@ -236,7 +213,7 @@ bool remove_player_name(string const& user_name, string const& player_name)
 	
 	
 		bool found_item = false;
-		char* ptr = ((char*)data) + sizeof(LoginRecord);
+		char* ptr = ((char*)G.ptr) + sizeof(LoginRecord);
 		for(int i=sizeof(LoginRecord); i<len; )
 		{
 			cout << "Checking record: " << ptr << endl;
@@ -245,11 +222,11 @@ bool remove_player_name(string const& user_name, string const& player_name)
 			i += l;
 			if(strcmp(ptr, player_name.c_str()) == 0)
 			{
-				memmove(ptr, ((char*)data) + i, len - i);
+				memmove(ptr, ((char*)G.ptr) + i, len - i);
 			
 				tchdbput(login_db,
 					(const void*)user_name.c_str(), user_name.size(),
-					data, len - l);
+					G.ptr, len - l);
 					
 				found_item = true;
 				break;

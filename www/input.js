@@ -9,6 +9,8 @@ InputHandler.serializers =
 {
 	"DigBlock" : function(ev)
 	{
+	
+	/*
 		var res = new Uint8Array(13);
 		var k = 0;
 		
@@ -25,10 +27,13 @@ InputHandler.serializers =
 		}
 		
 		return res.buffer;
+	*/
+		return (new Uint8Array(0)).buffer;
 	},
 	
 	"PlaceBlock" : function(ev)
 	{
+	/*
 		var res = new Uint8Array(1);
 		
 		res[0] = 3;				//Event type
@@ -37,6 +42,9 @@ InputHandler.serializers =
 		
 		
 		return res.buffer;
+	*/
+	
+		return (new Uint8Array(0)).buffer;
 	},
 	
 	"Chat" : function(ev)
@@ -52,7 +60,7 @@ InputHandler.serializers =
 		res[1] = utf8str.length;	//String length
 		
 		for(var i=0; i<utf8str.length; i++)
-			res[i+2] = utf8str.charCodeAt(i);
+			res[i+2] = utf8str.charCodeAt(i) & 0x7f;
 			
 		return res.buffer;
 	}
@@ -89,7 +97,7 @@ InputHandler.serialize = function()
 	bb.append(Session.get_session_id_arr().buffer);
 	
 	//Add player information
-	//bb.append(Player.net_state().buffer);
+	bb.append(Player.net_state().buffer);
 	
 	//Convert events to blob data
 	for(var i=0; i<InputHandler.events.length; i++)

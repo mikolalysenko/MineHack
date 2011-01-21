@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 
+
 #include <tcutil.h>
 
 #include "constants.h"
@@ -19,6 +20,7 @@
 #include "entity.h"
 
 using namespace std;
+using namespace __gnu_cxx;
 
 namespace Game
 {
@@ -51,26 +53,16 @@ void bucket_str(double x, double y, double z, char* res)
 	*(res++) = 0;
 }
 
+//TODO: This should really be done more efficiently...
+//Maybe look into finding a library for fast string conversion, or else manually instantiate optimized versions of these templates...
 
-void insert_int(TCMAP* map, const char* key, int64_t x)
+//Inserts the key as a string
+template<typename T>
+	void insert_str(TCMAP* map, const char* key, T const& x)
 {
-	char buf[64];
-	int len = snprintf(buf, 64, "%lld", x);
-	tcmapput(map, key, strlen(key), buf, len);
-}
-
-void insert_uint(TCMAP* map, const char* key, uint64_t x)
-{
-	char buf[64];
-	int len = snprintf(buf, 64, "%llu", x);
-	tcmapput(map, key, strlen(key), buf, len);
-}
-
-void insert_double(TCMAP* map, const char* key, long double d)
-{
-	char buf[128];
-	int len = snprintf(buf, 128, "%lf", d);
-	tcmapput(map, key, strlen(key), buf, len);
+	stringstream ss;
+	ss << x;
+	tcmapput2(map, key, ss.str().c_str());
 }
 
 template<typename T>
@@ -84,7 +76,8 @@ bool get_int(const TCMAP* map, const char* key, int64_t& x)
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	return sscanf(str, "%lld", &x) > 0;
+	x = strtol(str, NULL, 10);
+	return true;
 }
 
 bool get_uint(const TCMAP* map, const char* key, uint64_t& x)
@@ -92,25 +85,27 @@ bool get_uint(const TCMAP* map, const char* key, uint64_t& x)
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	return sscanf(str, "%llu", &x) > 0;
+	x = strtoul(str, NULL, 10);
+	return true;
 }
 
-bool get_double(const TCMAP* map, const char* key, double& d)
+bool get_float(const TCMAP* map, const char* key, float& x)
 {
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	return sscanf(str, "%lf", &d) > 0;
+	x = strtod(str, NULL);
+	return true;
 }
 
 
-
-bool get_float(const TCMAP* map, const char* key, float& d)
+bool get_double(const TCMAP* map, const char* key, double& x)
 {
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	return sscanf(str, "%f", &d) > 0;
+	x = strtod(str, NULL);
+	return true;
 }
 
 template<typename T>
@@ -140,9 +135,9 @@ bool PlayerEntity::from_map(const TCMAP* map)
 	int vsiz = strlen(str);
 	if(str == NULL || vsiz > PLAYER_NAME_MAX_LEN)
 		return false;
+	memset(player_name, 0, PLAYER_NAME_MAX_LEN + 1);
 	memcpy(player_name, str, vsiz);
-	player_name[vsiz] = '\0';
-
+	
 	get_uint(map, "net_last_tick", net_last_tick);
 	get_double(map, "net_x", net_x);
 	get_double(map, "net_y", net_y);
@@ -160,16 +155,17 @@ bool PlayerEntity::from_map(const TCMAP* map)
 
 void PlayerEntity::to_map(TCMAP* map) const
 {
+	cout << "Player name = " << player_name << endl;
 	tcmapput2(map, "player_name", player_name);
 	
-	insert_uint(map, "net_last_tick", net_last_tick);
-	insert_double(map, "net_x", net_x);
-	insert_double(map, "net_y", net_y);
-	insert_double(map, "net_z", net_z);
-	insert_double(map, "net_pitch", net_pitch);
-	insert_double(map, "net_yaw", net_yaw);
-	insert_double(map, "net_roll", net_roll);
-	insert_int(map, "net_input", net_input);
+	insert_str(map, "net_last_tick", net_last_tick);
+	insert_str(map, "net_x", net_x);
+	insert_str(map, "net_y", net_y);
+	insert_str(map, "net_z", net_z);
+	insert_str(map, "net_pitch", net_pitch);
+	insert_str(map, "net_yaw", net_yaw);
+	insert_str(map, "net_roll", net_roll);
+	insert_str(map, "net_input", net_input);
 }
 
 
@@ -197,17 +193,14 @@ bool EntityBase::from_map(const TCMAP* map)
 		return false;	
 	if(!get_double(map, "roll", roll))
 		return false;	
-
-	if(!get_int(map, "health", health))
-		return false;
 	
 	return true;
 }
 
 void EntityBase::to_map(TCMAP* res) const
 {
-	insert_int		(res, "type",	(int64_t)type);
-	insert_int		(res, "active",	(int64_t)(active != 0));
+	insert_str		(res, "type",	(int)type);
+	insert_str		(res, "active",	(int)(active != 0));
 	
 	if(active)
 	{
@@ -218,15 +211,13 @@ void EntityBase::to_map(TCMAP* res) const
 	}
 	
 
-	insert_double	(res, "x", 		x);
-	insert_double	(res, "y", 		y);
-	insert_double	(res, "z", 		z);
+	insert_str(res, "x", 		x);
+	insert_str(res, "y", 		y);
+	insert_str(res, "z", 		z);
 
-	insert_double	(res, "pitch", 	pitch);
-	insert_double	(res, "yaw", 	yaw);
-	insert_double	(res, "roll", 	roll);
-	
-	insert_int	  	(res, "health",	(unsigned)health);
+	insert_str(res, "pitch", 	pitch);
+	insert_str(res, "yaw", 		yaw);
+	insert_str(res, "roll", 	roll);
 }
 
 bool Entity::from_map(const TCMAP* res)
@@ -246,10 +237,8 @@ bool Entity::from_map(const TCMAP* res)
 	return true;
 }
 
-TCMAP* Entity::to_map() const
+void Entity::to_map(TCMAP* res) const
 {
-	TCMAP* res = tcmapnew();
-	
 	base.to_map(res);
 	
 	switch(base.type)
@@ -262,9 +251,6 @@ TCMAP* Entity::to_map() const
 			monster.to_map(res);
 		break;
 	}
-
-	return res;
-
 }
 
 

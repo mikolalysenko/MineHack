@@ -61,9 +61,9 @@ EntityDB::~EntityDB()
 bool EntityDB::create_entity(Entity const& initial_state, EntityID& entity_id)
 {
 	entity_id.id = (uint64_t)tctdbgenuid(entity_db);
-	return tctdbputkeep(entity_db, 
-		(const void*)&entity_id, sizeof(EntityID), 
-		initial_state.to_map());
+	ScopeTCMap	M;
+	initial_state.to_map(M.map);
+	return tctdbputkeep(entity_db, (const void*)&entity_id, sizeof(EntityID), M.map);
 }
 
 //Destroys an entity
@@ -115,7 +115,8 @@ bool EntityDB::update_entity(
 		if(rc & (int)EntityUpdateControl::Update)
 		{
 			cout << "updating entity" << endl;
-			ScopeTCMap M(entity.to_map());
+			tcmapclear(M.map);
+			entity.to_map(M.map);
 			tctdbput(entity_db, &entity_id, sizeof(EntityID), M.map);
 		}
 		else if(rc & (int)EntityUpdateControl::Delete)
@@ -251,8 +252,18 @@ bool EntityDB::foreach(
 			entity.entity_id = *((const EntityID*)key);
 			entity.from_map(columns);
 
+			//Call user function
 			UserDelegate* dg = (UserDelegate*)data;
-			return (int)dg->func(entity, dg->context);
+			int rc = (int)dg->func(entity, dg->context);
+			
+			//If executing update, then need to pack entity into columns
+			if(rc & TDBQPPUT)
+			{
+				tcmapclear(columns);
+				entity.to_map(columns);
+			}
+			
+			return rc;
 		}
 
 	};
@@ -279,12 +290,14 @@ bool EntityDB::get_player(std::string const& player_name, EntityID& res)
 	
 	ScopeTCList L(tctdbqrysearch(Q.query));
 	
-	int sz = 0;
-	ScopeFree E(tclistpop(L.list, &sz));
-	if(sz != sizeof(EntityID))
-		return false;
+	assert(tclistnum(L.list) <= 1);
 	
-	res = *((EntityID*)E.ptr);
+	int sz = 0;
+	const void* ptr = tclistval(L.list, 0, &sz);
+	if(ptr == NULL)
+		return false;
+		
+	res = *((EntityID*)ptr);
 	
 	return true;
 }

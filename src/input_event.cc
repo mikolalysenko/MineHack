@@ -42,7 +42,7 @@ int DigEvent::extract(void* buf, size_t buf_len)
 
 int PlayerEvent::extract(void* buf, size_t buf_len)
 {
-	const int LEN = 8 + (4 + 4 + 4) + 3;
+	const int LEN = 24;
 
 	uint8_t *ptr = (uint8_t*)buf;
 
@@ -61,11 +61,13 @@ int PlayerEvent::extract(void* buf, size_t buf_len)
 	z = ((double)iz) / COORD_NET_PRECISION;
 	
 	//Unpack pitch/yaw
-	int ipitch, iyaw;
-	ipitch = *(ptr++);
-	iyaw = *(ptr++);
-	pitch	= 2. * M_PI / 256. * (double)ipitch;
-	yaw		= 2. * M_PI / 256. * (double)iyaw;
+	int ipitch, iyaw, iroll;
+	ipitch 	= *(ptr++);
+	iyaw 	= *(ptr++);
+	iroll 	= *(ptr++);
+	pitch	= 2. * M_PI / 255. * (double)ipitch;
+	yaw		= 2. * M_PI / 255. * (double)iyaw;
+	roll	= 2. * M_PI / 255. * (double)iroll;
 	
 	//Unpack input
 	input_state = *(ptr++);

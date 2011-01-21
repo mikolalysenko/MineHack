@@ -2,6 +2,9 @@ var Player =
 {
 	//Entity ID
 	entity_id : "",
+	
+	//Player entity
+	entity : null,
 
 	//Units / tick walk speed
 	speed : 0.1,
@@ -30,14 +33,12 @@ var Player =
 		"chat" : 0
 	},
 	
-	//
+	//Mouse delta
 	dx : 0,
 	dy : 0,
 	
-	//Player coordinates
-	pos : [(1<<20), (1<<20), (1<<20)],
-	pitch : 0,
-	yaw : 0	
+	//If set, player is chatting
+	in_chat : false
 };
 
 
@@ -83,23 +84,69 @@ Player.init = function()
 	return "Ok";
 }
 
+Player.set_entity_id = function(str)
+{
+	var res = "";
+	for(var i=14; i>=0; i-=2)
+	{
+		var x = parseInt(str.slice(i, i+2), 16);
+		res += String.fromCharCode(x + 0xB0);
+	}
+	Player.entity_id = res;
+}
+
+Player.set_entity = function(ent)
+{
+	Player.entity = ent;
+}
+
 Player.net_state = function()
 {
-	var res = new Uint8Array(13);
+	if(!Player.entity)
+		return new Uint8Array(0);
+	
+	var res = new Uint8Array(25);
+	var ent = Player.entity;
 	var i = 0;
 	
 	res[i++] = 1;	//Player update event id
 	
-	for(var j=0; j<3; j++)
-	{
-		var x = Math.round(Player.pos[j] * COORD_NET_PRECISION);
-		res[i++] =  x     &0xff;
-		res[i++] = (x>>8) &0xff;
-		res[i++] = (x>>16)&0xff;
-		res[i++] = (x>>24)&0xff;
-	}
-	res[i++] = Math.round((180.0 + Player.yaw) * 255.0 / 360.0);
-	res[i++] = Math.round((Player.pitch + 45.0) * 255.0 / 360.0);
+	//Serialize tick count
+	var k = Game.tick_lo;
+	res[i++] =  k     &0xff;
+	res[i++] = (k>>8) &0xff;
+	res[i++] = (k>>16)&0xff;
+	res[i++] = (k>>24)&0xff;
+
+	k = Game.tick_hi;	
+	res[i++] =  k     &0xff;
+	res[i++] = (k>>8) &0xff;
+	res[i++] = (k>>16)&0xff;
+	res[i++] = (k>>24)&0xff;
+
+	
+	k = Math.floor(ent.x * NET_COORD_PRECISION);
+	res[i++] =  k     &0xff;
+	res[i++] = (k>>8) &0xff;
+	res[i++] = (k>>16)&0xff;
+	res[i++] = (k>>24)&0xff;
+	
+	k = Math.floor(ent.y * NET_COORD_PRECISION);
+	res[i++] =  k     &0xff;
+	res[i++] = (k>>8) &0xff;
+	res[i++] = (k>>16)&0xff;
+	res[i++] = (k>>24)&0xff;
+	
+	k = Math.floor(ent.z * NET_COORD_PRECISION);
+	res[i++] =  k     &0xff;
+	res[i++] = (k>>8) &0xff;
+	res[i++] = (k>>16)&0xff;
+	res[i++] = (k>>24)&0xff;
+	
+	res[i++] = (Math.floor(ent.pitch* 255.0 / (2.0 * Math.PI)) + 0x1000) & 0xff;
+	res[i++] = (Math.floor(ent.yaw 	* 255.0 / (2.0 * Math.PI)) + 0x1000) & 0xff;
+	res[i++] = (Math.floor(ent.roll * 255.0 / (2.0 * Math.PI)) + 0x1000) & 0xff;
+	
 	res[i++] = 
 		(Player.input["forward"]	<< 0) |
 		(Player.input["back"] 		<< 1) |
@@ -112,32 +159,14 @@ Player.net_state = function()
 	return res;
 }
 
-Player.set_entity_id = function(str)
-{
-	var res = "";
-	for(var i=14; i>=0; i-=2)
-	{
-		var x = parseInt(str.slice(i, i+2), 16);
-		res += String.fromCharCode(x + 0xB0);
-	}
-	Player.entity_id = res;
-}
-
-
-Player.net_update = function(packet)
-{
-	alert("got net update");
-
-	var entity = new Entity(packet);
-}
-
-
 Player.show_chat_input = function()
 {
 	var chatBox = document.getElementById("chatBox");
 	
 	if(chatBox.style.display == "none")
 	{
+		Player.in_chat = true;
+	
 		chatBox.onkeypress = function(cc)
 		{
 		
@@ -158,7 +187,9 @@ Player.show_chat_input = function()
 			}
 			
 			Game.canvas.focus();
-
+			
+			Player.in_chat = false;
+			
 			return false;
 		};
 	
@@ -169,15 +200,25 @@ Player.show_chat_input = function()
 
 Player.tick = function()
 {
-	var front = [ -Math.sin(Player.yaw), 0, -Math.cos(Player.yaw) ];
+	if(Player.in_chat)
+	{
+		for(i in Player.input)
+		{
+			Player.input[i] = 0;
+		}
+		
+		return;
+	}
+	
+	var front = [ -Math.sin(Player.entity.yaw), 0, -Math.cos(Player.entity.yaw) ];
 	var right = [ -front[2], 0, front[0]];
 	var up = [0, 1, 0];
 
 	var move = function(v, s)
 	{
-		Player.pos[0] += v[0] * s;
-		Player.pos[1] += v[1] * s;
-		Player.pos[2] += v[2] * s;
+		Player.entity.x += v[0] * s;
+		Player.entity.y += v[1] * s;
+		Player.entity.z += v[2] * s;
 	}
 
 	if(Player.input["forward"] == 1)
@@ -220,19 +261,19 @@ Player.tick = function()
 		Player.input["chat"] = 0;
 	}
 
-	Player.yaw -= Player.dx * Player.dx * Player.dx;
+	Player.entity.yaw -= Player.dx * Player.dx * Player.dx;
 
-	if(Player.yaw > Math.PI)
-		Player.yaw -= 2.0 * Math.PI;
-	if(Player.yaw < -Math.PI)
-		Player.yaw += 2.0 * Math.PI;
+	if(Player.entity.yaw > Math.PI)
+		Player.entity.yaw -= 2.0 * Math.PI;
+	if(Player.entity.yaw < -Math.PI)
+		Player.entity.yaw += 2.0 * Math.PI;
 	
-	Player.pitch += Player.dy * Player.dy * Player.dy;
+	Player.entity.pitch += Player.dy * Player.dy * Player.dy;
 
-	if(Player.pitch < -Math.PI/2.0)
-		Player.pitch = -Math.PI/2.0;
-	if(Player.pitch > Math.PI/2.0)
-		Player.pitch = Math.PI/2.0;
+	if(Player.entity.pitch < -Math.PI/2.0)
+		Player.entity.pitch = -Math.PI/2.0;
+	if(Player.entity.pitch > Math.PI/2.0)
+		Player.entity.pitch = Math.PI/2.0;
 
 }
 
@@ -241,51 +282,14 @@ Player.tick = function()
 Player.chunk = function()
 {
 	return [
-		Math.floor(Player.pos[0]) >> CHUNK_X_S,
-		Math.floor(Player.pos[1]) >> CHUNK_Y_S,
-		Math.floor(Player.pos[2]) >> CHUNK_Z_S ];
+		Math.floor(Player.entity.x) >> CHUNK_X_S,
+		Math.floor(Player.entity.y) >> CHUNK_Y_S,
+		Math.floor(Player.entity.z) >> CHUNK_Z_S ];
 }
-
-//Create view matrix
-Player.view_matrix = function()
-{
-	var cp = Math.cos(Player.pitch);
-	var sp = Math.sin(Player.pitch);
-	var cy = Math.cos(Player.yaw);
-	var sy = Math.sin(Player.yaw);
-	
-	var rotp = new Float32Array([
-		 1,   0,  0, 0,
-		 0,  cp, sp, 0,
-		 0, -sp, cp, 0,
-		 0,   0,  0, 1]); 
-		  
-	var roty = new Float32Array([
-		 cy, 0, sy, 0,
-		  0, 1,  0, 0,
-		-sy, 0, cy, 0,
-		  0, 0,  0, 1]);
-	
-	var rot = mmult(rotp, roty);
-		
-	var c = Player.chunk();	
-	c[0] *= CHUNK_X;
-	c[1] *= CHUNK_Y;
-	c[2] *= CHUNK_Z;
-		
-	var trans = new Float32Array([
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		c[0]-Player.pos[0], c[1]-Player.pos[1], c[2]-Player.pos[2], 1])
-	
-	return mmult(rot, trans);
-}
-
 
 Player.eye_ray = function()
 {
-	var view_m = Player.view_matrix();
+	var view_m = Player.entity.pose_matrix();
 	var d = [ -view_m[2], -view_m[6], -view_m[10] ];
 	return [ Player.pos, d ];
 }

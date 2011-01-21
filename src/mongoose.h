@@ -26,8 +26,8 @@ extern "C" {
 #endif // __cplusplus
 
 struct mg_context;     // Handle for the HTTP service itself
-struct mg_connection;  // Handle for the individual connection
 
+struct mg_connection;	//Connection buffer
 
 // This structure contains information about the HTTP request.
 struct mg_request_info {
@@ -154,6 +154,9 @@ int mg_printf(struct mg_connection *, const char *fmt, ...);
 
 //HACK: Returns the number of bytes available in the header
 int mg_available_bytes(struct mg_connection*);
+
+//HACK: Returns the socket associated with the underlying connection
+int mg_steal_socket(struct mg_connection*);
 
 // Read data from the remote end, return number of bytes read.
 int mg_read(struct mg_connection *, void *buf, size_t len);

@@ -435,6 +435,7 @@ struct mg_context {
   pthread_cond_t sq_empty;   // Signaled when socket is consumed
 };
 
+
 struct mg_connection {
   struct mg_connection *peer; // Remote target in proxy mode
   struct mg_request_info request_info;
@@ -450,6 +451,7 @@ struct mg_connection {
   int request_len;            // Size of the request + headers in a buffer
   int data_len;               // Total size of data in a buffer
 };
+
 
 const char **mg_get_valid_option_names(void) {
   return config_options;
@@ -1319,6 +1321,12 @@ static int pull(FILE *fp, SOCKET sock, SSL *ssl, char *buf, int len) {
 int mg_available_bytes(struct mg_connection *conn)
 {
 	return conn->content_len - conn->consumed_content;
+}
+
+///Dirty hack, doesn't work with SSL, but then again we aren't using SSL for updates...
+int mg_steal_socket(struct mg_connection *conn)
+{
+	return conn->client.sock;
 }
 
 int mg_read(struct mg_connection *conn, void *buf, size_t len) {

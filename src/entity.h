@@ -83,9 +83,6 @@ namespace Game
 		//Rotation (stored in Euler angles)
 		double pitch, yaw, roll;
 		
-		//The health of the entity
-		int64_t health;
-		
 		//Database serialization
 		bool 	from_map(const TCMAP*);
 		void	to_map(TCMAP*) const;
@@ -108,7 +105,7 @@ namespace Game
 		
 		//Database serialization
 		bool	from_map(const TCMAP*);
-		TCMAP*	to_map() const;
+		void 	to_map(TCMAP*) const;
 	};
 	
 };

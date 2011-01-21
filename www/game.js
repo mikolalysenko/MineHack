@@ -36,9 +36,6 @@ Game.resize = function()
 	
 	//Set UI position
 	var uiPanel = document.getElementById("uiPanel");
-	
-	
-	Game.draw();
 }
 
 Game.init = function(canvas)
@@ -77,9 +74,6 @@ Game.init = function(canvas)
 	{
 		return res;
 	}
-	
-	//Update the chunks
-	Map.update_cache();
 	
 	//Initialize screen
 	window.onresize = function(event)
@@ -126,7 +120,7 @@ Game.proj_matrix = function()
 //Creates the total cmera matrix
 Game.camera_matrix = function()
 {
-	return mmult(Game.proj_matrix(), Player.view_matrix());
+	return mmult(Game.proj_matrix(), Player.entity.pose_matrix());
 }
 
 Game.draw = function()
@@ -188,6 +182,10 @@ Game.tick = function()
 	{
 		++Game.tick_lo;
 	}
+
+	//Wait for player entity packet before starting game
+	if(!Player.entity)
+		return;
 
 	//Update game state
 	Player.tick();

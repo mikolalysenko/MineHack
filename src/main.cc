@@ -511,20 +511,8 @@ void do_heartbeat(HttpEvent& ev)
 		cout << endl;
 	}
 	
-	{	//Generate client response
-		int mlen;
-		void * data = game_instance->heartbeat(session.player_id, mlen);
-	
-		if(data == NULL)
-		{
-			ajax_send_binary(ev.conn, data, 0);
-			return;
-		}
-		
-		ScopeFree guard(data);
-
-		ajax_send_binary(ev.conn, data, mlen);
-	}
+	//Write data directly to socket (nasty, but saves having to allocate extra buffers)
+	game_instance->heartbeat(session.player_id, mg_steal_socket(ev.conn));
 }
 
 

@@ -46,14 +46,14 @@ struct ScopeFree
 	void* ptr;
 	
 	ScopeFree(void* p) : ptr(p) {}
-	ScopeFree() { if(ptr != NULL) std::free(ptr); }
+	~ScopeFree() { if(ptr) std::free(ptr); }
 };
 
 template<class T> struct ScopeDelete
 {
 	T* ptr;
 	ScopeDelete(T* p) : ptr(p) {}
-	~ScopeDelete() { if(ptr != NULL) delete ptr; }
+	~ScopeDelete() { if(ptr) delete ptr; }
 };
 
 
@@ -83,8 +83,7 @@ struct ScopeTCList
 	
 	~ScopeTCList()
 	{
-		if(list != NULL)
-			tclistdel(list);
+		if(list) tclistdel(list);
 	}
 };
 
@@ -92,12 +91,13 @@ struct ScopeTCMap
 {
 	TCMAP* map;
 	
+	ScopeTCMap() : map(tcmapnew()) { }
+	
 	ScopeTCMap(TCMAP* m) : map(m) {}
 	
 	~ScopeTCMap()
 	{
-		if(map != NULL)
-			tcmapdel(map);
+		if(map) tcmapdel(map);
 	}
 };
 

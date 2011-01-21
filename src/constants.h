@@ -31,7 +31,7 @@
 #define MAX_CHUNK_BUFFER_LEN	(CHUNK_X*CHUNK_Y*CHUNK_Z*2)
 
 //Number of bits for a chunk index
-#define CHUNK_IDX_S				21ULL
+#define CHUNK_IDX_S				19ULL
 
 //Size of max chunk index
 #define CHUNK_IDX_MAX			(1<<CHUNK_IDX_S)
@@ -56,21 +56,21 @@
 
 
 //Precision for network coordinates
-#define COORD_NET_PRECISION_S	(32ULL - COORD_BITS)
+#define COORD_NET_PRECISION_S	8
 #define COORD_NET_PRECISION		(1ULL<<COORD_NET_PRECISION_S)
 
 //Radius for chat events
 #define CHAT_RADIUS				128
+
+//Radius of one network update region (for a player)
+#define UPDATE_RADIUS			128
+
 
 //Bounds on chat line
 #define CHAT_LINE_MAX_LEN		128
 
 //Radius beyond which the client needs to be resynchronized
 #define POSITION_RESYNC_RADIUS	8
-
-//Size of the update region for a heartbeat
-#define UPDATE_RADIUS			128
-
 
 #define TICK_RESYNC_TIME		100
 
