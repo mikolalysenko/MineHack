@@ -2,13 +2,11 @@
 #include <sys/socket.h>
 #include <pthread.h>
 
-//Hash stuff.  May swap this out for something different later (maybe tokyo cabinet hash?)
-#include <ext/hash_map>
-#include <ext/hash_map>
-
 #include <cmath>
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
 #include <cstdint>
 #include <cstring>
 #include <cassert>
@@ -20,7 +18,6 @@
 #include "mailbox.h"
 
 using namespace std;
-using namespace __gnu_cxx;
 using namespace Game;
 
 

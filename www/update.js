@@ -95,7 +95,7 @@ UpdateHandler.handle_update_packet = function(arr)
 	
 	//Parse out entity updates
 	var pidx = idx;
-	for(var n=0; update_size > 0; ++n)
+	for(var n=0; idx - pidx < update_size; ++n)
 	{
 		//Parse out entity data
 		var initialize = arr[idx++];

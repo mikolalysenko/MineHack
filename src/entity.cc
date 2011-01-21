@@ -155,9 +155,7 @@ bool PlayerEntity::from_map(const TCMAP* map)
 
 void PlayerEntity::to_map(TCMAP* map) const
 {
-	cout << "Player name = " << player_name << endl;
 	tcmapput2(map, "player_name", player_name);
-	
 	insert_str(map, "net_last_tick", net_last_tick);
 	insert_str(map, "net_x", net_x);
 	insert_str(map, "net_y", net_y);

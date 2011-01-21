@@ -204,8 +204,6 @@ bool EntityDB::foreach(
 		
 		*(--ptr) = '\0';
 		
-		cout << "Bucket string = " << bucket_str << endl;
-		
 		tctdbqryaddcond(Q.query, "bucket", TDBQCSTROREQ, bucket_str);
 		}
 		
@@ -273,7 +271,6 @@ bool EntityDB::foreach(
 	
 	//Execute
 	bool res = tctdbqryproc(Q.query, UserDelegate::call, &dg);
-	
 	
 	//Print hint string	
 	//cout << "Hint: " << tctdbqryhint(Q.query) << endl;

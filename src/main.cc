@@ -461,6 +461,12 @@ void do_get_chunk(HttpEvent& ev)
 	ajax_send_binary(ev.conn, (const void*)chunk_buf, buf_len);
 }
 
+//Network deserialization
+template<typename T> void net_deserialize(uint8_t*& ptr, T& v)
+{
+	v = *((T*)(void*)ptr);
+	ptr += sizeof(T);
+}
 
 //Pulls pending events from client
 void do_heartbeat(HttpEvent& ev)
@@ -485,28 +491,66 @@ void do_heartbeat(HttpEvent& ev)
 	}
 	
 	//Parse out the events
-	int p = sizeof(SessionID), len = blob.len - sizeof(SessionID);
-	while(true)
-	{
-		//Create event
-		InputEvent input;
-		int d = input.extract(&blob.data[p], len);
-		if(d < 0)
-			break;
+	uint8_t *ptr = blob.data + sizeof(SessionID),
+			*eob = blob.data + blob.len;
 	
-		//Add event
-		game_instance->handle_input(session.player_id, input);
-		p 	+= d;
-		len -= d;
+	//Parse out player update packet
+	const int TICK_LEN = 24;
+	if(ptr + TICK_LEN <= eob)
+	{
+		PlayerEvent pl;
+		
+		//Deserialize tick value
+		net_deserialize(ptr, pl.tick);
+		
+		//Unpack position value
+		uint32_t ix, iy, iz;
+		net_deserialize(ptr, ix);
+		net_deserialize(ptr, iy);
+		net_deserialize(ptr, iz);	
+		pl.x = ((double)ix) / COORD_NET_PRECISION;
+		pl.y = ((double)iy) / COORD_NET_PRECISION;
+		pl.z = ((double)iz) / COORD_NET_PRECISION;
+	
+		//Unpack pitch/yaw
+		int ipitch, iyaw, iroll;
+		ipitch 	= *(ptr++);
+		iyaw 	= *(ptr++);
+		iroll 	= *(ptr++);
+		pl.pitch= 2. * M_PI / 255. * (double)ipitch;
+		pl.yaw	= 2. * M_PI / 255. * (double)iyaw;
+		pl.roll	= 2. * M_PI / 255. * (double)iroll;
+	
+		//Unpack input
+		pl.input_state = *(ptr++);
+
+		//Post event
+		game_instance->handle_player_tick(session.player_id, pl);
+		ptr += TICK_LEN;
+	}
+	
+	//TODO: Handle forget events
+	
+	//Handle chat events
+	if(ptr + 2 <= eob)
+	{
+		int r = *(ptr++);
+		r += (*(ptr++))<<8;
+		
+		if(ptr + r <= eob)
+		{
+			game_instance->handle_chat(session.player_id, string((const char*)ptr, r));
+			ptr += r;
+		}
 	}
 
 	//This shouldn't happen, but need to check anyway
-	if(len > 0)
+	if(ptr < eob)
 	{
 		cout << "Warning!  Unused data in heartbeat buffer: ";
-		for(int i=0; i<len; i++)
+		while(ptr < eob)
 		{
-			cout << (int)blob.data[p+i] << ",";
+			cout << (int)*(ptr++) << ",";
 		}
 		cout << endl;
 	}

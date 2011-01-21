@@ -8,12 +8,12 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "constants.h"
 #include "misc.h"
 #include "chunk.h"
 #include "entity.h"
-#include "input_event.h"
 #include "entity_db.h"
 #include "mailbox.h"
 #include "world.h"
@@ -178,6 +178,7 @@ bool World::player_leave(EntityID const& player_id)
 	{
 		bool success;
 		double x, y, z;
+		string name;
 	
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
@@ -198,6 +199,7 @@ bool World::player_leave(EntityID const& player_id)
 				V->x = entity.base.x;
 				V->y = entity.base.y;
 				V->z = entity.base.z;
+				V->name = entity.player.player_name;
 				
 				return EntityUpdateControl::Update;
 			}
@@ -219,20 +221,25 @@ bool World::player_leave(EntityID const& player_id)
 			V.x - UPDATE_RADIUS, V.y - UPDATE_RADIUS, V.z - UPDATE_RADIUS,
 			V.x + UPDATE_RADIUS, V.y + UPDATE_RADIUS, V.z + UPDATE_RADIUS);
 	
+		stringstream ss;
+		ss << V.name << " left the game.<br/>";
+	
 		struct KillVisitor
 		{
 			EntityID	casualty_id;
 			Mailbox*	mailbox;
+			string		logout_txt;
 			
 			static EntityUpdateControl call(Entity& entity, void* data)
 			{
 				KillVisitor* KV = (KillVisitor*)data;
 				KV->mailbox->send_kill(entity.entity_id, KV->casualty_id);
+				KV->mailbox->send_chat(entity.entity_id, KV->logout_txt, false);
 				return EntityUpdateControl::Continue;
 			}
 		};
 		
-		KillVisitor KV = { player_id, mailbox };
+		KillVisitor KV = { player_id, mailbox, ss.str() };
 		entity_db->foreach(KillVisitor::call, &KV, r, { EntityType::Player });
 	}
 
@@ -244,23 +251,6 @@ bool World::player_leave(EntityID const& player_id)
 //---------------------------------------------------------------
 // Input handlers
 //---------------------------------------------------------------
-
-//Handles a client input event
-void World::handle_input(
-	EntityID const& player_id, 
-	InputEvent const& input)
-{
-	switch(input.type)
-	{
-		case InputEventType::PlayerTick:
-			handle_player_tick(player_id, input.player_event);
-		break;
-		
-		case InputEventType::Chat:
-			handle_chat(player_id, input.chat_event);
-		break;
-	}
-}
 
 void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& input)
 {
@@ -315,7 +305,7 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 }
 
 
-void World::handle_chat(EntityID const& player_id, ChatEvent const& input)
+void World::handle_chat(EntityID const& player_id, std::string const& msg)
 {
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
@@ -325,29 +315,10 @@ void World::handle_chat(EntityID const& player_id, ChatEvent const& input)
 	
 	//Construct chat string
 	stringstream ss;
-	ss << entity.player.player_name << ": " << input.msg;
+	ss << entity.player.player_name << ": " << msg;
 	
-	//Construct region
-	Region r(	entity.base.x - CHAT_RADIUS, entity.base.y - CHAT_RADIUS, entity.base.z - CHAT_RADIUS,  
-				entity.base.x + CHAT_RADIUS, entity.base.y + CHAT_RADIUS, entity.base.z + CHAT_RADIUS); 
-	
-	
-	//Post event to all players in radius
-	struct Visitor
-	{
-		Mailbox* mailbox;
-		string chat_string;
-	
-		static EntityUpdateControl call(Entity& p, void* data)
-		{
-			Visitor* V = (Visitor*)data;
-			V->mailbox->send_chat(p.entity_id, V->chat_string);
-			return EntityUpdateControl::Continue;
-		}
-	};
-	
-	Visitor V = { mailbox, ss.str() };
-	entity_db->foreach(Visitor::call, &V, r, { EntityType::Player } );
+	//Broadcast to players
+	broadcast_chat(entity.base.x, entity.base.y, entity.base.z, ss.str(), true);
 }
 
 
@@ -426,6 +397,37 @@ void World::resync_player(EntityID const& player_id)
 		mailbox->send_entity(player_id, player);
 	}
 }
+
+
+//---------------------------------------------------------------
+// Misc. game stuff (admin commands, chat stuff, etc.)
+//---------------------------------------------------------------
+
+void World::broadcast_chat(double x, double y, double z, string const& msg, bool escape_xml)
+{
+	//Construct region
+	Region r(	x - CHAT_RADIUS, y - CHAT_RADIUS, z - CHAT_RADIUS,  
+				x + CHAT_RADIUS, y + CHAT_RADIUS, z + CHAT_RADIUS); 
+	
+	//Post event to all players in radius
+	struct Visitor
+	{
+		Mailbox* mailbox;
+		string chat_string;
+		bool escape;
+	
+		static EntityUpdateControl call(Entity& p, void* data)
+		{
+			Visitor* V = (Visitor*)data;
+			V->mailbox->send_chat(p.entity_id, V->chat_string, V->escape);
+			return EntityUpdateControl::Continue;
+		}
+	};
+	
+	Visitor V = { mailbox, msg, escape_xml };
+	entity_db->foreach(Visitor::call, &V, r, { EntityType::Player } );
+}
+
 
 //---------------------------------------------------------------
 // World ticking / update

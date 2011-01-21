@@ -94,9 +94,9 @@
 #define EVENT_PACKET_SIZE		(1<<16)
 
 //Grid bucket sizes for range searching
-#define BUCKET_SHIFT_X			6
-#define BUCKET_SHIFT_Y			6
-#define BUCKET_SHIFT_Z			6
+#define BUCKET_SHIFT_X			7
+#define BUCKET_SHIFT_Y			7
+#define BUCKET_SHIFT_Z			7
 
 #define BUCKET_MASK_X			((1<<BUCKET_SHIFT_X)-1)
 #define BUCKET_MASK_Y			((1<<BUCKET_SHIFT_Y)-1)

@@ -6,8 +6,8 @@
 #include <pthread.h>
 
 #include <string>
-#include <ext/hash_set>
-#include <ext/hash_map>
+#include <set>
+#include <map>
 #include <vector>
 #include <cstdint>
 
@@ -72,7 +72,7 @@ namespace Game
 		struct PlayerRecord
 		{
 			//Player's known entities
-			__gnu_cxx::hash_set<uint64_t> known_entities;
+			std::set<uint64_t> known_entities;
 			
 			//Packet header data
 			uint64_t	tick_count;		//Tick count (for the packet)
@@ -103,7 +103,7 @@ namespace Game
 
 		//The lock for the mailbox (TODO: Maybe implement fine grained locking for players?  would require rewriting the hash map though...)
 		pthread_mutex_t	mailbox_lock;
-		__gnu_cxx::hash_map<uint64_t, PlayerRecord*>	player_data;
+		std::map<uint64_t, PlayerRecord*>	player_data;
 		
 		//Player database lock/access control
 		struct PlayerLock

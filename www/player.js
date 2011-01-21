@@ -105,11 +105,9 @@ Player.net_state = function()
 	if(!Player.entity)
 		return new Uint8Array(0);
 	
-	var res = new Uint8Array(25);
+	var res = new Uint8Array(24);
 	var ent = Player.entity;
 	var i = 0;
-	
-	res[i++] = 1;	//Player update event id
 	
 	//Serialize tick count
 	var k = Game.tick_lo;
@@ -291,7 +289,7 @@ Player.eye_ray = function()
 {
 	var view_m = Player.entity.pose_matrix();
 	var d = [ -view_m[2], -view_m[6], -view_m[10] ];
-	return [ Player.pos, d ];
+	return [ [Player.entity.x, Player.entity.y, Player.entity.z], d ];
 }
 
 

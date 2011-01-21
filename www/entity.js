@@ -17,8 +17,10 @@ Entity = function(coords, packet, len)
 	if(this.type == PLAYER_ENTITY)
 	{
 		//Parse out player name from packet
+		var name_len = packet[1];
 		this.player_name = "";
-		
+		for(var i=2; i<2+name_len; i++)
+			this.player_name += String.fromCharCode(packet[i] & 0x7f);
 		
 		//Set packet length
 		len.val = 1 + this.player_name.length;

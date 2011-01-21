@@ -51,8 +51,6 @@ bool create_session(const string& user_name, SessionID& session_id)
 	if( user_name.size() > USER_NAME_MAX_LEN )
 		return false;
 	
-	//Generate session id
-	session_id.id = session_id_gen->gen_uuid();
 	
 	//Initialize session variable
 	Session s;
@@ -61,6 +59,9 @@ bool create_session(const string& user_name, SessionID& session_id)
 	s.player_id.clear();
 	
 	{	WriteLock L(&session_lock);
+	
+		//Generate session id
+		session_id.id = session_id_gen->gen_uuid();
 		
 		if(user_table.find(user_name) != user_table.end())
 			return false;

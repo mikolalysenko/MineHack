@@ -14,8 +14,6 @@ Game =
 	zfar  : 1000.0,
 	fov   : 45.0,
 	
-	input_events : [],
-	
 	wait_for_heartbeat : false,
 	
 	enable_ao : true
