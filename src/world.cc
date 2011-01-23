@@ -226,6 +226,7 @@ bool World::player_leave(EntityID const& player_id)
 
 void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& input)
 {
+	cout << "Updating player!" << endl;
 	struct Visitor
 	{
 		const PlayerEvent* input;
@@ -382,6 +383,7 @@ bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& playe
 	//Next, we need to poll all pollable entities within the update radius of the client
 	//This is done without locking the entity database, so we could be preempted
 	ScopeTCQuery Q(entity_db->entity_db);
+	
 	Region r(	player.base.x - UPDATE_RADIUS, 
 				player.base.y - UPDATE_RADIUS,
 				player.base.z - UPDATE_RADIUS,
@@ -389,19 +391,26 @@ bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& playe
 				player.base.y + UPDATE_RADIUS,
 				player.base.z + UPDATE_RADIUS );
 	entity_db->add_range_query(Q.query, r);
+	
 	tctdbqryaddcond(Q.query, "poll", TDBQCSTREQ, "1");
 	
 	ScopeTCList L(tctdbqrysearch(Q.query));
+	
+	cout << "L.list = " << (void*)L.list << endl;
 	
 	if(L.list != NULL)
 	while(true)
 	{
 		int sz;
 		ScopeFree G(tclistpop(L.list, &sz));
+		
+		cout << "G.ptr = " << G.ptr << ", sz = " << sz << endl;
 		if(G.ptr == NULL || sz != sizeof(EntityID))
 			break;
 
 		EntityID entity_id = *(EntityID*)G.ptr;
+		
+		cout << "Sending entity: " << entity_id.id << endl;
 		Entity entity;
 		if(!entity_db->get_entity(entity_id, entity))
 			continue;
@@ -431,8 +440,6 @@ bool World::heartbeat(
 
 void World::CreateHandler::call(Entity const& entity)
 {
-	cout << "Called create handler" << endl;
-	
 	if(entity.base.flags & EntityFlags::Inactive)
 		return;
 
@@ -448,8 +455,6 @@ void World::CreateHandler::call(Entity const& entity)
 
 void World::UpdateHandler::call(Entity const& entity)
 {
-	cout << "Called update handler" << endl;
-	
 	if( (entity.base.flags & EntityFlags::Inactive) ||
 		(entity.base.flags & EntityFlags::Temporary) )
 		return;
@@ -479,8 +484,6 @@ void World::UpdateHandler::call(Entity const& entity)
 
 void World::DeleteHandler::call(Entity const& entity)
 {
-	cout << "Called delete handler" << endl;
-	
 	if((entity.base.flags & EntityFlags::Temporary))
 		return;
 	
@@ -522,13 +525,17 @@ void World::tick_players()
 		{
 			Visitor *V = (Visitor*)data;
 		
+			/*
 			//Check for timed out players
 			if(V->world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
 			{
+				cout << "Player timeout!" << endl;
 				entity.base.flags = EntityFlags::Inactive;
 				V->world->mailbox->del_player(entity.entity_id);
 				return EntityUpdateControl::Update;
 			}
+			*/
+			
 		
 			//Update network state
 			//TODO: Add some interpolation / sanity checking here.

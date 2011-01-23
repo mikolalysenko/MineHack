@@ -472,7 +472,6 @@ template<typename T> void net_deserialize(uint8_t*& ptr, T& v)
 //Pulls pending events from client
 void do_heartbeat(HttpEvent& ev)
 {
-	cout << "got heartbeat" << endl;
 	HttpBlobReader blob(ev.conn);
 	
 	if(blob.len < sizeof(SessionID))
@@ -487,11 +486,10 @@ void do_heartbeat(HttpEvent& ev)
 	if( !get_session_data(session_id, session) ||
 		session.state != SessionState::InGame )
 	{
-		cout << "not logged in" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
-	
+
 	//Parse out the events
 	uint8_t *ptr = blob.data + sizeof(SessionID),
 			*eob = blob.data + blob.len;
@@ -562,6 +560,7 @@ void do_heartbeat(HttpEvent& ev)
 	if(!game_instance->heartbeat(session.player_id, mg_steal_socket(ev.conn)))
 	{
 		cout << "Heartbeat failed" << endl;
+		delete_session(session_id);
 		ajax_error(ev.conn);
 	}
 }

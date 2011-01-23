@@ -291,7 +291,8 @@ void EntityDB::add_range_query(TDBQRY* query, Region const& r)
 	//String size
 	int size =	(bmax_x - bmin_x + 1) *
 				(bmax_y - bmin_y + 1) *
-				(bmax_z - bmin_z + 1) * 19;
+				(bmax_z - bmin_z + 1) * 
+				(3 * BUCKET_STR_LEN + 1);
 	
 	//The bucket string
 	ScopeFree guard(NULL);
@@ -335,6 +336,8 @@ void EntityDB::add_range_query(TDBQRY* query, Region const& r)
 	}
 	
 	*(--ptr) = '\0';
+	
+	cout << "Bucket string = " << bucket_str;
 	
 	tctdbqryaddcond(query, "bucket", TDBQCSTROREQ, bucket_str);
 	

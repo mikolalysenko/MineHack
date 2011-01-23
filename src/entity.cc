@@ -25,32 +25,35 @@ using namespace __gnu_cxx;
 namespace Game
 {
 
-void bucket_str(double x, double y, double z, char* res)
+void bucket_str(double x, double y, double z, char* ptr)
 {
-	int ix = (int)(x / BUCKET_X),
-		iy = (int)(y / BUCKET_Y),
-		iz = (int)(z / BUCKET_Z);
+	int bx = (int)(x / BUCKET_X),
+		by = (int)(y / BUCKET_Y),
+		bz = (int)(z / BUCKET_Z);
 
+	int t = bx;
 	for(int i=0; i<BUCKET_STR_LEN; i++)
 	{
-		*(res++) = '0' + (ix & BUCKET_STR_MASK);
-		ix >>= BUCKET_STR_BITS;
-	}
-
-	for(int i=0; i<BUCKET_STR_LEN; i++)
-	{
-		*(res++) = '0' + (iy & BUCKET_STR_MASK);
-		iy >>= BUCKET_STR_BITS;
+		*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+		t >>= BUCKET_STR_BITS;
 	}
 	
+	t = by;
 	for(int i=0; i<BUCKET_STR_LEN; i++)
 	{
-		*(res++) = '0' + (iz & BUCKET_STR_MASK);
-		iz >>= BUCKET_STR_BITS;
+		*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+		t >>= BUCKET_STR_BITS;
 	}
-		
+
+	t = bz;
+	for(int i=0; i<BUCKET_STR_LEN; i++)
+	{
+		*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+		t >>= BUCKET_STR_BITS;
+	}
 	
-	*(res++) = 0;
+	*(ptr++) = 0;
+	
 }
 
 //TODO: This should really be done more efficiently...
@@ -209,6 +212,9 @@ void EntityBase::to_map(TCMAP* res) const
 	char str[20];
 	bucket_str(x, y, z, str);
 	tcmapput2(res, "bucket", str);
+	
+	cout << "Updating entity: bucket = " << str << endl;
+
 	
 
 	insert_str(res, "x", 		x);

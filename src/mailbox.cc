@@ -452,6 +452,14 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 		send(socket, &header, sizeof(NetHeader), 0);
 	}
 	
+	cout << "origin = " << ox << ',' << oy << ',' << oz <<endl
+		 << "block_size = " << block_events.size() << endl
+		 << "chat_size  = " << chat_log.size() << endl
+		 << "coord_size = " << coords.size() << endl
+		 << "eblob_size = " << eblob.size() << endl
+		 << "kill_size  = " << dead_entities.size() << endl;
+	
+	
 	//Send block events
 	for(auto iter = block_events.begin(); iter != block_events.end(); ++iter)
 	{

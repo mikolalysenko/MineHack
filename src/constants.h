@@ -79,7 +79,7 @@
 #define PLAYER_START_Z			(1 << 20)
 
 //Player time out (in ticks)
-#define PLAYER_TIMEOUT			1000
+#define PLAYER_TIMEOUT			100000
 
 //Sleep time for the main loop
 #define SLEEP_TIME				40
