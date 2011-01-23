@@ -1,3 +1,5 @@
+/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: false, regexp: true, maxerr: 50, indent: 4 */
+
 
 //Chunk parameters
 const CHUNK_X_S		= 4;

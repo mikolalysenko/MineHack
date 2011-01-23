@@ -472,6 +472,7 @@ template<typename T> void net_deserialize(uint8_t*& ptr, T& v)
 //Pulls pending events from client
 void do_heartbeat(HttpEvent& ev)
 {
+	cout << "got heartbeat" << endl;
 	HttpBlobReader blob(ev.conn);
 	
 	if(blob.len < sizeof(SessionID))
@@ -557,7 +558,12 @@ void do_heartbeat(HttpEvent& ev)
 	}
 	
 	//Write data directly to socket (nasty, but saves having to allocate extra buffers)
-	game_instance->heartbeat(session.player_id, mg_steal_socket(ev.conn));
+	cout << "Serializing heartbeat packet" << endl;
+	if(!game_instance->heartbeat(session.player_id, mg_steal_socket(ev.conn)))
+	{
+		cout << "Heartbeat failed" << endl;
+		ajax_error(ev.conn);
+	}
 }
 
 

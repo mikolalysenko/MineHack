@@ -1,4 +1,6 @@
 //Application state
+/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
+"use strict";
 
 var LoginState = {};
 
@@ -7,6 +9,9 @@ LoginState.init = function()
 	//Initialize the login state
 	var loginPane = document.getElementById('loginElem');
 	loginPane.style.display = 'block';
+	
+	document.getElementById("loginButton").onclick = LoginState.do_login;
+	document.getElementById("createButton").onclick = LoginState.do_register;
 	
 	Session.logout();
 }
@@ -56,7 +61,7 @@ LoginState.do_login = function()
 	}
 	else
 	{
-		App.state.do_login_error(res);
+		LoginState.do_login_error(res);
 	}
 }
 
@@ -84,6 +89,8 @@ CharacterSelectState.init = function()
 
 	var selectElem = document.getElementById("selectElem");
 	selectElem.style.display = "block";	
+	
+	document.getElementById("createPlayer").onclick = CharacterSelectState.do_create_player;
 }
 
 CharacterSelectState.shutdown = function()

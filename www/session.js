@@ -1,3 +1,5 @@
+/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
+"use strict";
 
 var Session = 
 {

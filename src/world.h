@@ -32,8 +32,9 @@ namespace Game
 		int 		input_state;
 	};
 
-	struct World
+	class World
 	{
+	public:
 		//World data
 		bool		running;
 		
@@ -63,7 +64,7 @@ namespace Game
 			size_t buf_len);
 		
 		//Processes queued messages for a particular client, main network IO event
-		void heartbeat(
+		bool heartbeat(
 			EntityID const&,
 			int socket);
 		

@@ -1,8 +1,12 @@
+/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
+
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 /*  SHA-256 implementation in JavaScript | (c) Chris Veness 2002-2010 | www.movable-type.co.uk    */
 /*   - see http://csrc.nist.gov/groups/ST/toolkit/secure_hashing.html                             */
 /*         http://csrc.nist.gov/groups/ST/toolkit/examples.html                                   */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+"use strict";
 
 var Sha256 = {};  // Sha256 namespace
 

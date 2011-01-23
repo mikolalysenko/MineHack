@@ -15,6 +15,7 @@
 #include "config.h"
 #include "chunk.h"
 #include "entity.h"
+#include "heartbeat.h"
 
 namespace Game
 {
@@ -37,9 +38,11 @@ namespace Game
 	};
 	
 	//Manages a collection of entities
-	//TODO: Add callbacks to track entity creation/deletion events
-	struct EntityDB
+	class EntityDB
 	{
+		friend bool heartbeat_impl(Mailbox*, EntityDB*, EntityID const&, int, int);
+	
+	public:
 		//Constructor/destructor stuff
 		EntityDB(std::string const& filename, Config* config);
 		~EntityDB();
@@ -64,8 +67,7 @@ namespace Game
 			void* data,
 			Region const& 	region = Region(), 
 			std::vector<EntityType> types = std::vector<EntityType>(0),
-			bool 			only_active = true,
-			bool			only_poll = false);
+			bool 			only_active = true);
 	
 		//Retrieves a player (if one exists)
 		bool get_player(std::string const& player_name, EntityID& res);
@@ -83,6 +85,9 @@ namespace Game
 		EntityEventHandler* create_handler;
 		EntityEventHandler* update_handler;
 		EntityEventHandler* delete_handler;
+		
+		//Add range component
+		void add_range_query(TDBQRY* query, Region const& r);
 		
 	};
 };

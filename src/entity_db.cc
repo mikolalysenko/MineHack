@@ -182,82 +182,12 @@ bool EntityDB::foreach(
 	void*				user_data,
 	Region const& 		r, 
 	vector<EntityType>	types,
-	bool				only_active,
-	bool				only_poll)
+	bool				only_active)
 {
 	ScopeTCQuery Q(entity_db);
 	
 	//Add range query
-	if(r.lo[0] > 0)
-	{
-		{
-		int bmin_x = (int)(r.lo[0] / BUCKET_X),
-			bmin_y = (int)(r.lo[1] / BUCKET_Y),
-			bmin_z = (int)(r.lo[2] / BUCKET_Z),
-			bmax_x = (int)(r.hi[0] / BUCKET_X),
-			bmax_y = (int)(r.hi[1] / BUCKET_Y),
-			bmax_z = (int)(r.hi[2] / BUCKET_Z);
-			
-		//String size
-		int size =	(bmax_x - bmin_x + 1) *
-					(bmax_y - bmin_y + 1) *
-					(bmax_z - bmin_z + 1) * 19;
-		
-		//The bucket string
-		ScopeFree guard(NULL);
-		char* bucket_str = (char*)alloca(size);
-			
-		//Insufficient stack space, need to do malloc
-		if(bucket_str == NULL)
-		{
-			bucket_str = (char*)malloc(size);
-			guard.ptr = bucket_str;
-		}
-		
-		char* ptr = bucket_str;
-		
-		for(int bx=bmin_x; bx<=bmax_x; bx++)
-		for(int by=bmin_y; by<=bmax_y; by++)
-		for(int bz=bmin_z; bz<=bmax_z; bz++)
-		{
-			int t = bx;
-			for(int i=0; i<BUCKET_STR_LEN; i++)
-			{
-				*(ptr++) = '0' + (t & BUCKET_STR_MASK);
-				t >>= BUCKET_STR_BITS;
-			}
-			
-			t = by;
-			for(int i=0; i<BUCKET_STR_LEN; i++)
-			{
-				*(ptr++) = '0' + (t & BUCKET_STR_MASK);
-				t >>= BUCKET_STR_BITS;
-			}
-		
-			t = bz;
-			for(int i=0; i<BUCKET_STR_LEN; i++)
-			{
-				*(ptr++) = '0' + (t & BUCKET_STR_MASK);
-				t >>= BUCKET_STR_BITS;
-			}
-			
-			*(ptr++) = ' ';
-		}
-		
-		*(--ptr) = '\0';
-		
-		tctdbqryaddcond(Q.query, "bucket", TDBQCSTROREQ, bucket_str);
-		}
-		
-		//Add fine grained range conditions to query
-		static const char* AXIS_LABEL[] = { "x", "y", "z" };
-		for(int i=0; i<3; i++)
-		{
-			stringstream ss;
-			ss << r.lo[i] << ' ' << r.hi[i];
-			tctdbqryaddcond(Q.query, AXIS_LABEL[i], TDBQCNUMBT, ss.str().c_str());
-		}
-	}
+	add_range_query(Q.query, r);
 	
 	//Add query restriction on type flags
 	if(types.size() > 0)
@@ -274,12 +204,6 @@ bool EntityDB::foreach(
 	if(only_active)
 	{
 		tctdbqryaddcond(Q.query, "active", TDBQCSTREQ, "1");
-	}
-	
-	//Add polling condition
-	if(only_poll)
-	{
-		tctdbqryaddcond(Q.query, "poll", TDBQCSTREQ, "1");
 	}
 	
 	//Define the call back structure locally
@@ -350,6 +274,78 @@ bool EntityDB::foreach(
 	//cout << "Hint: " << tctdbqryhint(Q.query) << endl;
 
 	return res;
+}
+
+void EntityDB::add_range_query(TDBQRY* query, Region const& r)
+{
+	if(r.lo[0] <= 0)
+		return;
+	
+	int bmin_x = (int)(r.lo[0] / BUCKET_X),
+		bmin_y = (int)(r.lo[1] / BUCKET_Y),
+		bmin_z = (int)(r.lo[2] / BUCKET_Z),
+		bmax_x = (int)(r.hi[0] / BUCKET_X),
+		bmax_y = (int)(r.hi[1] / BUCKET_Y),
+		bmax_z = (int)(r.hi[2] / BUCKET_Z);
+		
+	//String size
+	int size =	(bmax_x - bmin_x + 1) *
+				(bmax_y - bmin_y + 1) *
+				(bmax_z - bmin_z + 1) * 19;
+	
+	//The bucket string
+	ScopeFree guard(NULL);
+	char* bucket_str = (char*)alloca(size);
+		
+	//Insufficient stack space, need to do malloc
+	if(bucket_str == NULL)
+	{
+		bucket_str = (char*)malloc(size);
+		guard.ptr = bucket_str;
+	}
+	
+	char* ptr = bucket_str;
+	
+	for(int bx=bmin_x; bx<=bmax_x; bx++)
+	for(int by=bmin_y; by<=bmax_y; by++)
+	for(int bz=bmin_z; bz<=bmax_z; bz++)
+	{
+		int t = bx;
+		for(int i=0; i<BUCKET_STR_LEN; i++)
+		{
+			*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+			t >>= BUCKET_STR_BITS;
+		}
+		
+		t = by;
+		for(int i=0; i<BUCKET_STR_LEN; i++)
+		{
+			*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+			t >>= BUCKET_STR_BITS;
+		}
+	
+		t = bz;
+		for(int i=0; i<BUCKET_STR_LEN; i++)
+		{
+			*(ptr++) = '0' + (t & BUCKET_STR_MASK);
+			t >>= BUCKET_STR_BITS;
+		}
+		
+		*(ptr++) = ' ';
+	}
+	
+	*(--ptr) = '\0';
+	
+	tctdbqryaddcond(query, "bucket", TDBQCSTROREQ, bucket_str);
+	
+	//Add fine grained range conditions to query
+	static const char* AXIS_LABEL[] = { "x", "y", "z" };
+	for(int i=0; i<3; i++)
+	{
+		stringstream ss;
+		ss << r.lo[i] << ' ' << r.hi[i];
+		tctdbqryaddcond(query, AXIS_LABEL[i], TDBQCNUMBT, ss.str().c_str());
+	}
 }
 
 //Retrieves a player (if one exists)

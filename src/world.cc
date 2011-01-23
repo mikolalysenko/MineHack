@@ -1,3 +1,5 @@
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <pthread.h>
 
 #include <utility>
@@ -10,6 +12,9 @@
 #include <cmath>
 #include <string>
 
+#include <tcutil.h>
+#include <tctdb.h>
+
 #include "constants.h"
 #include "misc.h"
 #include "chunk.h"
@@ -17,6 +22,7 @@
 #include "entity_db.h"
 #include "mailbox.h"
 #include "world.h"
+#include "heartbeat.h"
 
 using namespace std;
 using namespace Game;
@@ -175,7 +181,6 @@ bool World::player_join(EntityID const& player_id)
 		(int)V.player.base.x, 
 		(int)V.player.base.y, 
 		(int)V.player.base.z);
-	mailbox->send_entity(player_id, V.player);
 		
 	return true;
 }
@@ -333,7 +338,7 @@ int World::get_compressed_chunk(
 	};
 	
 	Visitor V = { player_id, mailbox };
-	entity_db->foreach(Visitor::call, &V, Region(chunk_id), vector<EntityType>(), true, false);
+	entity_db->foreach(Visitor::call, &V, Region(chunk_id), vector<EntityType>(), true);
 	
 
 	//Read the chunk from the map
@@ -347,10 +352,8 @@ int World::get_compressed_chunk(
 // Heartbeat
 //---------------------------------------------------------------
 
-//Sends queued messages to client
-void World::heartbeat(
-	EntityID const& player_id,
-	int socket)
+//Implementation of heartbeat function
+bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& player_id, int tick_count, int socket)
 {
 	//Sanity check player
 	Entity player;
@@ -358,36 +361,69 @@ void World::heartbeat(
 		player.base.type != EntityType::Player ||
 		(player.base.flags & EntityFlags::Inactive) )
 	{
-		return;
+		cout << "Invalid player" << endl;
+		return false;
 	}
+	
+	//First, we need to make a local copy of the player packet and clear out the old one
+	Mailbox::PlayerRecord data;
+	{
+		Mailbox::PlayerLock P(mailbox, player_id);
+		Mailbox::PlayerRecord* ndata = P.data();
+		if(ndata == NULL)
+			return false;
 
-	//Poll radius
+		mailbox->update_index(ndata, player.base.x, player.base.y, player.base.z);
+		ndata->tick_count = tick_count;
+		
+		data.swap(*ndata);
+	}
+	
+	//Next, we need to poll all pollable entities within the update radius of the client
+	//This is done without locking the entity database, so we could be preempted
+	ScopeTCQuery Q(entity_db->entity_db);
 	Region r(	player.base.x - UPDATE_RADIUS, 
 				player.base.y - UPDATE_RADIUS,
 				player.base.z - UPDATE_RADIUS,
 				player.base.x + UPDATE_RADIUS,
 				player.base.y + UPDATE_RADIUS,
 				player.base.z + UPDATE_RADIUS );
+	entity_db->add_range_query(Q.query, r);
+	tctdbqryaddcond(Q.query, "poll", TDBQCSTREQ, "1");
+	
+	ScopeTCList L(tctdbqrysearch(Q.query));
+	
+	if(L.list != NULL)
+	while(true)
+	{
+		int sz;
+		ScopeFree G(tclistpop(L.list, &sz));
+		if(G.ptr == NULL || sz != sizeof(EntityID))
+			break;
 
-	//Start polling
-	//When destructor fires, will send the http event to the client
-	HeartbeatPoll poll(
-		mailbox,
-		player_id,
-		socket,
-		player.base.x, player.base.y, player.base.z);
-		
-	assert(poll.get_data());
-
-	//Poll all entities within radius and post event to the player
-	entity_db->foreach(
-		HeartbeatPoll::send_entity, 
-		poll.get_data(), 
-		r,
-		vector<EntityType>(),
-		false,
-		true);
+		EntityID entity_id = *(EntityID*)G.ptr;
+		Entity entity;
+		if(!entity_db->get_entity(entity_id, entity))
+			continue;
+			
+		data.serialize_entity(entity);
+	}
+			
+	//Finally, we serialize the packet to the network
+	data.net_serialize(socket);
+	return true;
 }
+
+//Sends queued messages to client
+//Note: This function is magical and breaks all sorts of abstractions in order to avoid
+//doing many wasteful memcpy's/locks all over the place.
+bool World::heartbeat(
+	EntityID const& player_id,
+	int socket)
+{
+	return heartbeat_impl(mailbox, entity_db, player_id, tick_count, socket);
+}
+
 
 //---------------------------------------------------------------
 // Entity event handler functions
@@ -395,6 +431,8 @@ void World::heartbeat(
 
 void World::CreateHandler::call(Entity const& entity)
 {
+	cout << "Called create handler" << endl;
+	
 	if(entity.base.flags & EntityFlags::Inactive)
 		return;
 
@@ -410,6 +448,8 @@ void World::CreateHandler::call(Entity const& entity)
 
 void World::UpdateHandler::call(Entity const& entity)
 {
+	cout << "Called update handler" << endl;
+	
 	if( (entity.base.flags & EntityFlags::Inactive) ||
 		(entity.base.flags & EntityFlags::Temporary) )
 		return;
@@ -439,6 +479,8 @@ void World::UpdateHandler::call(Entity const& entity)
 
 void World::DeleteHandler::call(Entity const& entity)
 {
+	cout << "Called delete handler" << endl;
+	
 	if((entity.base.flags & EntityFlags::Temporary))
 		return;
 	
@@ -509,8 +551,7 @@ void World::tick_players()
 		&V,
 		Region(),
 		vector<EntityType>({ EntityType::Player }), 
-		true, 
-		false); 
+		true); 
 }
 
 void World::tick_mobs()

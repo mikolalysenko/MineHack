@@ -6,6 +6,13 @@ div#chatLog
 	height:200px;
 }
 
+div#debugLog
+{
+	overflow:auto;
+	width:800;
+	height:600;
+}
+
 a.avatarSelect
 {
 }

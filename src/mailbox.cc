@@ -11,6 +11,7 @@
 #include <cstring>
 #include <cassert>
 #include <cstdlib>
+#include <iostream>
 
 #include "constants.h"
 #include "misc.h"
@@ -417,6 +418,8 @@ int Mailbox::PlayerRecord::packet_len() const
 //Serialize the packet into binary form on the socket
 void Mailbox::PlayerRecord::net_serialize(int socket) const
 {
+	cout << "Serializing packet, socket = " << socket << endl;
+
 	//Send HTTP header
 	{	char header_buf[1024];
 		int len = snprintf(header_buf, sizeof(header_buf),
@@ -427,7 +430,9 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 			"Content-Length: %d\n"
 			"\n", packet_len());
 	
-		send(socket, header_buf, len, 0);
+		int rc = send(socket, header_buf, len, 0);
+		
+		cout << "Wrote header, " << rc << endl;
 	}
 
 	//Send header
@@ -484,14 +489,20 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 	send(socket, &dead_entities[0], dead_entities.size() * sizeof(EntityID), 0);
 }
 
-//Resets the packet
-void Mailbox::PlayerRecord::clear()
+//Swaps packet for network serialization stuff (used to avoid locking)
+void Mailbox::PlayerRecord::swap(Mailbox::PlayerRecord& other)
 {
-	block_events.clear();
-	chat_log.clear();
-	coords.clear();
-	eblob.clear();
-	dead_entities.clear();
+	tick_count = other.tick_count;		
+	
+	ox = other.ox;
+	oy = other.oy;
+	oz = other.oz;
+	
+	block_events.swap(other.block_events);
+	chat_log.swap(other.chat_log);
+	coords.swap(other.coords);
+	eblob.swap(other.eblob);
+	dead_entities.swap(other.dead_entities);
 }
 
 
