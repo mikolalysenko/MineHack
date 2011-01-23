@@ -396,6 +396,8 @@ bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& playe
 	
 	ScopeTCList L(tctdbqrysearch(Q.query));
 	
+	cout << "hint = " << tctdbqryhint(Q.query) << endl;
+	
 	cout << "L.list = " << (void*)L.list << endl;
 	
 	if(L.list != NULL)

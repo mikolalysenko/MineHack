@@ -31,6 +31,8 @@ void bucket_str(double x, double y, double z, char* ptr)
 		by = (int)(y / BUCKET_Y),
 		bz = (int)(z / BUCKET_Z);
 
+	//cout << "B = " << bx << ',' << by << ',' << bz << endl;
+
 	int t = bx;
 	for(int i=0; i<BUCKET_STR_LEN; i++)
 	{

@@ -311,6 +311,8 @@ void EntityDB::add_range_query(TDBQRY* query, Region const& r)
 	for(int by=bmin_y; by<=bmax_y; by++)
 	for(int bz=bmin_z; bz<=bmax_z; bz++)
 	{
+		//cout << "B = " << bx << ',' << by << ',' << bz << endl;
+	
 		int t = bx;
 		for(int i=0; i<BUCKET_STR_LEN; i++)
 		{
@@ -337,7 +339,7 @@ void EntityDB::add_range_query(TDBQRY* query, Region const& r)
 	
 	*(--ptr) = '\0';
 	
-	cout << "Bucket string = " << bucket_str;
+	cout << "Bucket string = " << bucket_str << endl;
 	
 	tctdbqryaddcond(query, "bucket", TDBQCSTROREQ, bucket_str);
 	
