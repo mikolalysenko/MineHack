@@ -14,6 +14,8 @@ Switch http server to a different backend (preferrably using epoll)
 			HTTP compression
 			cache all static HTTP responses
 			no extra memcpys!
+			
+User write/writev to do io, avoids blocking/extra work.
 
 Implement HTTP streaming for heartbeat events!
 	This would be awesome, but will probably be too expensive

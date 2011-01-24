@@ -113,18 +113,12 @@ Player.net_state = function()
 	var i = 0;
 	
 	//Serialize tick count
-	var k = Game.tick_lo;
-	res[i++] =  k     &0xff;
-	res[i++] = (k>>8) &0xff;
-	res[i++] = (k>>16)&0xff;
-	res[i++] = (k>>24)&0xff;
-
-	k = Game.tick_hi;	
-	res[i++] =  k     &0xff;
-	res[i++] = (k>>8) &0xff;
-	res[i++] = (k>>16)&0xff;
-	res[i++] = (k>>24)&0xff;
-
+	var k = Game.tick_count;
+	for(var j=0; j<8; j++)
+	{
+		res[i++] = k % 256;	//Need to use div since javascript is dumb about bitwise
+		k /= 256;
+	}
 	
 	k = Math.floor(ent.x * NET_COORD_PRECISION);
 	res[i++] =  k     &0xff;
@@ -154,7 +148,7 @@ Player.net_state = function()
 		(Player.input["left"]		<< 2) |
 		(Player.input["right"]		<< 3) |
 		(Player.input["jump"]		<< 4) |
-		(Player.input["crouch"]	<< 5) |
+		(Player.input["crouch"]		<< 5) |
 		(Player.input["dig"]		<< 6);
 	
 	return res;

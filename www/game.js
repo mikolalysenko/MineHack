@@ -1,4 +1,3 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
 "use strict";
 
 Game = 
@@ -6,8 +5,10 @@ Game =
 	crashed : false,
 	running : false,
 	
-	tick_lo : 0,
-	tick_hi : 0,
+	//Game tick count.  goal is to make it approximately net_tick_count - ping
+	tick_count : 0,	
+	ping : 0,
+	net_tick_count : 0,
 	
 	TICKS_PER_HEARTBEAT : 3,
 	
@@ -160,6 +161,7 @@ Game.shutdown = function()
 Game.heartbeat = function()
 {
 	Game.wait_for_heartbeat = true;
+	Game.heartbeat_clock = 0;
 	
 	//Sends a binary message to the server
 	asyncGetBinary("/h?k="+Session.session_id, 
@@ -170,23 +172,31 @@ Game.heartbeat = function()
 
 Game.tick = function()
 {
-	if(	Game.tick_lo % Game.TICKS_PER_HEARTBEAT == 0 &&
+	if(	Game.tick_count % Game.TICKS_PER_HEARTBEAT == 0 &&
 		!Game.wait_for_heartbeat )
 		Game.heartbeat();
 
-	if(Game.tick_lo == (1<<32) - 1)
+	//Goal: Try to interpolate local clock so that it = remote_clock - ping 
+	++Game.heartbeat_clock;
+	++Game.net_tick_count;
+	if(Game.tick_count < Game.net_tick_count - 2.0 * Game.ping)
 	{
-		Game.tick_lo = 0;
-		++Game.tick_hi;
+		Game.tick_count = 0.5 * (Game.net_tick_count - Game.ping) + 0.5 * Game.tick_count;
+	}
+	else if(Game.tick_count > Game.net_tick_count - 0.5 * Game.ping)
+	{
 	}
 	else
-	{
-		++Game.tick_lo;
+	{	
+		++Game.tick_count;
 	}
-
+	
 	//Wait for player entity packet before starting game
 	if(!Player.entity)
 		return;
+		
+	//Tick entities
+	EntityDB.tick();
 
 	//Update game state
 	Player.tick();
@@ -194,8 +204,6 @@ Game.tick = function()
 	//Update cache
 	Map.update_cache();
 	
-	//Tick entities
-	EntityDB.tick();
 	
 	//Redraw
 	Game.draw();

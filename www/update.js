@@ -8,6 +8,12 @@ var decode_int = function(arr, i)
 	return arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16) + (arr[i+3]<<24);
 }
 
+var decode_uint = function(arr, i)
+{
+	return arr[i] + (arr[i+1]<<8) + (arr[i+2]<<16) + (arr[i+3]*16777216);
+}
+
+
 var decode_ushort = function(arr, i)
 {
 	return arr[i] + (arr[i+1]<<8);
@@ -15,20 +21,24 @@ var decode_ushort = function(arr, i)
 
 var decode_short = function(arr, i)
 {
-	var v = arr[i] + (arr[i+1]<<8);
-	if(v >= (1<<15))
-		v = (1<<16) - v;
-	return v;
+	return ((arr[i] + (arr[i+1]<<8))<<16)>>16;
 }
 
 var decode_byte = function(arr, i)
 {
-	var b = arr[i];
-	if(b >= (1<<7))
-		b = (1<<8) - b;
-	return b;
+	return (arr[i]<<24)>>24;
 }
 
+var decode_tick = function(arr, i)
+{
+	var r = 0;
+	for(var k=i+7; k>=i; --k)
+	{
+		r += arr[k];
+		r *= 256;
+	}
+	return r;
+}
 
 //Handles an update packet from the server
 UpdateHandler.handle_update_packet = function(arr)
@@ -40,10 +50,8 @@ UpdateHandler.handle_update_packet = function(arr)
 		return;
 	
 	//Parse packet header
-	Game.tick_lo = decode_int(arr, 0);
-	Game.tick_hi = decode_int(arr, 4);
-	
-	var ox = decode_int(arr,8),
+	var net_tick = decode_tick(arr, 0),
+		ox = decode_int(arr,8),
 		oy = decode_int(arr,12),
 		oz = decode_int(arr,16),
 		block_size	= decode_ushort(arr, 20),
@@ -52,6 +60,9 @@ UpdateHandler.handle_update_packet = function(arr)
 		update_size	= decode_ushort(arr, 26),
 		kill_size	= decode_ushort(arr, 28);
 
+	//Set network clock
+	Game.ping = 0.5 * Game.heartbeat_clock + 0.5 * Game.ping;
+	Game.net_tick_count = net_tick;
 
 	if(arr.length < NET_HEADER_SIZE + 4 * block_size + chat_size +  9 * coord_size + update_size +  8 * kill_size)
 		return;
@@ -82,6 +93,8 @@ UpdateHandler.handle_update_packet = function(arr)
 	
 	while(--coord_size>=0)
 	{
+		var t = net_tick - decode_ushort(arr, idx);
+		idx += 2;	
 		var x = decode_short(arr, idx) * NET_DIVIDE + ox;
 		idx += 2;
 		var y = decode_short(arr, idx) * NET_DIVIDE + oy;
@@ -93,7 +106,7 @@ UpdateHandler.handle_update_packet = function(arr)
 		var yaw 	= arr[idx++] * 2.0 * Math.PI / 255.0;
 		var roll	= arr[idx++] * 2.0 * Math.PI / 255.0;
 		
-		coords.push( [ x, y, z, pitch, yaw, roll ] );
+		coords.push( [ t, x, y, z, pitch, yaw, roll ] );
 	}
 	
 	//Parse out entity updates
@@ -107,7 +120,7 @@ UpdateHandler.handle_update_packet = function(arr)
 		
 		var r = -1;
 		
-		if(initialize)
+		if(initialize == 1)
 		{
 			//Send update packet to the target
 			r = EntityDB.create_entity(entity_id, coords[n], arr.slice(idx));

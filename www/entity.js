@@ -1,48 +1,53 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
 "use strict";
-
 
 //Entity constructor
 Entity = function(coords, packet, len)
 {
-	this.x = coords[0];
-	this.y = coords[1];
-	this.z = coords[2];
+	//Set base coordinates (temporary
+	this.x = coords[1];
+	this.y = coords[2];
+	this.z = coords[3];
+	this.pitch 	= coords[4];
+	this.yaw 	= coords[5];
+	this.roll 	= coords[6];
 	
-	this.pitch 	= coords[3];
-	this.yaw 	= coords[4];
-	this.roll 	= coords[5];
+	//Set network coordinates
+	this.net_t 		= coords[0];
+	this.net_x 		= coords[1];
+	this.net_y 		= coords[2];
+	this.net_z 		= coords[3];
+	this.net_pitch	= coords[4];
+	this.net_yaw	= coords[5];
+	this.net_roll	= coords[6];
 	
 	//Parse out packet data for initialization
-	this.type = packet[0];
+	this.type = packet[len.val++];
 	
 	if(this.type == PLAYER_ENTITY)
 	{
 		//Parse out player name from packet
-		var name_len = packet[1];
+		var name_len = packet[len.val++];
 		this.player_name = "";
 		for(var i=2; i<2+name_len; i++)
-			this.player_name += String.fromCharCode(packet[i] & 0x7f);
+			this.player_name += String.fromCharCode(packet[len.val++] & 0x7f);
 		
-		//Set packet length
-		len.val = 1 + this.player_name.length;
 	}
 	else if(this.type == MONSTER_ENTITY)
 	{
-		len.val = 1;
 	}
 }
 
 //Updates entity state from network packet
 Entity.prototype.update = function(coords, packet)
 {
-	this.x = coords[0];
-	this.y = coords[1];
-	this.z = coords[2];
-	
-	this.pitch 	= coords[3];
-	this.yaw 	= coords[4];
-	this.roll 	= coords[5];
+	//Set network coordinates
+	this.net_t 		= coords[0];
+	this.net_x 		= coords[1];
+	this.net_y 		= coords[2];
+	this.net_z 		= coords[3];
+	this.net_pitch	= coords[4];
+	this.net_yaw	= coords[5];
+	this.net_roll	= coords[6];
 	
 	if(this.type == PLAYER_ENTITY)
 	{
@@ -98,14 +103,33 @@ Entity.prototype.pose_matrix = function()
 	return mmult(rot, trans);
 }
 
-//Updates client model of entity behavior
+//Interpolates local state from last known network state
 Entity.prototype.tick = function()
 {
+	if(this == Player.entity)
+	{
+		//Only resync player if we are really messed up
+		return;
+	}
+	
+	//For now, no interpolation just set position
+	this.x		= this.net_x;
+	this.y		= this.net_y;
+	this.z		= this.net_z;
+	this.pitch	= this.net_pitch;
+	this.yaw	= this.net_yaw;
+	this.roll	= this.net_roll;
 }
 
 //Draws the entity
 Entity.prototype.draw = function(gl)
 {
+	if(this.type == PLAYER_ENTITY)
+	{
+	}
+	else if(this.type == MONSTER_ENTITY)
+	{
+	}
 }
 
 
