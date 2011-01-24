@@ -254,6 +254,7 @@ Player.tick = function()
 			Math.abs(Player.entity.y - Player.dig_target[1]) > DIG_RADIUS ||
 			Math.abs(Player.entity.z - Player.dig_target[2]) > DIG_RADIUS )
 		{
+			alert("walked away");
 			InputHandler.push_event(["DigStop"]);
 			Player.digging = false;
 		}
