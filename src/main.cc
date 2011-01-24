@@ -569,6 +569,8 @@ void do_heartbeat(HttpEvent& ev)
 	
 	game_instance->handle_player_tick(session.player_id, pl, last_tick);
 	
+	cout << "heartbeat:  last = " << last_tick << ", cur = " << header.tick << endl;
+	
 	//Parse out the events
 	uint8_t *ptr = blob.data + sizeof(NetInputHeader),
 			*eob = blob.data + blob.len;
@@ -597,6 +599,7 @@ void do_heartbeat(HttpEvent& ev)
 		NetActionHeader action_header = *(NetActionHeader*)(void*)ptr;
 		ptr += sizeof(NetActionHeader);
 		
+		
 		//Calculate action size
 		int target_size = 0;
 		switch(action_header.target_type)
@@ -618,7 +621,7 @@ void do_heartbeat(HttpEvent& ev)
 		}
 		
 		//Check bounds
-		if(ptr + target_size >= eob)
+		if(eob < ptr + target_size)
 		{
 			cout << "Invalid target size for action event?" << endl;
 			break;
@@ -628,6 +631,9 @@ void do_heartbeat(HttpEvent& ev)
 		action.type			= action_header.type;
 		action.target_type	= action_header.target_type;
 		action.tick			= header.tick - action_header.delta_tick;
+		
+		cout << "Got action: " << (int)action.type << ',' << action.target_type << " @ " << action.tick << endl;
+
 		
 		if(action.target_type == ActionTarget::Block)
 		{
@@ -662,7 +668,10 @@ void do_heartbeat(HttpEvent& ev)
 		//Quick sanity check on action, should not have happened *before*
 		//last player update packet.  Discard all out of order events.
 		if(action.tick < last_tick)
+		{
+			cout << "Action is out of order" << endl;
 			continue;
+		}
 		last_tick = action.tick;
 		
 		game_instance->handle_action(session.player_id, action);

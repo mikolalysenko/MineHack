@@ -361,11 +361,17 @@ void World::handle_action(EntityID const& player_id, Action const& action)
 			{
 			case ActionType::DigStart:
 				
+				
 				if( entity.player.state != PlayerState::Neutral ||
 					abs(entity.base.x - V->action.target_block.x) > DIG_RADIUS || 
 					abs(entity.base.y - V->action.target_block.y) > DIG_RADIUS || 
 					abs(entity.base.z - V->action.target_block.z) > DIG_RADIUS )
+				{
+					cout << "Invalid dig event" << endl;
 					return EntityUpdateControl::Continue;
+				}
+
+				cout << "Digging!" << endl;
 					
 				entity.player.state				= PlayerState::Digging;
 				entity.player.dig_state.start	= V->action.tick;
@@ -694,7 +700,7 @@ void World::tick_players()
 				{
 					entity.player.state = PlayerState::Neutral;
 				}
-				else if(dig_finish_time > world->tick_count)
+				else if(dig_finish_time <= world->tick_count)
 				{
 					world->set_block(
 						entity.player.dig_state.x,

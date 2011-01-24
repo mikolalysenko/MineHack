@@ -175,9 +175,9 @@ InputHandler.serialize = function()
 		{
 			var pos = action[3];
 			tmp = new Uint8Array(3);
-			tmp[0] = Math.floor(Player.entity.x - pos[0]) & 0xff;
-			tmp[1] = Math.floor(Player.entity.y - pos[1]) & 0xff;
-			tmp[2] = Math.floor(Player.entity.z - pos[2]) & 0xff;
+			tmp[0] = (pos[0] - Math.floor(Player.entity.x)) & 0xff;
+			tmp[1] = (pos[1] - Math.floor(Player.entity.y)) & 0xff;
+			tmp[2] = (pos[2] - Math.floor(Player.entity.z)) & 0xff;
 			bb.append(tmp.buffer);
 		}
 		else if(action[2] == TARGET_ENTITY)
@@ -189,6 +189,10 @@ InputHandler.serialize = function()
 			alert("Not implemented");
 		}
 	}
+	
+	//Clear old actions
+	InputHandler.actions = []
+	InputHandler.action_length = 0;
 
 	//Create blob
 	return bb.getBlob("application/octet-stream");		

@@ -257,9 +257,8 @@ Player.tick = function()
 			InputHandler.push_event(["DigStop"]);
 			Player.digging = false;
 		}
-		
 		//Other possibility, block is gone
-		if(Map.get_block(Player.dig_target[0], Player.dig_target[1], Player.dig_target[2]) == 0)
+		else if(Map.get_block(Player.dig_target[0], Player.dig_target[1], Player.dig_target[2]) == 0)
 		{
 			InputHandler.push_event(["DigStop"]);
 			Player.digging = false;
