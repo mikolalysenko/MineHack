@@ -31,21 +31,27 @@ InputHandler.packet_header = function()
 	
 	//Serialize session id
 	var session_id = Session.get_session_id_arr();
-	for(i=0; i<8; i++)
-		res[i] = session_id[i];
+	for(var j=0; j<8; ++j)
+		res[i++] = session_id[j];
 	
 	//If the entity isn't initialized, just return the empty header
 	if(!ent)
 		return res;
 	
 	//Serialize tick count
-	var k = Math.round(Game.game_ticks);
-	for(var j=0; j<8; j++)
-	{
-		res[i++] = k % 256;	//Need to use div since javascript is dumb about bitwise
-		k /= 256;
-	}
-	
+	var k = Math.floor(Game.game_ticks);
+	var lo = Math.floor(k % 4294967296.0);
+	var hi = Math.floor(k / 4294967296.0);
+
+	res[i++] =  lo     &0xff;
+	res[i++] = (lo>>8) &0xff;
+	res[i++] = (lo>>16)&0xff;
+	res[i++] = (lo>>24)&0xff;
+	res[i++] =  hi     &0xff;
+	res[i++] = (hi>>8) &0xff;
+	res[i++] = (hi>>16)&0xff;
+	res[i++] = (hi>>24)&0xff;
+		
 	//X coordinate
 	k = Math.round(ent.x * NET_COORD_PRECISION);
 	res[i++] =  k     &0xff;

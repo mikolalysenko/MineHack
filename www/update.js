@@ -34,8 +34,7 @@ var decode_tick = function(arr, i)
 	var r = 0;
 	for(var k=i+7; k>=i; --k)
 	{
-		r += arr[k];
-		r *= 256;
+		r = r*256 + arr[k];
 	}
 	return r;
 }
@@ -61,8 +60,20 @@ UpdateHandler.handle_update_packet = function(arr)
 		kill_size	= decode_ushort(arr, 28);
 
 	//Update network clock and ping
-	Game.ping = 0.5 * (Game.local_ticks - Game.heartbeat_clock) + 0.5 * Game.ping;
-	Game.net_ticks = net_tick;
+	if(Game.last_net_tick)
+	{	
+		Game.ping = 0.8 * (PING_DELAY + net_tick - Game.last_net_tick) + 0.2 * Game.ping;
+		Game.net_ticks = net_tick;
+	}
+	else
+	{
+		Game.ping = Game.local_ticks;
+		Game.net_ticks = net_tick;
+		Game.game_ticks = Game.net_ticks - Game.ping;
+	}
+	
+	Game.last_net_tick = net_tick;
+
 
 	if(arr.length < NET_HEADER_SIZE + 4 * block_size + chat_size +  9 * coord_size + update_size +  8 * kill_size)
 		return;

@@ -70,9 +70,10 @@
 #define CHAT_LINE_MAX_LEN		128
 
 //Radius beyond which the client needs to be resynchronized
-#define POSITION_RESYNC_RADIUS	8
+#define POSITION_RESYNC_RADIUS	10
 
-#define TICK_RESYNC_TIME		100
+//In ticks
+#define MAX_PING				200
 
 #define PLAYER_START_X			(1 << 20)
 #define PLAYER_START_Y			(1 << 20)

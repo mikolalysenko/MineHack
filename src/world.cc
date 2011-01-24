@@ -237,11 +237,11 @@ bool World::valid_player(EntityID const& player_id)
 
 void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& input)
 {
-	cout << "Updating player!" << endl;
 	struct Visitor
 	{
 		const PlayerEvent* input;
 		uint64_t tick_count;
+		bool out_of_sync;
 		
 		static EntityUpdateControl call(Entity& entity, void* data)	
 		{
@@ -261,10 +261,10 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 			if(	abs(entity.base.x - input->x) > POSITION_RESYNC_RADIUS ||
 				abs(entity.base.y - input->y) > POSITION_RESYNC_RADIUS ||
 				abs(entity.base.z - input->z) > POSITION_RESYNC_RADIUS ||
-				V->tick_count < input->tick ||
-				input->tick < V->tick_count - TICK_RESYNC_TIME ||
-				input->tick < player->net_last_tick )
+				input->tick > V->tick_count )
 			{
+				//Resynchronize player
+				V->out_of_sync = true;
 				return EntityUpdateControl::Continue;
 			}
 			
@@ -281,8 +281,18 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 		}
 	};
 	
-	Visitor V = { &input, tick_count };
+	
+	Visitor V = { &input, tick_count, false };
+	cout << "Updating player:" << V.tick_count << " -- " << input.tick << ';' << input.x << ',' << input.y << ',' << input.z << endl;
+
 	entity_db->update_entity(player_id, Visitor::call, &V);
+	
+	//Player is desynchronized
+	if(V.out_of_sync)
+	{
+		cout << "Player desyncrhonized" << endl;
+		mailbox->forget_entity(player_id, player_id);
+	}
 }
 
 
@@ -397,9 +407,11 @@ bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& playe
 			return false;
 
 		mailbox->update_index(ndata, player.base.x, player.base.y, player.base.z);
-		ndata->tick_count = tick_count;
 		data.swap(*ndata);
 	}
+	
+	//Set tick count
+	data.tick_count = tick_count;
 	
 	//grab a list of all entities in the range of the player
 	vector<uint64_t> new_entities;
@@ -544,6 +556,8 @@ void World::tick()
 {
 	//Increment tick counter
 	mailbox->set_tick_count(++tick_count);
+	
+	cout << "Tick count = " << tick_count << endl;
 	
 	tick_players();
 	tick_mobs();

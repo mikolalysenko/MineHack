@@ -176,7 +176,6 @@ Game.shutdown = function()
 Game.heartbeat = function()
 {
 	Game.wait_for_heartbeat = true;
-	Game.heartbeat_clock = Game.local_ticks;
 	
 	//Sends a binary message to the server
 	asyncGetBinary("/h?k="+Session.session_id, 
@@ -192,15 +191,18 @@ Game.tick = function()
 		Game.heartbeat();
 
 	//Update network clock/local clock
-	++Game.net_ticks;
 	++Game.local_ticks;
+
+	//Wait for player entity packet before starting game
+	if(!Player.entity)
+		return;
 	
 	//Goal: Try to interpolate local clock so that  = remote_clock - ping 
 	if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
 	{
-		Game.game_ticks = 0.5 * (Game.net_ticks - Game.ping) + 0.5 * Game.game_ticks;
+		Game.game_ticks = Math.floor(0.5 * (Game.net_ticks - Game.ping) + 0.5 * Game.game_ticks);
 	}
-	else if(Game.game_ticks > Game.net_ticks - 0.5 * Game.ping)
+	else if(Game.game_ticks >= Math.floor(Game.net_ticks - Game.ping))
 	{
 		//Whoops!  Too far ahead, do nothing for a few frames to catch up
 	}
@@ -209,9 +211,6 @@ Game.tick = function()
 		++Game.game_ticks;
 	}
 	
-	//Wait for player entity packet before starting game
-	if(!Player.entity)
-		return;
 		
 	//Tick entities
 	EntityDB.tick();

@@ -33,6 +33,9 @@ Implement some form of occlusion query to accelerate map loading.
 Implement HTTP streaming for heartbeat events!
 	This would be awesome, but will probably be too expensive
 
+Instead of usleep, use a realtime timer event in the main loop
+	Should reduce pointless waiting and improve concurrency
+
 Introduce some type of precompilation phase for the client code
 	Javascript should be statically checked (to the extent that it is possible)
 	Also:

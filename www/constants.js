@@ -37,3 +37,5 @@ const PLAYER_ENTITY		= 1;
 const MONSTER_ENTITY	= 2;
 
 
+//A fixed delay on the ping, always added
+const PING_DELAY		= 5;

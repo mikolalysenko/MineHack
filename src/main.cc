@@ -502,6 +502,7 @@ void do_heartbeat(HttpEvent& ev)
 	cout << "Expect: " << packet_len << ", got: " << blob.len << endl;
 	
 	cout << "Packet header: " << endl
+		<< "tick = " << header.tick << endl
 		<< "forget size = " << header.forget_size << endl
 		<< "chat size = " << header.chat_size << endl;
 	
@@ -684,7 +685,7 @@ void server_loop()
 				msg_buf[buf_ptr++] = c;
 		}
 		
-		usleep(SLEEP_TIME);
+		usleep(SLEEP_TIME * 1000);
 	}
 }
 
