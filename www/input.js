@@ -3,18 +3,39 @@
 var InputHandler = 
 {
 	forgotten : [],
-	chat_log : ""
+	chat_log : "",
+	actions : [],
+	action_length : 0
 };
 
 InputHandler.push_event = function(ev)
 {
 	if(ev[0] == "Chat")
 	{
+		if(chat_log.length + ev[1].length >= (1<<16)-1)
+			return;
 		InputHandler.chat_log += ev[1];
 	}
 	else if(ev[0] == "Forget")
 	{
+		if(forgotten.length >= (1<<16)-1)
+			return;
 		InputHandler.forgotten.push(ev[1]);
+	}
+	else if(ev[0] == "DigStart")
+	{
+		if(InputHandler.action_length >= (1<<16)-1)
+			return;
+	
+		InputHandler.actions.push([ ACTION_DIG_START, TARGET_BLOCK, Game.game_ticks, ev[1] ]);
+		InputHandler.action_length += 1 + 1 + 2 + 3;
+	}
+	else if(ev[0] == "DigStop")
+	{
+		if(InputHandler.action_length > (1<<16))
+			return;
+		InputHandler.actions.push([ ACTION_DIG_STOP, TARGET_NONE, Game.game_ticks ]);
+		InputHandler.action_length += 1 + 1 + 2;
 	}
 	else
 	{
@@ -25,7 +46,7 @@ InputHandler.push_event = function(ev)
 //Creates the packet header
 InputHandler.packet_header = function()
 {
-	var res = new Uint8Array(36);
+	var res = new Uint8Array(38);
 	var ent = Player.entity;
 	var i = 0;
 	
@@ -95,6 +116,10 @@ InputHandler.packet_header = function()
 	res[i++] =  InputHandler.chat_log.length 	   & 0xff;
 	res[i++] = (InputHandler.chat_log.length >> 8)  & 0xff;
 	
+	//Action size
+	res[i++] = InputHandler.action_length & 0xff;
+	res[i++] = (InputHandler.action_length>>8) & 0xff;
+	
 	
 	return res;
 }
@@ -128,6 +153,42 @@ InputHandler.serialize = function()
 	}
 	InputHandler.chat_log = "";
 	bb.append(chat_array.buffer);
+	
+	//Serialize action events (this is a bit more complicated)
+	for(var i=0; i<InputHandler.actions.length; i++)
+	{
+		var action = InputHandler.actions[i];
+		
+		//Write the header
+		var tmp = new Uint8Array(4);
+		tmp[0] = action[0];
+		tmp[1] = action[1];
+		
+		var delta_tick = Math.floor(Game.game_ticks - action[2]);
+		tmp[2] = delta_tick & 0xff;
+		tmp[3] = (delta_tick >> 8) & 0xff;
+		
+		bb.append(tmp.buffer);
+		
+		//Write target info
+		if(action[1] == TARGET_BLOCK)
+		{
+			var pos = action[3];
+			tmp = new Uint8Array(3);
+			tmp[0] = Math.floor(Player.entity.x - pos[0]) & 0xff;
+			tmp[1] = Math.floor(Player.entity.y - pos[1]) & 0xff;
+			tmp[2] = Math.floor(Player.entity.z - pos[2]) & 0xff;
+			bb.append(tmp.buffer);
+		}
+		else if(action[2] == TARGET_ENTITY)
+		{
+			alert("Not implemented");
+		}
+		else if(action[3] == TARGET_RAY)
+		{
+			alert("Not implemented");
+		}
+	}
 
 	//Create blob
 	return bb.getBlob("application/octet-stream");		

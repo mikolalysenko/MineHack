@@ -39,3 +39,18 @@ const MONSTER_ENTITY	= 2;
 
 //A fixed delay on the ping, always added
 const PING_DELAY		= 5;
+
+//Action event codes
+const ACTION_DIG_START		= 0;
+const ACTION_DIG_STOP		= 1;
+const ACTION_USE_ITEM		= 2;
+
+//Action target codes
+const TARGET_NONE			= 0;
+const TARGET_BLOCK			= 1;
+const TARGET_ENTITY			= 2;
+const TARGET_RAY			= 3;
+const TARGET_HAS_ITEM		= (1<<7);
+
+const DIG_RADIUS			= 5;
+

@@ -175,6 +175,30 @@ bool PlayerEntity::from_map(const TCMAP* map)
 	get_int(map, "net_input", inp);	
 	net_input = inp;
 	
+	//Read state
+	get_int(map, "state", inp);
+	state = (PlayerState)inp;
+	
+	switch(state)
+	{
+		case PlayerState::Neutral:
+		break;
+		
+		case PlayerState::Digging:
+			get_uint(map, "dig_start", dig_state.start);
+			get_int(map, "dig_x", inp);
+			dig_state.x = inp;
+			get_int(map, "dig_y", inp);
+			dig_state.y = inp;
+			get_int(map, "dig_z", inp);
+			dig_state.z = inp;
+		break;
+		
+		case PlayerState::Dead:
+		break;
+	}
+	
+	
 	return true;
 }
 
@@ -189,6 +213,24 @@ void PlayerEntity::to_map(TCMAP* map) const
 	insert_str(map, "net_yaw", net_yaw);
 	insert_str(map, "net_roll", net_roll);
 	insert_str(map, "net_input", net_input);
+	
+	insert_str(map, "state", (int)state);
+	
+	switch(state)
+	{
+		case PlayerState::Neutral:
+		break;
+		
+		case PlayerState::Digging:
+			insert_str(map, "dig_start", dig_state.start);
+			insert_str(map, "dig_x", dig_state.x);
+			insert_str(map, "dig_y", dig_state.y);
+			insert_str(map, "dig_z", dig_state.z);
+		break;
+		
+		case PlayerState::Dead:
+		break;
+	}
 }
 
 

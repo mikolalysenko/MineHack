@@ -14,6 +14,7 @@
 #include "constants.h"
 #include "chunk.h"
 #include "entity.h"
+#include "action.h"
 #include "entity_db.h"
 #include "mailbox.h"
 #include "worldgen.h"
@@ -54,9 +55,11 @@ namespace Game
 		
 		//Input handlers
 		bool valid_player(EntityID const& player_id);
-		void handle_player_tick(EntityID const& player_id, PlayerEvent const& input);
+		void handle_player_action(EntityID const& player_id, Action const& action);
+		void handle_player_tick(EntityID const& player_id, PlayerEvent const& input, uint64_t& prev_tick);
 		void handle_chat(EntityID const& player_id, std::string const& msg);
 		void handle_forget(EntityID const& player_id, EntityID const& forget_id);
+		void handle_action(EntityID const& player_id, Action const& action);
 		
 		//Retrieves a compressed chunk from the server
 		int get_compressed_chunk(
@@ -72,6 +75,9 @@ namespace Game
 		
 		//Ticks the server
 		void tick();
+		
+		//Misc. functions
+		void set_block(int x, int y, int z, Block b);
 		
 	private:
 	

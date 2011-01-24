@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstdlib>
 
-#include <tcutil.h>
 
 #include "constants.h"
 #include "config.h"
@@ -42,6 +41,36 @@ namespace Game
 		Monster = 2,
 	};
 	
+	//Player state data
+	enum class PlayerState : std::uint8_t
+	{
+		Neutral,
+		Digging,
+		Dead
+	};
+
+	//Logged out state	
+	struct LogoutState
+	{
+	};
+	
+	//Neutral state
+	struct NeutralState
+	{
+	};
+	
+	//Digging state
+	struct DigState
+	{
+		uint64_t	start;		//Time dig started
+		uint32_t	x, y, z;	//Dig target
+	};
+	
+	//Dead state
+	struct DeadState
+	{
+	};
+	
 	//Player specific entity data
 	struct PlayerEntity
 	{
@@ -53,6 +82,18 @@ namespace Game
 		double		net_x, net_y, net_z;
 		float		net_pitch, net_yaw, net_roll;
 		int			net_input;
+		
+		//Player state type
+		PlayerState	state;
+
+		//Data for each player state
+		union
+		{
+			LogoutState		logout_state;
+			NeutralState	neutral_state;
+			DigState		dig_state;
+			DeadState		dead_state;
+		};
 		
 		//Database serialization
 		bool 	from_map(const TCMAP*);

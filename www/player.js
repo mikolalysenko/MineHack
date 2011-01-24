@@ -41,7 +41,11 @@ var Player =
 	dy : 0,
 	
 	//If set, player is chatting
-	in_chat : false
+	in_chat : false,
+	
+	//If set, then player is digging
+	digging : false,
+	dig_target : [0, 0, 0]
 };
 
 
@@ -194,8 +198,31 @@ Player.tick = function()
 			
 		if(hit_rec.length > 0)
 		{
-			InputHandler.push_event(["DigBlock", hit_rec[0], hit_rec[1], hit_rec[2]]);
+			var hit = [ Math.floor(hit_rec[0]), 
+						Math.floor(hit_rec[1]), 
+						Math.floor(hit_rec[2]) ];
+		
+			if(!Player.digging)
+			{
+				InputHandler.push_event(["DigStart", hit ]);
+				Player.digging = true;
+				Player.dig_target = hit;
+			}
+			else if(
+				Player.dig_target[0] != hit[0] ||
+				Player.dig_target[1] != hit[1] ||
+				Player.dig_target[2] != hit[2] )
+			{
+				InputHandler.push_event(["DigStop"]);
+				InputHandler.push_event(["DigStart", hit ]);
+				Player.dig_target = hit;
+			}
 		}
+	}
+	else if(Player.digging)
+	{
+		InputHandler.push_event(["DigStop"]);
+		Player.digging = false;
 	}
 
 
@@ -219,6 +246,25 @@ Player.tick = function()
 	if(Player.entity.pitch > Math.PI/2.0)
 		Player.entity.pitch = Math.PI/2.0;
 
+	//Check for dig conditions
+	if( Player.digging )
+	{
+		//Check if we walked away
+	 	if( Math.abs(Player.entity.x - Player.dig_target[0]) > DIG_RADIUS ||
+			Math.abs(Player.entity.y - Player.dig_target[1]) > DIG_RADIUS ||
+			Math.abs(Player.entity.z - Player.dig_target[2]) > DIG_RADIUS )
+		{
+			InputHandler.push_event(["DigStop"]);
+			Player.digging = false;
+		}
+		
+		//Other possibility, block is gone
+		if(Map.get_block(Player.dig_target[0], Player.dig_target[1], Player.dig_target[2]) == 0)
+		{
+			InputHandler.push_event(["DigStop"]);
+			Player.digging = false;
+		}
+	}
 }
 
 

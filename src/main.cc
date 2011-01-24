@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cstdarg>
 #include <cstdio>
+#include <algorithm>
 
 #include "mongoose.h"
 
@@ -15,7 +16,7 @@
 #include "session.h"
 #include "misc.h"
 #include "world.h"
-#include "inventory.h"
+#include "action.h"
 
 using namespace std;
 using namespace Server;
@@ -476,6 +477,25 @@ struct NetInputHeader
 	
 	uint16_t	forget_size;
 	uint16_t	chat_size;
+	uint16_t	action_size;
+};
+
+struct NetActionHeader
+{
+	ActionType	type;
+	uint8_t		target_type;
+	uint16_t	delta_tick;
+};
+
+struct NetBlockTarget
+{
+	int8_t		x, y, z;
+};
+
+struct NetRayTarget
+{
+	int16_t	ox, oy, oz,
+			dx, dy, dz;
 };
 
 #pragma pack(pop)
@@ -497,7 +517,8 @@ void do_heartbeat(HttpEvent& ev)
 	
 	int packet_len = sizeof(NetInputHeader) +
 					 sizeof(EntityID) * header.forget_size +
-					 header.chat_size;
+					 header.chat_size +
+					 header.action_size;
 					 
 	cout << "Expect: " << packet_len << ", got: " << blob.len << endl;
 	
@@ -529,6 +550,7 @@ void do_heartbeat(HttpEvent& ev)
 	
 	//Parse out player input
 	PlayerEvent pl;
+	uint64_t last_tick;
 	pl.tick		= header.tick;
 	pl.x		= ((double)header.ix) / COORD_NET_PRECISION;
 	pl.y		= ((double)header.iy) / COORD_NET_PRECISION;
@@ -537,10 +559,19 @@ void do_heartbeat(HttpEvent& ev)
 	pl.yaw		= ((double)header.iyaw)		/ 255.0 * 2.0 * M_PI;
 	pl.roll		= ((double)header.iroll)	/ 255.0 * 2.0 * M_PI;
 	pl.input_state = header.key_state;
-	game_instance->handle_player_tick(session.player_id, pl);
+	
+	//Sanity check packet
+	if(header.tick > game_instance->tick_count)
+	{
+		ajax_error(ev.conn);
+		return;
+	}
+	
+	game_instance->handle_player_tick(session.player_id, pl, last_tick);
 	
 	//Parse out the events
-	uint8_t *ptr = blob.data + sizeof(NetInputHeader);
+	uint8_t *ptr = blob.data + sizeof(NetInputHeader),
+			*eob = blob.data + blob.len;
 
 	//Handle forget events
 	for(int i=0; i<header.forget_size; i++)
@@ -555,6 +586,87 @@ void do_heartbeat(HttpEvent& ev)
 	{
 		game_instance->handle_chat(session.player_id, string((const char*)ptr, header.chat_size));
 		ptr += header.chat_size;
+	}
+	
+	//Handle action events
+	while(ptr < eob)
+	{
+		//Read out action header
+		if(ptr + sizeof(NetActionHeader) > eob)
+			break;
+		NetActionHeader action_header = *(NetActionHeader*)(void*)ptr;
+		ptr += sizeof(NetActionHeader);
+		
+		//Calculate action size
+		int target_size = 0;
+		switch(action_header.target_type)
+		{
+			case ActionTarget::Block:
+				target_size += sizeof(NetBlockTarget);
+			break;
+			
+			case ActionTarget::Entity:
+				target_size += sizeof(EntityID);
+			break;
+			
+			case ActionTarget::Ray:
+				target_size += sizeof(NetRayTarget);
+			break;
+		
+			default:
+				break;
+		}
+		
+		//Check bounds
+		if(ptr + target_size >= eob)
+		{
+			cout << "Invalid target size for action event?" << endl;
+			break;
+		}
+		
+		Action action;
+		action.type			= action_header.type;
+		action.target_type	= action_header.target_type;
+		action.tick			= header.tick - action_header.delta_tick;
+		
+		if(action.target_type == ActionTarget::Block)
+		{
+			NetBlockTarget target = *(NetBlockTarget*)(void*)ptr;
+			ptr += sizeof(NetBlockTarget);
+			
+			action.target_block.x = target.x + (int)pl.x;
+			action.target_block.y = target.y + (int)pl.y;
+			action.target_block.z = target.z + (int)pl.z;
+		}
+		else if(action.target_type == ActionTarget::Entity)
+		{
+			action.target_id = *(EntityID*)(void*)ptr;
+			ptr += sizeof(EntityID);
+		}
+		else if(action.target_type == ActionTarget::Ray)
+		{
+			NetRayTarget target = *(NetRayTarget*)(void*)ptr;
+			ptr += sizeof(NetRayTarget);
+			
+			action.target_ray.ox = ((double)target.ox)/COORD_NET_PRECISION + pl.x;
+			action.target_ray.oy = ((double)target.oy)/COORD_NET_PRECISION + pl.y;
+			action.target_ray.oz = ((double)target.oz)/COORD_NET_PRECISION + pl.z;
+			
+			double l = sqrt(target.dx*target.dx + target.dy*target.dy + target.dz*target.dz);
+			
+			action.target_ray.dx = (double)target.dx / l;
+			action.target_ray.dy = (double)target.dy / l;
+			action.target_ray.dz = (double)target.dz / l;
+		}
+		
+		//Quick sanity check on action, should not have happened *before*
+		//last player update packet.  Discard all out of order events.
+		if(action.tick < last_tick)
+			continue;
+		last_tick = action.tick;
+		
+		game_instance->handle_action(session.player_id, action);
+		
 	}
 	
 	//Write data directly to socket (nasty, but saves having to allocate extra buffers)

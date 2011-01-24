@@ -72,15 +72,19 @@
 //Radius beyond which the client needs to be resynchronized
 #define POSITION_RESYNC_RADIUS	10
 
-//In ticks
+//In ticks, time before player updates are discarded
 #define MAX_PING				200
 
+//Radius around which one can dig
+#define DIG_RADIUS				5
+
+//Player start coordinates
 #define PLAYER_START_X			(1 << 20)
 #define PLAYER_START_Y			(1 << 20)
 #define PLAYER_START_Z			(1 << 20)
 
-//Player time out (in ticks)
-#define PLAYER_TIMEOUT			100000
+//Player time out (in ticks) default is approx. 1 minute
+#define PLAYER_TIMEOUT			1500
 
 //Sleep time for the main loop
 #define SLEEP_TIME				40

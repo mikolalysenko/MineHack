@@ -1,5 +1,6 @@
 Debug the new entity replication framework
 
+Add stuff for rendering entities
 
 Add a client debugger
 	Need some way to log messages

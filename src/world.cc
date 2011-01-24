@@ -19,10 +19,12 @@
 #include "misc.h"
 #include "chunk.h"
 #include "entity.h"
+#include "action.h"
 #include "entity_db.h"
 #include "mailbox.h"
 #include "world.h"
 #include "heartbeat.h"
+
 
 using namespace std;
 using namespace Game;
@@ -108,6 +110,9 @@ bool World::player_create(string const& player_name, EntityID& player_id)
 	player.player.net_yaw		= player.base.yaw;
 	player.player.net_roll		= player.base.roll;
 	player.player.net_input 	= 0;
+	
+	//Set base player state
+	player.player.state			= PlayerState::Neutral;
 	
 	//Set player name
 	assert(player_name.size() <= PLAYER_NAME_MAX_LEN);
@@ -235,13 +240,16 @@ bool World::valid_player(EntityID const& player_id)
 	return true;
 }
 
-void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& input)
+void World::handle_player_tick(EntityID const& player_id, 
+	PlayerEvent const& input,
+	uint64_t& prev_tick)
 {
 	struct Visitor
 	{
 		const PlayerEvent* input;
 		uint64_t tick_count;
 		bool out_of_sync;
+		uint64_t prev_tick;
 		
 		static EntityUpdateControl call(Entity& entity, void* data)	
 		{
@@ -268,6 +276,9 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 				return EntityUpdateControl::Continue;
 			}
 			
+			//Return the tick count
+			V->prev_tick = player->net_last_tick;
+			
 			//Upate player network state
 			player->net_last_tick	= input->tick;
 			player->net_x			= input->x;
@@ -282,7 +293,7 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 	};
 	
 	
-	Visitor V = { &input, tick_count, false };
+	Visitor V = { &input, tick_count, false, 0 };
 	cout << "Updating player:" << V.tick_count << " -- " << input.tick << ';' << input.x << ',' << input.y << ',' << input.z << endl;
 
 	entity_db->update_entity(player_id, Visitor::call, &V);
@@ -293,6 +304,8 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 		cout << "Player desyncrhonized" << endl;
 		mailbox->forget_entity(player_id, player_id);
 	}
+	
+	prev_tick = V.prev_tick;
 }
 
 
@@ -329,6 +342,54 @@ void World::handle_chat(EntityID const& player_id, std::string const& msg)
 void World::handle_forget(EntityID const& player_id, EntityID const& forgotten)
 {
 	mailbox->forget_entity(player_id, forgotten);
+}
+
+//Handles a time critical user event
+void World::handle_action(EntityID const& player_id, Action const& action)
+{
+	struct Visitor
+	{
+		Action action;
+		World* world;
+		
+		static EntityUpdateControl visit(Entity& entity, void* data)
+		{
+			Visitor* V = (Visitor*)data;
+			
+			//Check action type
+			switch(V->action.type)
+			{
+			case ActionType::DigStart:
+				
+				if( entity.player.state != PlayerState::Neutral ||
+					abs(entity.base.x - V->action.target_block.x) > DIG_RADIUS || 
+					abs(entity.base.y - V->action.target_block.y) > DIG_RADIUS || 
+					abs(entity.base.z - V->action.target_block.z) > DIG_RADIUS )
+					return EntityUpdateControl::Continue;
+					
+				entity.player.state				= PlayerState::Digging;
+				entity.player.dig_state.start	= V->action.tick;
+				entity.player.dig_state.x 		= V->action.target_block.x;	
+				entity.player.dig_state.y 		= V->action.target_block.y;
+				entity.player.dig_state.z 		= V->action.target_block.z;
+			
+				return EntityUpdateControl::Update;
+			
+			case ActionType::DigStop:
+				if(entity.player.state != PlayerState::Digging)
+					return EntityUpdateControl::Continue;
+
+				entity.player.state = PlayerState::Neutral;
+				return EntityUpdateControl::Update;
+			}
+			
+			
+			return EntityUpdateControl::Continue;
+		}
+	};
+	
+	Visitor V = { action, this };
+	entity_db->update_entity(player_id, Visitor::visit, &V);
 }
 
 
@@ -548,6 +609,21 @@ void World::DeleteHandler::call(Entity const& entity)
 
 
 //---------------------------------------------------------------
+// Misc. stuff
+//---------------------------------------------------------------
+void World::set_block(int x, int y, int z, Block b)
+{
+	game_map->set_block(x, y, z, b);
+	
+	Region r(
+		x - UPDATE_RADIUS, y - UPDATE_RADIUS, z - UPDATE_RADIUS,
+		x + UPDATE_RADIUS, y + UPDATE_RADIUS, z + UPDATE_RADIUS );
+	
+	mailbox->broadcast_block(r, x, y, z, b);
+}
+
+
+//---------------------------------------------------------------
 // World ticking / update
 //---------------------------------------------------------------
 
@@ -570,22 +646,18 @@ void World::tick_players()
 {
 	struct Visitor
 	{
-		World*				world;
-		
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
-			Visitor *V = (Visitor*)data;
+			World* world = (World*)data;
 		
-			/*
 			//Check for timed out players
-			if(V->world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
+			if(world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
 			{
 				cout << "Player timeout!" << endl;
 				entity.base.flags = EntityFlags::Inactive;
-				V->world->mailbox->del_player(entity.entity_id);
+				world->mailbox->del_player(entity.entity_id);
 				return EntityUpdateControl::Update;
 			}
-			*/
 			
 		
 			//Update network state
@@ -598,15 +670,57 @@ void World::tick_players()
 			entity.base.pitch = entity.player.net_pitch;
 			entity.base.yaw = entity.player.net_yaw;
 			entity.base.roll = 0.0;
+
+			//Handle state specific stuff
+			switch(entity.player.state)
+			{
+			
+			//Normal state
+			case PlayerState::Neutral:
+			{
+			}
+			break;
+			
+			//Digging
+			case PlayerState::Digging:
+			{
+				//Calculate finish time
+				uint64_t dig_finish_time = entity.player.dig_state.start + 5;
+				
+				//Check if we moved too far
+				if( abs(entity.base.x - entity.player.dig_state.x) > DIG_RADIUS ||
+					abs(entity.base.y - entity.player.dig_state.y) > DIG_RADIUS ||
+					abs(entity.base.z - entity.player.dig_state.z) > DIG_RADIUS )
+				{
+					entity.player.state = PlayerState::Neutral;
+				}
+				else if(dig_finish_time > world->tick_count)
+				{
+					world->set_block(
+						entity.player.dig_state.x,
+						entity.player.dig_state.y,
+						entity.player.dig_state.z,
+						Block::Air);
+						
+					entity.player.state = PlayerState::Neutral;
+				}
+			}	
+			break;
+			
+			//Dead!
+			case PlayerState::Dead:
+			{
+			}
+			break;
+			}
 			
 			return EntityUpdateControl::Update;				
 		}
 	};
 	
-	Visitor V = { this };
 	entity_db->foreach(
 		Visitor::call, 
-		&V,
+		this,
 		Region(),
 		vector<EntityType>({ EntityType::Player }), 
 		true); 
