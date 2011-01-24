@@ -37,6 +37,10 @@ InputHandler.serialize = function()
 	//TODO: Add all forget events
 	
 	//Add chat data
+	var lenb = new Uint8Array(2);
+	lenb[0] = InputHandler.chat_log.length & 0xff;
+	lenb[1] = InputHandler.chat_log.length >> 8;
+	bb.append(lenb.buffer);
 	var chat_array = new Uint8Array(InputHandler.chat_log.length);
 	for(var i=0; i<InputHandler.chat_log.length; i++)
 	{
@@ -48,3 +52,4 @@ InputHandler.serialize = function()
 	//Create blob
 	return bb.getBlob("application/octet-stream");		
 }
+

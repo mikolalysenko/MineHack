@@ -277,6 +277,8 @@ void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& inp
 
 void World::handle_chat(EntityID const& player_id, std::string const& msg)
 {
+	cout << "got chat" << endl;
+
 	//Sanity check chat message
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
@@ -287,6 +289,8 @@ void World::handle_chat(EntityID const& player_id, std::string const& msg)
 	//Construct chat string
 	stringstream ss;
 	ss << entity.player.player_name << ": " << msg;
+	
+	cout << ss.str() <<endl;
 	
 	//Construct region
 	Region r(	entity.base.x - CHAT_RADIUS,
@@ -396,23 +400,17 @@ bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& playe
 	
 	ScopeTCList L(tctdbqrysearch(Q.query));
 	
-	cout << "hint = " << tctdbqryhint(Q.query) << endl;
-	
-	cout << "L.list = " << (void*)L.list << endl;
-	
 	if(L.list != NULL)
 	while(true)
 	{
 		int sz;
 		ScopeFree G(tclistpop(L.list, &sz));
 		
-		cout << "G.ptr = " << G.ptr << ", sz = " << sz << endl;
 		if(G.ptr == NULL || sz != sizeof(EntityID))
 			break;
 
 		EntityID entity_id = *(EntityID*)G.ptr;
 		
-		cout << "Sending entity: " << entity_id.id << endl;
 		Entity entity;
 		if(!entity_db->get_entity(entity_id, entity))
 			continue;

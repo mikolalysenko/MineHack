@@ -287,6 +287,9 @@ void Mailbox::update_index(PlayerRecord* data, int ox, int oy, int oz)
 	int nbucket = TO_BUCKET(ox, oy, oz),
 		pbucket = TO_BUCKET(data->ox, data->oy, data->oz);
 		
+		
+	//cout << "Updating bucket: " << pbucket << endl;
+		
 	if(pbucket == nbucket)
 		return;
 
@@ -353,6 +356,8 @@ void Mailbox::foreach_region(
 	for(int bz=bmin_z; bz<=bmax_z; bz++)
 	{
 		uint64_t bucket = BUCKET_IDX(bx, by, bz);
+		
+		cout << "VISITING BUCKET: " << bucket << endl;
 		
 		auto iter=player_pos_index.find(bucket);
 		if(iter == player_pos_index.end())
