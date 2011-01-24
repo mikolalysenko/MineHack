@@ -224,6 +224,17 @@ bool World::player_leave(EntityID const& player_id)
 // Input handlers
 //---------------------------------------------------------------
 
+//Does a sanity check on a player object
+bool World::valid_player(EntityID const& player_id)
+{
+	Entity entity;
+	if( !entity_db->get_entity(player_id, entity) ||
+		(entity.base.flags & EntityFlags::Inactive) ||
+		entity.base.type != EntityType::Player )
+		return false;
+	return true;
+}
+
 void World::handle_player_tick(EntityID const& player_id, PlayerEvent const& input)
 {
 	cout << "Updating player!" << endl;
@@ -304,6 +315,12 @@ void World::handle_chat(EntityID const& player_id, std::string const& msg)
 	mailbox->broadcast_chat(r, ss.str(), true);
 }
 
+//Forgets about an entity
+void World::handle_forget(EntityID const& player_id, EntityID const& forgotten)
+{
+	mailbox->forget_entity(player_id, forgotten);
+}
+
 
 //---------------------------------------------------------------
 // Chunk retrieval
@@ -370,7 +387,8 @@ bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& playe
 		return false;
 	}
 	
-	//First, we need to make a local copy of the player packet and clear out the old one
+	
+	//We need to make a local copy of the player packet and clear out the old one
 	Mailbox::PlayerRecord data;
 	{
 		Mailbox::PlayerLock P(mailbox, player_id);
@@ -380,46 +398,65 @@ bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& playe
 
 		mailbox->update_index(ndata, player.base.x, player.base.y, player.base.z);
 		ndata->tick_count = tick_count;
-		
 		data.swap(*ndata);
 	}
 	
-	//Next, we need to poll all pollable entities within the update radius of the client
-	//This is done without locking the entity database, so we could be preempted
-	ScopeTCQuery Q(entity_db->entity_db);
-	
-	Region r(	player.base.x - UPDATE_RADIUS, 
-				player.base.y - UPDATE_RADIUS,
-				player.base.z - UPDATE_RADIUS,
-				player.base.x + UPDATE_RADIUS,
-				player.base.y + UPDATE_RADIUS,
-				player.base.z + UPDATE_RADIUS );
-	entity_db->add_range_query(Q.query, r);
-	
-	tctdbqryaddcond(Q.query, "poll", TDBQCSTREQ, "1");
-	
-	ScopeTCList L(tctdbqrysearch(Q.query));
-	
-	if(L.list != NULL)
-	while(true)
+	//grab a list of all entities in the range of the player
+	vector<uint64_t> new_entities;
 	{
-		int sz;
-		ScopeFree G(tclistpop(L.list, &sz));
+		ScopeTCQuery Q(entity_db->entity_db);
+	
+		Region r(	player.base.x - UPDATE_RADIUS, 
+					player.base.y - UPDATE_RADIUS,
+					player.base.z - UPDATE_RADIUS,
+					player.base.x + UPDATE_RADIUS,
+					player.base.y + UPDATE_RADIUS,
+					player.base.z + UPDATE_RADIUS );
+		entity_db->add_range_query(Q.query, r);
+	
+		tctdbqryaddcond(Q.query, "poll", TDBQCSTREQ, "1");
+	
+		ScopeTCList L(tctdbqrysearch(Q.query));
 		
-		if(G.ptr == NULL || sz != sizeof(EntityID))
-			break;
+		if(L.list != NULL)
+		while(true)
+		{
+			int sz;
+			ScopeFree G(tclistpop(L.list, &sz));
+		
+			if(G.ptr == NULL || sz != sizeof(EntityID))
+				break;
 
-		EntityID entity_id = *(EntityID*)G.ptr;
-		
-		Entity entity;
-		if(!entity_db->get_entity(entity_id, entity))
-			continue;
+			//Recover entity			
+			EntityID entity_id = *(EntityID*)G.ptr;
+			Entity entity;
+			entity_db->get_entity(entity_id, entity);
 			
-		data.serialize_entity(entity);
+			//Check for known entity
+			if(	data.known_entities.count(entity_id.id) == 0 && 
+				(entity.base.flags & EntityFlags::Persist) )
+				new_entities.push_back(entity_id.id);
+
+			//Serialize
+			data.serialize_entity(entity);
+		}
 	}
-			
-	//Finally, we serialize the packet to the network
+		
+	//Push data to client
 	data.net_serialize(socket);
+	
+	//Finally, we need to add the newly serialized entities to the known
+	//entity set on the client
+	if(new_entities.size() > 0)
+	{
+		Mailbox::PlayerLock P(mailbox, player_id);
+		Mailbox::PlayerRecord* ndata = P.data();
+		if(ndata == NULL)
+			return true;
+		
+		ndata->known_entities.insert(new_entities.begin(), new_entities.end());
+	}
+	
 	return true;
 }
 

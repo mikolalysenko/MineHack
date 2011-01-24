@@ -511,11 +511,16 @@ void Mailbox::PlayerRecord::swap(Mailbox::PlayerRecord& other)
 	oy = other.oy;
 	oz = other.oz;
 	
+	//FIXME: This copy wasteful.
+	//It would be better to use a hash table object that works without locking
+	known_entities = other.known_entities;
+	
 	block_events.swap(other.block_events);
 	chat_log.swap(other.chat_log);
 	coords.swap(other.coords);
 	eblob.swap(other.eblob);
 	dead_entities.swap(other.dead_entities);
+	
 }
 
 
@@ -591,7 +596,9 @@ void Mailbox::PlayerRecord::serialize_entity(Entity const& ent)
 {
 	bool initialize = known_entities.count(ent.entity_id.id) == 0;
 	if(initialize && (ent.base.flags & EntityFlags::Persist))
+	{
 		known_entities.insert(ent.entity_id.id);
+	}
 
 	//Entity packet format:
 	//	Initialization flag

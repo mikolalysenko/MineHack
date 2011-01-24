@@ -462,97 +462,98 @@ void do_get_chunk(HttpEvent& ev)
 	ajax_send_binary(ev.conn, (const void*)chunk_buf, buf_len);
 }
 
-//Network deserialization
-template<typename T> void net_deserialize(uint8_t*& ptr, T& v)
+//Network packet header
+#pragma pack(push,1)
+
+struct NetInputHeader
 {
-	v = *((T*)(void*)ptr);
-	ptr += sizeof(T);
-}
+	SessionID	session_id;
+	
+	uint64_t	tick;
+	uint32_t	ix, iy, iz;
+	uint8_t		ipitch, iyaw, iroll;
+	uint8_t		key_state;
+	
+	uint16_t	forget_size;
+	uint16_t	chat_size;
+};
+
+#pragma pack(pop)
 
 //Pulls pending events from client
 void do_heartbeat(HttpEvent& ev)
 {
 	HttpBlobReader blob(ev.conn);
 	
-	if(blob.len < sizeof(SessionID))
+	if(blob.len < sizeof(NetInputHeader))
 	{
+		cout << "Blob is missing header, header len = " << sizeof(NetInputHeader) << ", packet len = " << blob.len << endl;
 		ajax_error(ev.conn);
 		return;
 	}
 	
-	SessionID	session_id = *((SessionID*)blob.data);
+	NetInputHeader header = *(NetInputHeader*)(void*)blob.data;
 	Session		session;
 	
-	if( !get_session_data(session_id, session) ||
-		session.state != SessionState::InGame )
+	int packet_len = sizeof(NetInputHeader) +
+					 sizeof(EntityID) * header.forget_size +
+					 header.chat_size;
+					 
+	cout << "Expect: " << packet_len << ", got: " << blob.len << endl;
+	
+	cout << "Packet header: " << endl
+		<< "forget size = " << header.forget_size << endl
+		<< "chat size = " << header.chat_size << endl;
+	
+	//Check session is valid
+	if( !get_session_data(header.session_id, session) ||
+		session.state != SessionState::InGame || 
+		blob.len != packet_len )
 	{
+		cout << "Not logged in yet" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
-
+	
+	
+	//Check player is valid
+	if(	!game_instance->valid_player(session.player_id) )
+	{
+		cout << "Player is invalid!" << endl;
+	
+		delete_session(header.session_id);
+		ajax_error(ev.conn);
+		return;
+	}
+	
+	//Parse out player input
+	PlayerEvent pl;
+	pl.tick		= header.tick;
+	pl.x		= ((double)header.ix) / COORD_NET_PRECISION;
+	pl.y		= ((double)header.iy) / COORD_NET_PRECISION;
+	pl.z		= ((double)header.iz) / COORD_NET_PRECISION;
+	pl.pitch	= ((double)header.ipitch)	/ 255.0 * 2.0 * M_PI;
+	pl.yaw		= ((double)header.iyaw)		/ 255.0 * 2.0 * M_PI;
+	pl.roll		= ((double)header.iroll)	/ 255.0 * 2.0 * M_PI;
+	pl.input_state = header.key_state;
+	game_instance->handle_player_tick(session.player_id, pl);
+	
 	//Parse out the events
-	uint8_t *ptr = blob.data + sizeof(SessionID),
-			*eob = blob.data + blob.len;
-	
-	//Parse out player update packet
-	const int TICK_LEN = 24;
-	if(ptr + TICK_LEN <= eob)
-	{
-		PlayerEvent pl;
-		
-		//Deserialize tick value
-		net_deserialize(ptr, pl.tick);
-		
-		//Unpack position value
-		uint32_t ix, iy, iz;
-		net_deserialize(ptr, ix);
-		net_deserialize(ptr, iy);
-		net_deserialize(ptr, iz);	
-		pl.x = ((double)ix) / COORD_NET_PRECISION;
-		pl.y = ((double)iy) / COORD_NET_PRECISION;
-		pl.z = ((double)iz) / COORD_NET_PRECISION;
-	
-		//Unpack pitch/yaw
-		int ipitch, iyaw, iroll;
-		ipitch 	= *(ptr++);
-		iyaw 	= *(ptr++);
-		iroll 	= *(ptr++);
-		pl.pitch= 2. * M_PI / 255. * (double)ipitch;
-		pl.yaw	= 2. * M_PI / 255. * (double)iyaw;
-		pl.roll	= 2. * M_PI / 255. * (double)iroll;
-	
-		//Unpack input
-		pl.input_state = *(ptr++);
+	uint8_t *ptr = blob.data + sizeof(NetInputHeader);
 
-		//Post event
-		game_instance->handle_player_tick(session.player_id, pl);
-		ptr += TICK_LEN;
-	}
-	
-	//TODO: Handle forget events
-	
-	//Handle chat events
-	if(ptr + 2 <= eob)
+	//Handle forget events
+	for(int i=0; i<header.forget_size; i++)
 	{
-		int r = *(ptr++);
-		r += (*(ptr++))<<8;
-		
-		if(ptr + r <= eob)
-		{
-			game_instance->handle_chat(session.player_id, string((const char*)ptr, r));
-			ptr += r;
-		}
+		EntityID entity_id = *(EntityID*)(void*)ptr;
+		ptr += sizeof(EntityID);
+		game_instance->handle_forget(session.player_id, entity_id);
 	}
 
-	//This shouldn't happen, but need to check anyway
-	if(ptr < eob)
+	//Handle chat message	
+	if(header.chat_size > 0)
 	{
-		cout << "Warning!  Unused data in heartbeat buffer: ";
-		while(ptr < eob)
-		{
-			cout << (int)*(ptr++) << ",";
-		}
-		cout << endl;
+		game_instance->handle_chat(session.player_id, string((const char*)ptr, header.chat_size));
+		ptr += header.chat_size;
 	}
 	
 	//Write data directly to socket (nasty, but saves having to allocate extra buffers)
@@ -560,7 +561,7 @@ void do_heartbeat(HttpEvent& ev)
 	if(!game_instance->heartbeat(session.player_id, mg_steal_socket(ev.conn)))
 	{
 		cout << "Heartbeat failed" << endl;
-		delete_session(session_id);
+		delete_session(header.session_id);
 		ajax_error(ev.conn);
 	}
 }

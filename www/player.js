@@ -103,57 +103,6 @@ Player.set_entity = function(ent)
 	Player.entity = ent;
 }
 
-Player.net_state = function()
-{
-	if(!Player.entity)
-		return new Uint8Array(0);
-	
-	var res = new Uint8Array(24);
-	var ent = Player.entity;
-	var i = 0;
-	
-	//Serialize tick count
-	var k = Game.tick_count;
-	for(var j=0; j<8; j++)
-	{
-		res[i++] = k % 256;	//Need to use div since javascript is dumb about bitwise
-		k /= 256;
-	}
-	
-	k = Math.floor(ent.x * NET_COORD_PRECISION);
-	res[i++] =  k     &0xff;
-	res[i++] = (k>>8) &0xff;
-	res[i++] = (k>>16)&0xff;
-	res[i++] = (k>>24)&0xff;
-	
-	k = Math.floor(ent.y * NET_COORD_PRECISION);
-	res[i++] =  k     &0xff;
-	res[i++] = (k>>8) &0xff;
-	res[i++] = (k>>16)&0xff;
-	res[i++] = (k>>24)&0xff;
-	
-	k = Math.floor(ent.z * NET_COORD_PRECISION);
-	res[i++] =  k     &0xff;
-	res[i++] = (k>>8) &0xff;
-	res[i++] = (k>>16)&0xff;
-	res[i++] = (k>>24)&0xff;
-	
-	res[i++] = (Math.floor(ent.pitch* 255.0 / (2.0 * Math.PI)) + 0x1000) & 0xff;
-	res[i++] = (Math.floor(ent.yaw 	* 255.0 / (2.0 * Math.PI)) + 0x1000) & 0xff;
-	res[i++] = (Math.floor(ent.roll * 255.0 / (2.0 * Math.PI)) + 0x1000) & 0xff;
-	
-	res[i++] = 
-		(Player.input["forward"]	<< 0) |
-		(Player.input["back"] 		<< 1) |
-		(Player.input["left"]		<< 2) |
-		(Player.input["right"]		<< 3) |
-		(Player.input["jump"]		<< 4) |
-		(Player.input["crouch"]		<< 5) |
-		(Player.input["dig"]		<< 6);
-	
-	return res;
-}
-
 Player.show_chat_input = function()
 {
 	var chatBox = document.getElementById("chatBox");

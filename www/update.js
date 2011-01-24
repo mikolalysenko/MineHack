@@ -60,9 +60,9 @@ UpdateHandler.handle_update_packet = function(arr)
 		update_size	= decode_ushort(arr, 26),
 		kill_size	= decode_ushort(arr, 28);
 
-	//Set network clock
-	Game.ping = 0.5 * Game.heartbeat_clock + 0.5 * Game.ping;
-	Game.net_tick_count = net_tick;
+	//Update network clock and ping
+	Game.ping = 0.5 * (Game.local_ticks - Game.heartbeat_clock) + 0.5 * Game.ping;
+	Game.net_ticks = net_tick;
 
 	if(arr.length < NET_HEADER_SIZE + 4 * block_size + chat_size +  9 * coord_size + update_size +  8 * kill_size)
 		return;
@@ -140,7 +140,7 @@ UpdateHandler.handle_update_packet = function(arr)
 	}
 	
 	if(idx != pidx + update_size)
-		alert("PACKET OVERFLOWED!!!!");
+		alert("PACKET INDEX ERROR!!!!");
 	
 	//Rebase index pointer in case something went wrong
 	idx = pidx + update_size;

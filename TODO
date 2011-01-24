@@ -17,6 +17,19 @@ Switch http server to a different backend (preferrably using epoll)
 			
 User write/writev to do io, avoids blocking/extra work.
 
+Implement some form of occlusion query to accelerate map loading.
+	Right now it uses the naive strategy of just grabbing all blocks in a radius
+	Might be better to do something fancy like this:
+		Every n frames:
+			Render a low resolution version of the world onto a cube
+				For each chunk within some large radius (say 10x10x10):
+					If chunk is loaded, draw it with depth 0
+					Otherwise, draw a cube at chunk location instead, colored by chunkID
+			Read resulting texture back onto CPU
+			For each pixel:
+				If color is unloaded chunk,
+				Issue fetch command for chunk
+
 Implement HTTP streaming for heartbeat events!
 	This would be awesome, but will probably be too expensive
 

@@ -5,10 +5,25 @@ Game =
 	crashed : false,
 	running : false,
 	
-	//Game tick count.  goal is to make it approximately net_tick_count - ping
-	tick_count : 0,	
+	//Clock stuff:
+	// Each tick is approximately 40ms (this is not very precise due to scheduling issues)
+	
+	//There are 3 timers in the game
+	// Local ticks measures the total number of ticks since the app started.
+	//This is used internally for engine related functions (ie ping, event scheduling, etc.)
+	local_ticks : 0,
+	
+	//Game ticks is the approximate local time.  This is the tick counter that
+	//should be used for simulation.  It is approximately equal to (net_ticks - ping)
+	//Note that this is a floating point number, not an integer quantity!
+	game_ticks : 0,	
+	
+	//This is out guess at what the network clock time is.  Our local simulation
+	//always runs somewhat behind this.
+	net_ticks : 0,
+	
+	//This is the amount of time we are behind the network counter (in ticks)
 	ping : 0,
-	net_tick_count : 0,
 	
 	TICKS_PER_HEARTBEAT : 3,
 	
@@ -161,7 +176,7 @@ Game.shutdown = function()
 Game.heartbeat = function()
 {
 	Game.wait_for_heartbeat = true;
-	Game.heartbeat_clock = 0;
+	Game.heartbeat_clock = Game.local_ticks;
 	
 	//Sends a binary message to the server
 	asyncGetBinary("/h?k="+Session.session_id, 
@@ -172,23 +187,26 @@ Game.heartbeat = function()
 
 Game.tick = function()
 {
-	if(	Game.tick_count % Game.TICKS_PER_HEARTBEAT == 0 &&
+	if(	Game.local_ticks % Game.TICKS_PER_HEARTBEAT == 0 &&
 		!Game.wait_for_heartbeat )
 		Game.heartbeat();
 
-	//Goal: Try to interpolate local clock so that it = remote_clock - ping 
-	++Game.heartbeat_clock;
-	++Game.net_tick_count;
-	if(Game.tick_count < Game.net_tick_count - 2.0 * Game.ping)
+	//Update network clock/local clock
+	++Game.net_ticks;
+	++Game.local_ticks;
+	
+	//Goal: Try to interpolate local clock so that  = remote_clock - ping 
+	if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
 	{
-		Game.tick_count = 0.5 * (Game.net_tick_count - Game.ping) + 0.5 * Game.tick_count;
+		Game.game_ticks = 0.5 * (Game.net_ticks - Game.ping) + 0.5 * Game.game_ticks;
 	}
-	else if(Game.tick_count > Game.net_tick_count - 0.5 * Game.ping)
+	else if(Game.game_ticks > Game.net_ticks - 0.5 * Game.ping)
 	{
+		//Whoops!  Too far ahead, do nothing for a few frames to catch up
 	}
 	else
 	{	
-		++Game.tick_count;
+		++Game.game_ticks;
 	}
 	
 	//Wait for player entity packet before starting game

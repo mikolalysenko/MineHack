@@ -37,7 +37,7 @@ Entity = function(coords, packet, len)
 	}
 }
 
-//Updates entity state from network packet
+//Updates the network state for this entity
 Entity.prototype.update = function(coords, packet)
 {
 	//Set network coordinates
@@ -51,11 +51,11 @@ Entity.prototype.update = function(coords, packet)
 	
 	if(this.type == PLAYER_ENTITY)
 	{
-	
+		return 0;
 	}
 	else if(this.type == MONSTER_ENTITY)
 	{
-	
+		return 0;
 	}
 }
 
@@ -108,7 +108,6 @@ Entity.prototype.tick = function()
 {
 	if(this == Player.entity)
 	{
-		//Only resync player if we are really messed up
 		return;
 	}
 	
@@ -119,6 +118,13 @@ Entity.prototype.tick = function()
 	this.pitch	= this.net_pitch;
 	this.yaw	= this.net_yaw;
 	this.roll	= this.net_roll;
+	
+	if(this.type == PLAYER_ENTITY)
+	{
+	}
+	else if(this.type == MONSTER_ENTITY)
+	{
+	}
 }
 
 //Draws the entity
@@ -157,10 +163,9 @@ EntityDB.create_entity = function(entity_id, coords, packet)
 {
 	if(entity_id in EntityDB.index)
 	{
-		alert("Double initialized entity?");
+		alert("Double creating entity");
 	}
-	
-	//Create initial entity
+
 	var len = { val : 0 };
 	var ent = new Entity(coords, packet, len);
 	EntityDB.index[entity_id] = ent;
@@ -179,7 +184,8 @@ EntityDB.update_entity = function(entity_id, coords, packet)
 	var ent = EntityDB.index[entity_id];
 	if(!ent)
 	{
-		//TODO: Should send a forget packet to the server
+		//Require that entity is already in database
+		InputHandler.push_event(["Forget", entity_id]);
 		return -1;
 	}
 	return ent.update(coords, packet);

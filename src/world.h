@@ -28,7 +28,7 @@ namespace Game
 	{
 		uint64_t	tick;
 		double 		x, y, z;
-		float 		pitch, yaw, roll;
+		double 		pitch, yaw, roll;
 		int 		input_state;
 	};
 
@@ -53,8 +53,10 @@ namespace Game
 		bool player_leave(EntityID const& player_id);
 		
 		//Input handlers
+		bool valid_player(EntityID const& player_id);
 		void handle_player_tick(EntityID const& player_id, PlayerEvent const& input);
 		void handle_chat(EntityID const& player_id, std::string const& msg);
+		void handle_forget(EntityID const& player_id, EntityID const& forget_id);
 		
 		//Retrieves a compressed chunk from the server
 		int get_compressed_chunk(

@@ -447,7 +447,7 @@ var Map =
 	terrain_tex		: null,
 	max_chunks		: 1024,
 	chunk_count 	: 0,
-	chunk_radius	: 2
+	chunk_radius	: 1
 };
 
 Map.init = function(gl)
@@ -507,6 +507,9 @@ Map.update_cache = function()
 	{
 		Map.fetch_chunk(i, j, k);
 	}
+	
+	//TODO: Optimize this to fetch chunks near player which are visible, but not yet drawn
+	
 	
 	//If we are over the chunk count, remove old chunks
 	if(Map.chunk_count > Map.max_chunks)
