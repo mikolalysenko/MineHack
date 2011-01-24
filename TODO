@@ -1,0 +1,36 @@
+Debug the new entity replication framework
+
+
+Add a client debugger
+	Need some way to log messages
+	Track entities/chunks
+
+Switch http server to a different backend (preferrably using epoll)
+	Mongoose is not very efficiently designed, and doesn't allow for things like persistent sockets/streaming
+	Custom HTTP server may be best
+		Desired features:
+			epoll based implementation
+			multithreaded (obviously)
+			HTTP compression
+			cache all static HTTP responses
+			no extra memcpys!
+
+Implement HTTP streaming for heartbeat events!
+	This would be awesome, but will probably be too expensive
+
+Introduce some type of precompilation phase for the client code
+	Javascript should be statically checked (to the extent that it is possible)
+	Also:
+		Minified
+		Optimized
+	Maybe try Closure from google?
+	Other note: JSLint is a terrible tool, it seems to mostly enforce the author's own prejuidices while providing little in the way of any substantial performance/safety guarantees.
+		Other lint style checkers seem to be equally terrible
+
+
+Need to test code on other platforms:
+	Firefox 4
+	Opera
+	(IE support is not going to happen, at least until MS commits to supporting webgl)
+
+

@@ -349,6 +349,7 @@ void EntityDB::add_range_query(TDBQRY* query, Region const& r)
 	{
 		stringstream ss;
 		ss << r.lo[i] << ' ' << r.hi[i];
+		cout << "adding query: " << ss.str() << ", axis = " << AXIS_LABEL[i] << endl;
 		tctdbqryaddcond(query, AXIS_LABEL[i], TDBQCNUMBT, ss.str().c_str());
 	}
 }

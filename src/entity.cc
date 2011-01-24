@@ -31,8 +31,6 @@ void bucket_str(double x, double y, double z, char* ptr)
 		by = (int)(y / BUCKET_Y),
 		bz = (int)(z / BUCKET_Z);
 
-	//cout << "B = " << bx << ',' << by << ',' << bz << endl;
-
 	int t = bx;
 	for(int i=0; i<BUCKET_STR_LEN; i++)
 	{
@@ -69,6 +67,28 @@ template<typename T>
 	ss << x;
 	tcmapput2(map, key, ss.str().c_str());
 }
+
+template<> void insert_str<float>(TCMAP* map, const char* key, float const& x)
+{
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%f", x);
+	tcmapput2(map, key, buf);
+}
+
+template<> void insert_str<double>(TCMAP* map, const char* key, double const& x)
+{
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%lf", x);
+	tcmapput2(map, key, buf);
+}
+
+template<> void insert_str<long double>(TCMAP* map, const char* key, long double const& x)
+{
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%Lf", x);
+	tcmapput2(map, key, buf);
+}
+
 
 template<typename T>
 	void insert_struct(TCMAP* map, const char* key, T const& s)
@@ -210,15 +230,12 @@ void EntityBase::to_map(TCMAP* res) const
 	insert_str (res, "poll", 	(int)(poll));
 	insert_str (res, "flags",	(int)flags);
 
+
 	//Add position bucket field, used for optimizing range searches
 	char str[20];
 	bucket_str(x, y, z, str);
 	tcmapput2(res, "bucket", str);
 	
-	cout << "Updating entity: bucket = " << str << endl;
-
-	
-
 	insert_str(res, "x", 		x);
 	insert_str(res, "y", 		y);
 	insert_str(res, "z", 		z);
