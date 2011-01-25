@@ -6,7 +6,9 @@ Loader =
 	shaders :
 	[
 		"shaders/chunk.vs",
-		"shaders/chunk.fs"
+		"shaders/chunk.fs",
+		"shaders/vis.vs",
+		"shaders/vis.fs"
 	],
 	
 	images :

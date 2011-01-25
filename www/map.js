@@ -300,6 +300,20 @@ ChunkVB.prototype.draw = function(gl, chunk_shader)
 	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
 }
 
+ChunkVB.prototype.draw_vis = function(gl, vis_shader)
+{
+	if(this.dirty)
+		this.gen_vb(gl);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
+	gl.vertexAttribPointer(chunk_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
+	
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
+	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
+}
+
+
+
 //Releases the resources associated to a chunk
 ChunkVB.prototype.release = function(gl)
 {
@@ -431,6 +445,25 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam)
 	this.vb.draw(gl, chunk_shader);
 }
 
+Chunk.prototype.draw_vis = function(gl, vis_shader, cam)
+{
+	if(!this.in_frustum(cam))
+		return;
+
+	var c = Map.last_chunk;
+
+	var pos = new Float32Array([1, 0, 0, 0,
+								0, 1, 0, 0,
+								0, 0, 1, 0,
+								(this.x-c[0])*CHUNK_X, 
+								(this.y-c[1])*CHUNK_Y, 
+								(this.z-c[2])*CHUNK_Z, 1]);
+	
+	gl.uniformMatrix4fv(vis_shader.view_mat, false, pos);
+	
+	this.vb.draw(gl, vis_shader);
+}
+
 //Releases a chunk and its associated resources
 Chunk.prototype.release = function(gl)
 {
@@ -447,7 +480,11 @@ var Map =
 	terrain_tex		: null,
 	max_chunks		: 1024,
 	chunk_count 	: 0,
-	chunk_radius	: 1
+	chunk_radius	: 1,
+	vis_radius		: 16,
+	vis_width		: 64,
+	vis_height		: 64,
+	last_chunk		: [0, 0, 0]
 };
 
 Map.init = function(gl)
@@ -492,7 +529,139 @@ Map.init = function(gl)
 	}
 	Map.terrain_tex = res[1];
 	
+	//Create visibility prog
+	res = getProgram(gl, "shaders/vis.fs", "shaders/vis.vs");
+	if(res[0] != "Ok")
+	{
+		return res[1];
+	}
+	
+	Map.vis_fs = res[1];
+	Map.vis_vs = res[2];
+	Map.vis_shader = res[3];
+	
+	//Get attributes
+	Map.vis_shader.pos_attr = gl.getAttribLocation(Map.vis_shader, "pos");
+	if(Map.vis_shader.pos_attr == null)
+		return "Could not locate position attribute";
+
+	Map.vis_shader.proj_mat = gl.getUniformLocation(Map.vis_shader, "proj");
+	if(Map.vis_shader.proj_mat == null)
+		return "Could not locate projection matrix uniform";
+	
+	Map.vis_shader.view_mat = gl.getUniformLocation(Map.vis_shader, "view");
+	if(Map.vis_shader.view_mat == null)
+		return "Could not locate view matrix uniform";
+		
+	Map.vis_shader.chunk_id = gl.getUniformLocation(Map.vis_shadier, "chunk_id");
+	if(Map.vis_shader.chunk_id == null)
+		return "Could not locate chunk_id uniform";
+	
+	
+	//Create chunk visibility frame buffer
+	Map.vis_tex = gl.createTexture();
+	gl.bindTexture(gl.TEXTURE_2D, Map.vis_tex);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NONE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NONE);
+	gl.texParameteri(gl.TEXTURE_2D,	gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, Map.vis_width, Map.vis_height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+	gl.bindTexture(gl.TEXTURE_2D, null);
+	
+	var depth_rb = gl.createRenderbuffer();
+	gl.bindRenderbuffer(gl.RENDERBUFFER, depth_rb);
+	gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, Map.vis_width, Map.vis_height);
+	gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+	
+	Map.vis_fbo = gl.createFramebuffer();
+	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
+	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, Map.vis_tex, 0);
+	gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth_rb);
+	
+	if(!gl.isFramebuffer(Map.vis_fbo))
+	{
+		return "Could not create visibility frame buffer";
+	}
+	
+	//Clear out FBO
+	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
+	gl.clearColor(1, 1, 1, 1);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	
+	//Initialize pixel array
+	Map.vis_data = new Int8Array(4 * Map.vis_width * Map.vis_height);
+	
+	//Create box vb
+	
 	return "Ok";
+}
+
+Map.draw_box = function(gl, cx, cy, cz)
+{
+}
+
+Map.visibility_query = function(gl, camera)
+{
+	//Start by binding fbo
+	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
+	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
+	
+	//Read pixels
+	gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.BYTE, Map.vis_data);
+	
+	//Process data to find visible chunks
+	for(var i=0; i<Map.vis_data.length; i+=4)
+	{
+		if(Map.vis_data[i+3] == -1)
+			continue;
+		
+		//Issue the fetch request
+		Map.fetch_chunk(
+			Map.last_chunk[0] + Map.vis_data[i], 
+			Map.last_chunk[1] + Map.vis_data[i+1],
+			Map.last_chunk[2] + Map.vis_data[i+2] );
+	}
+	
+	//Initialize background
+	gl.clearColor(1, 1, 1, 1);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	
+	//Get camera
+	var camera = Game.camera_matrix(Map.vis_width, Map.vis_height);
+	
+	//Set up shader program
+	gl.useProgram(Map.vis_shader);
+	gl.enableVertexAttribArray(Map.vis_shader.pos_attr);
+	gl.uniformMatrix4fv(Map.vis_shader.proj_mat, false, camera);
+	
+	//Set state flags
+	gl.disable(gl.BLEND);
+	gl.enable(gl.DEPTH_TEST);
+	gl.frontFace(gl.CW);
+	gl.enable(gl.CULL_FACE);
+
+	//Save last chunk	
+	Map.last_chunk = Player.chunk();
+	
+	//Render all chunks to FB
+	for(var cx=Map.last_chunk[0]-Map.vis_radius; cx<=Map.last_chunk[0]+Map.vis_radius; ++cx)
+	for(var cy=Map.last_chunk[1]-Map.vis_radius; cy<=Map.last_chunk[1]+Map.vis_radius; ++cy)
+	for(var cz=Map.last_chunk[2]-Map.vis_radius; cz<=Map.last_chunk[2]+Map.vis_radius; ++cz)
+	{
+		var c = Map.lookup_chunk(cx, cy, cz);
+		
+		if(!c)
+		{
+			Map.draw_box(gl, cx, cy, cz);
+		}
+		else
+		{
+			c.draw_vis(gl, Map.vis_shader, camera);
+		}
+	}
+	
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
 //Updates the cache of chunks
@@ -508,7 +677,10 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	//TODO: Optimize this to fetch chunks near player which are visible, but not yet drawn
+	if(Map.pending_chunks.length == 0)
+	{
+		Map.visibility_query(Game.gl);
+	}
 	
 	
 	//If we are over the chunk count, remove old chunks

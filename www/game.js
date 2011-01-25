@@ -110,9 +110,9 @@ Game.init = function(canvas)
 }
 
 //Create projection matrix
-Game.proj_matrix = function()
+Game.proj_matrix = function(w, h)
 {
-	var aspect = Game.width / Game.height;
+	var aspect = w / h;
 	var znear = Game.znear;
 	var zfar = Game.zfar;
 	
@@ -135,9 +135,15 @@ Game.proj_matrix = function()
 }
 
 //Creates the total cmera matrix
-Game.camera_matrix = function()
+Game.camera_matrix = function(width, height)
 {
-	return mmult(Game.proj_matrix(), Player.entity.pose_matrix());
+	if(!width)
+	{
+		width = Game.width;
+		height = Game.height;
+	}
+
+	return mmult(Game.proj_matrix(w, h), Player.entity.pose_matrix());
 }
 
 Game.draw = function()
