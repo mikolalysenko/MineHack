@@ -559,7 +559,7 @@ Chunk.prototype.draw_vis = function(gl, vis_shader, cam)
 								(this.z-c[2])*CHUNK_Z, 1]);
 	
 	gl.uniformMatrix4fv(vis_shader.view_mat, false, pos);
-	gl.uniform4f(vis_shader.chunk_id, 1.0, 1.0, 1.0, 1.0);
+	gl.uniform4f(vis_shader.chunk_id, 1, 1, 1, 1);
 	
 	this.vb.draw_vis(gl, vis_shader);
 }
@@ -584,7 +584,8 @@ var Map =
 	vis_radius		: 16,
 	vis_width		: 64,
 	vis_height		: 64,
-	last_chunk		: [0, 0, 0]
+	last_chunk		: [0, 0, 0],
+	found_chunks	: false
 };
 
 Map.init = function(gl)
@@ -732,7 +733,6 @@ Map.init = function(gl)
 
 Map.draw_box = function(gl, cx, cy, cz)
 {
-	var c = Map.last_chunk;
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
@@ -742,7 +742,7 @@ Map.draw_box = function(gl, cx, cy, cz)
 	
 	//Set uniform
 	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
-	gl.uniform4f(Map.vis_shader.chunk_id, (cx&0xff)/256.0, (cy&0xff)/256.0, (cz&0xff)/256.0, 1.0);
+	gl.uniform4f(Map.vis_shader.chunk_id, (cx&0xff)/255.0, (cy&0xff)/255.0, (cz&0xff)/255.0, 1.0);
 	
 	//Draw the cube
 	if(!Map.just_drew_box)
@@ -759,6 +759,7 @@ Map.visibility_query = function(gl, camera)
 	//Start by binding fbo
 	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
+	
 	
 	//Initialize background
 	gl.clearColor(0, 0, 0, 1);
@@ -857,7 +858,7 @@ Map.visibility_query = function(gl, camera)
 	for(var i=0; i<Map.vis_data.length; i+=4)
 	{
 		if(i > 0 && 
-			Map.vis_data[i] == Map.vis_data[i-4] &&
+			Map.vis_data[i]   == Map.vis_data[i-4] &&
 			Map.vis_data[i+1] == Map.vis_data[i-3] &&
 			Map.vis_data[i+2] == Map.vis_data[i-2] )
 		{
@@ -871,6 +872,7 @@ Map.visibility_query = function(gl, camera)
 			Map.last_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
 			Map.last_chunk[2] + ((Map.vis_data[i+2]<<24)>>24) );
 	}
+	
 	
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
@@ -888,8 +890,9 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	if((Map.pending_chunks.length == 0) && (Game.local_ticks % 10) == 0)
+	if((Map.pending_chunks.length == 0) && (Map.found_chunks || (Game.local_ticks % 20 == 0)) )
 	{
+		Map.found_chunks = false;
 		Map.visibility_query(Game.gl);
 	}
 	
@@ -962,8 +965,7 @@ Map.decompress_chunk = function(arr, data)
 			n++;
 		}
 		
-		var c = arr[k];
-		++k;
+		var c = arr[k++];
 		
 		if(i + n > CHUNK_SIZE)
 			return -1;
@@ -1001,6 +1003,8 @@ Map.grab_chunks = function()
 	
 	var bb = new BlobBuilder();
 	bb.append(Session.get_session_id_arr().buffer);
+	
+	Map.found_chunks = true;
 	
 	for(var i=0; i<chunks.length; i++)
 	{
