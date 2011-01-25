@@ -25,7 +25,8 @@ Game =
 	//This is the amount of time we are behind the network counter (in ticks)
 	ping : 0,
 	
-	TICKS_PER_HEARTBEAT : 3,
+	TICKS_PER_HEARTBEAT : 20,
+	FINE_TICKS_PER_HEARTBEAT : 3,
 	
 	update_rate : 40,
 
@@ -192,8 +193,9 @@ Game.heartbeat = function()
 
 Game.tick = function()
 {
-	if(	Game.local_ticks % Game.TICKS_PER_HEARTBEAT == 0 &&
-		!Game.wait_for_heartbeat )
+	if(	!Game.wait_for_heartbeat && 
+		(Game.local_ticks % Game.TICKS_PER_HEARTBEAT == 0 ||
+		(InputHandler.has_events && (Game.local_ticks % Game.FINE_TICKS_PER_HEARTBEAT == 0)) ) )
 		Game.heartbeat();
 
 	//Update network clock/local clock

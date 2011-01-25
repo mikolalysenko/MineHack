@@ -5,7 +5,8 @@ var InputHandler =
 	forgotten : [],
 	chat_log : "",
 	actions : [],
-	action_length : 0
+	action_length : 0,
+	has_events : true
 };
 
 InputHandler.push_event = function(ev)
@@ -14,6 +15,7 @@ InputHandler.push_event = function(ev)
 	{
 		if(InputHandler.chat_log.length + ev[1].length >= (1<<16)-1)
 			return;
+		
 		InputHandler.chat_log += ev[1];
 	}
 	else if(ev[0] == "Forget")
@@ -26,7 +28,8 @@ InputHandler.push_event = function(ev)
 	{
 		if(InputHandler.action_length >= (1<<16)-1)
 			return;
-	
+			
+		InputHandler.has_events = true;
 		InputHandler.actions.push([ ACTION_DIG_START, TARGET_BLOCK, Game.game_ticks, ev[1] ]);
 		InputHandler.action_length += 1 + 1 + 2 + 3;
 	}
@@ -34,6 +37,8 @@ InputHandler.push_event = function(ev)
 	{
 		if(InputHandler.action_length > (1<<16))
 			return;
+			
+		InputHandler.has_events = true;
 		InputHandler.actions.push([ ACTION_DIG_STOP, TARGET_NONE, Game.game_ticks ]);
 		InputHandler.action_length += 1 + 1 + 2;
 	}
@@ -194,6 +199,7 @@ InputHandler.serialize = function()
 	//Clear old actions
 	InputHandler.actions = []
 	InputHandler.action_length = 0;
+	has_events = false;
 
 	//Create blob
 	return bb.getBlob("application/octet-stream");		
