@@ -12,13 +12,13 @@ InputHandler.push_event = function(ev)
 {
 	if(ev[0] == "Chat")
 	{
-		if(chat_log.length + ev[1].length >= (1<<16)-1)
+		if(InputHandler.chat_log.length + ev[1].length >= (1<<16)-1)
 			return;
 		InputHandler.chat_log += ev[1];
 	}
 	else if(ev[0] == "Forget")
 	{
-		if(forgotten.length >= (1<<16)-1)
+		if(InputHandler.forgotten.length >= (1<<16)-1)
 			return;
 		InputHandler.forgotten.push(ev[1]);
 	}

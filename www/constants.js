@@ -25,7 +25,7 @@ const CHUNK_SIZE	= CHUNK_X * CHUNK_Y * CHUNK_Z;
 const CHUNK_DIMS	= [ CHUNK_X, CHUNK_Y, CHUNK_Z ];
 
 //Network precision
-const NET_COORD_PRECISION 	= 256;
+const NET_COORD_PRECISION 	= 64;
 const NET_DIVIDE			= 1.0 / NET_COORD_PRECISION;
 
 //Network header size

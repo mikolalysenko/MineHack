@@ -306,7 +306,7 @@ App.set_state = function(next_state)
 App.crash = function(msg)
 {
 	App.set_state(ErrorState);	
-	App.state.postError(msg);
+	App.state.post_error(msg);
 }
 
 

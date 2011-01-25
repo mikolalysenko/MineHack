@@ -403,7 +403,7 @@ ChunkVB.prototype.draw_vis = function(gl, vis_shader)
 		this.gen_vb(gl);
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
-	gl.vertexAttribPointer(chunk_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(vis_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
 	
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
 	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
@@ -551,7 +551,6 @@ Chunk.prototype.draw_vis = function(gl, vis_shader, cam)
 		return;
 
 	var c = Map.last_chunk;
-
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
@@ -560,8 +559,9 @@ Chunk.prototype.draw_vis = function(gl, vis_shader, cam)
 								(this.z-c[2])*CHUNK_Z, 1]);
 	
 	gl.uniformMatrix4fv(vis_shader.view_mat, false, pos);
+	gl.uniform4f(vis_shader.chunk_id, 1.0, 1.0, 1.0, 1.0);
 	
-	this.vb.draw(gl, vis_shader);
+	this.vb.draw_vis(gl, vis_shader);
 }
 
 //Releases a chunk and its associated resources
@@ -580,7 +580,7 @@ var Map =
 	terrain_tex		: null,
 	max_chunks		: 1024,
 	chunk_count 	: 0,
-	chunk_radius	: 1,
+	chunk_radius	: 2,
 	vis_radius		: 16,
 	vis_width		: 64,
 	vis_height		: 64,
@@ -653,7 +653,7 @@ Map.init = function(gl)
 	if(Map.vis_shader.view_mat == null)
 		return "Could not locate view matrix uniform";
 		
-	Map.vis_shader.chunk_id = gl.getUniformLocation(Map.vis_shadier, "chunk_id");
+	Map.vis_shader.chunk_id = gl.getUniformLocation(Map.vis_shader, "chunk_id");
 	if(Map.vis_shader.chunk_id == null)
 		return "Could not locate chunk_id uniform";
 	
@@ -690,15 +690,68 @@ Map.init = function(gl)
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 	
 	//Initialize pixel array
-	Map.vis_data = new Int8Array(4 * Map.vis_width * Map.vis_height);
+	Map.vis_data = new Uint8Array(4 * Map.vis_width * Map.vis_height);
 	
-	//Create box vb
+	//Create box array
+    var vertices = new Float32Array( [
+    	0,			CHUNK_Y,	0,
+    	CHUNK_X,	CHUNK_Y,	0,
+    	0,			0,			0,
+    	CHUNK_X,	0,			0,
+    	0,			CHUNK_Y,	CHUNK_Z,
+    	CHUNK_X,	CHUNK_Y,	CHUNK_Z,
+    	0,			0,			CHUNK_Z,
+    	CHUNK_X,	0,			CHUNK_Z]);
+    
+    var indices = new Uint16Array( [
+			0,4,2, 2,4,6,		//-x
+			1,7,5, 1,3,7,		//+x
+    
+			2,6,3, 3,6,7,		//-y
+			0,1,4, 1,5,4,		//+y
+
+			0,3,1, 0,2,3,		//-z
+			4,5,6, 5,7,6		//+z
+			]);
+    
+    Map.box_vb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
+	gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+	gl.bindBuffer(gl.ARRAY_BUFFER, null);
+	
+	Map.box_ib = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+    
+    Map.box_elements = indices.length;
+    
 	
 	return "Ok";
 }
 
 Map.draw_box = function(gl, cx, cy, cz)
 {
+	var c = Map.last_chunk;
+	var pos = new Float32Array([1, 0, 0, 0,
+								0, 1, 0, 0,
+								0, 0, 1, 0,
+								(cx+0.5)*CHUNK_X, 
+								(cy+0.5)*CHUNK_Y, 
+								(cz+0.5)*CHUNK_Z, 1]);
+	
+	//Set uniform
+	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
+	gl.uniform4f(Map.vis_shader.chunk_id, (cx&0xff)/256.0, (cy&0xff)/256.0, (cz&0xff)/256.0, 1.0);
+	
+	//Draw the cube
+	if(!Map.just_drew_box)
+	{
+		gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
+		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
+	}
+	gl.drawElements(gl.TRIANGLES, Map.box_elements, gl.UNSIGNED_SHORT, 0);
 }
 
 Map.visibility_query = function(gl, camera)
@@ -707,25 +760,9 @@ Map.visibility_query = function(gl, camera)
 	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	
-	//Read pixels
-	gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.BYTE, Map.vis_data);
-	
-	//Process data to find visible chunks
-	for(var i=0; i<Map.vis_data.length; i+=4)
-	{
-		if(Map.vis_data[i+3] == -1)
-			continue;
-		
-		//Issue the fetch request
-		Map.fetch_chunk(
-			Map.last_chunk[0] + Map.vis_data[i], 
-			Map.last_chunk[1] + Map.vis_data[i+1],
-			Map.last_chunk[2] + Map.vis_data[i+2] );
-	}
-	
 	//Initialize background
-	gl.clearColor(1, 1, 1, 1);
-	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	gl.clearColor(0, 0, 0, 1);
+	gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
 	
 	//Get camera
 	var camera = Game.camera_matrix(Map.vis_width, Map.vis_height);
@@ -737,28 +774,102 @@ Map.visibility_query = function(gl, camera)
 	
 	//Set state flags
 	gl.disable(gl.BLEND);
+	gl.blendFunc(gl.ONE, gl.ZERO);
 	gl.enable(gl.DEPTH_TEST);
 	gl.frontFace(gl.CW);
 	gl.enable(gl.CULL_FACE);
 
 	//Save last chunk	
 	Map.last_chunk = Player.chunk();
+	Map.just_drew_box = false;
 	
-	//Render all chunks to FB
-	for(var cx=Map.last_chunk[0]-Map.vis_radius; cx<=Map.last_chunk[0]+Map.vis_radius; ++cx)
-	for(var cy=Map.last_chunk[1]-Map.vis_radius; cy<=Map.last_chunk[1]+Map.vis_radius; ++cy)
-	for(var cz=Map.last_chunk[2]-Map.vis_radius; cz<=Map.last_chunk[2]+Map.vis_radius; ++cz)
+	var query_chunk = function(cx, cy, cz)
 	{
-		var c = Map.lookup_chunk(cx, cy, cz);
+		var c = Map.lookup_chunk(
+			Map.last_chunk[0] + cx, 
+			Map.last_chunk[1] + cy, 
+			Map.last_chunk[2] + cz);
 		
 		if(!c)
 		{
 			Map.draw_box(gl, cx, cy, cz);
+			Map.just_drew_box = true;
 		}
 		else
 		{
+			Map.just_drew_box = false;
 			c.draw_vis(gl, Map.vis_shader, camera);
 		}
+	}
+	
+	//Render all chunks to front-to-back
+	query_chunk(0, 0, 0);
+	for(var r=1; r<=Map.vis_radius; ++r)
+	{
+		query_chunk(0, 0, r);
+		query_chunk(0, 0, -r);
+	
+		for(var d=1; d<=r; ++d)
+		{
+			query_chunk(0,  d, r-d);
+			query_chunk(0, -d, r-d);
+			if(d != r)
+			{
+				query_chunk(0,  d, d-r);
+				query_chunk(0, -d, d-r);
+			}
+		}
+	
+		for(var c=1; c<=r; ++c)
+		{
+			query_chunk( c, 0, r-c);
+			query_chunk(-c, 0, r-c);
+			if(c != r)
+			{
+				query_chunk( c, 0, c-r);
+				query_chunk(-c, 0, c-r);
+			}
+		
+			for(var d=1; d<=r-c; ++d)
+			{
+				var cx = c, cy = d, cz = r-c-d;
+		
+				query_chunk( cx, cy, cz);
+				query_chunk(-cx, cy, cz);
+				query_chunk( cx,-cy, cz);
+				query_chunk(-cx,-cy, cz);
+				
+				if(c+d != r)
+				{
+					query_chunk( cx, cy,-cz);
+					query_chunk(-cx, cy,-cz);
+					query_chunk( cx,-cy,-cz);
+					query_chunk(-cx,-cy,-cz);
+				}
+			}
+		}
+	}
+	
+	//Read pixels
+	gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);
+	
+	//Process data to find visible chunks
+	for(var i=0; i<Map.vis_data.length; i+=4)
+	{
+		if(i > 0 && 
+			Map.vis_data[i] == Map.vis_data[i-4] &&
+			Map.vis_data[i+1] == Map.vis_data[i-3] &&
+			Map.vis_data[i+2] == Map.vis_data[i-2] )
+		{
+			continue;
+		}
+				
+	
+		//Issue the fetch request
+		Map.fetch_chunk(
+			Map.last_chunk[0] + ((Map.vis_data[i]<<24)>>24), 
+			Map.last_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
+			Map.last_chunk[2] + ((Map.vis_data[i+2]<<24)>>24) );
 	}
 	
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -777,7 +888,7 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	if(Map.pending_chunks.length == 0)
+	if((Map.pending_chunks.length == 0) && (Game.local_ticks % 10) == 0)
 	{
 		Map.visibility_query(Game.gl);
 	}

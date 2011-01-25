@@ -426,8 +426,11 @@ int World::get_compressed_chunk(
 		abs(entity.base.y - (chunk_id.y + .5) * CHUNK_Y) > (UPDATE_RADIUS+CHUNK_Y) ||
 		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) > (UPDATE_RADIUS+CHUNK_Z) )
 	{
+		cout << "Bad chunk request" << endl;
 		return 0;
 	}
+	
+	cout << "Got chunk request: " << chunk_id.x << ',' << chunk_id.y << ',' << chunk_id.z << endl;
 	
 	//Refresh all existing entities in the chunk region for the client
 	struct Visitor

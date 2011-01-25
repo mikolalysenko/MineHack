@@ -30,7 +30,7 @@ Game =
 	update_rate : 40,
 
 	znear : 1.0,
-	zfar  : 1000.0,
+	zfar  : 256.0,
 	fov   : 45.0,
 	
 	wait_for_heartbeat : false,
@@ -143,7 +143,7 @@ Game.camera_matrix = function(width, height)
 		height = Game.height;
 	}
 
-	return mmult(Game.proj_matrix(w, h), Player.entity.pose_matrix());
+	return mmult(Game.proj_matrix(width, height), Player.entity.pose_matrix());
 }
 
 Game.draw = function()
@@ -226,7 +226,6 @@ Game.tick = function()
 
 	//Update cache
 	Map.update_cache();
-	
 	
 	//Redraw
 	Game.draw();

@@ -56,14 +56,14 @@
 
 
 //Precision for network coordinates
-#define COORD_NET_PRECISION_S	8
+#define COORD_NET_PRECISION_S	6
 #define COORD_NET_PRECISION		(1ULL<<COORD_NET_PRECISION_S)
 
 //Radius for chat events
 #define CHAT_RADIUS				128
 
 //Radius of one network update region (for a player)
-#define UPDATE_RADIUS			128
+#define UPDATE_RADIUS			256
 
 
 //Bounds on chat line
@@ -80,7 +80,7 @@
 
 //Player start coordinates
 #define PLAYER_START_X			(1 << 20)
-#define PLAYER_START_Y			(1 << 20)
+#define PLAYER_START_Y			((1 << 20)+32)
 #define PLAYER_START_Z			(1 << 20)
 
 //Player time out (in ticks) default is approx. 1 minute
