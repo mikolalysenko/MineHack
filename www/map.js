@@ -771,7 +771,7 @@ Map.trace_ray = function(
 	
 	while(t <= max_d)
 	{
-		var b = Map.get_block(Math.round(ox), Math.round(oy), Math.round(oz));
+		var b = Map.get_block(Math.floor(ox), Math.floor(oy), Math.floor(oz));
 		if(b != 0)
 			return [ox, oy, oz, b, norm[0], norm[1], norm[2]];
 			

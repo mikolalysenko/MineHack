@@ -643,6 +643,10 @@ void do_heartbeat(HttpEvent& ev)
 			action.target_block.x = target.x + (int)pl.x;
 			action.target_block.y = target.y + (int)pl.y;
 			action.target_block.z = target.z + (int)pl.z;
+			
+			cout << "base = " << (int)pl.x << ',' << (int)pl.y << ',' << (int)pl.z << endl;
+			cout << "offset = " << (int)target.x << ',' << (int)target.y << ',' << (int)target.z << endl;
+			cout << "Target block = " << action.target_block.x << ',' << action.target_block.y << ',' << action.target_block.z << endl;
 		}
 		else if(action.target_type == ActionTarget::Entity)
 		{

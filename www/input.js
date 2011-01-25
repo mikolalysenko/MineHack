@@ -140,7 +140,7 @@ InputHandler.serialize = function()
 		var str = InputHandler.forgotten[i];
 		for(var j=0; j<8; j++)
 		{
-			entb[j] = str.charCodeAt(j) & 0xff;
+			entb[j] = (str.charCodeAt(j) - 0xb0) & 0xff;
 		}
 		bb.append(entb.buffer);
 	}
@@ -174,10 +174,10 @@ InputHandler.serialize = function()
 		if(action[1] == TARGET_BLOCK)
 		{
 			var pos = action[3];
-			tmp = new Uint8Array(3);
-			tmp[0] = Math.round(pos[0] - Math.floor(Player.entity.x)) & 0xff;
-			tmp[1] = Math.round(pos[1] - Math.floor(Player.entity.y)) & 0xff;
-			tmp[2] = Math.round(pos[2] - Math.floor(Player.entity.z)) & 0xff;
+			tmp = new Int8Array(3);
+			tmp[0] = pos[0] - Math.floor(Player.entity.x);
+			tmp[1] = pos[1] - Math.floor(Player.entity.y);
+			tmp[2] = pos[2] - Math.floor(Player.entity.z);
 			
 			bb.append(tmp.buffer);
 		}
