@@ -31,6 +31,20 @@ const BlockTexCoords =
 	[ [1,2], [1,2], [1,2] ]  //Sand	
 ];
 
+//If true, then block type is transparent
+const Transparent =
+[
+	true,	//Air
+	false,	//Stone
+	false, 	//Dirt
+	false,	//Grass
+	false, 	//Cobble
+	false,	//Wood
+	false,	//Log
+	true, 	//Water
+	false,	//Sand
+];
+
 function ChunkVB(p, 
 	x_min, y_min, z_min,
 	x_max, y_max, z_max)
@@ -134,19 +148,28 @@ ChunkVB.prototype.gen_vb = function(gl)
 	{
 		var idx = x + (y<<CHUNK_X_S) + (z<<(CHUNK_XY_S));
 		var block_id = data[idx];
+		var ob;
 		
 		if(block_id == 0)
 			continue;
 		
-		if(	(x == 0 && 
-				d_lx != null && 
-				d_lx[CHUNK_X_MASK 				 + 
-					(y				<<CHUNK_X_S) + 
-					(z				<<CHUNK_XY_S)] == 0 ) ||
-			(x > 0 && 
-				data[idx-CHUNK_X_STEP] == 0) )
+		
+		//Add -x face
+		if(x > 0)
 		{
-			//Add -x face
+			ob = data[idx - CHUNK_X_STEP];
+		}
+		else if(x == 0 && d_lx != null)
+		{
+			ob = d_lx[CHUNK_X_MASK + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
 			add_face();
 			
 			appendv( [
@@ -159,14 +182,22 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(x == CHUNK_X-1 && 
-				d_ux != null && 
-				d_ux[(y				<<CHUNK_X_S) + 
-					 (z				<<CHUNK_XY_S)] == 0) ||
-			(x < CHUNK_X-1 && 
-				data[idx+CHUNK_X_STEP] == 0) )
+		//Add +x face	
+		if(x < CHUNK_X - 1)
 		{
-			//Add +x face
+			ob = data[idx+CHUNK_X_STEP]; 
+		}
+		else if(x == CHUNK_X-1 && d_ux != null)
+		{
+			ob = d_ux[(y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
 			add_face();
 			
 			appendv([
@@ -179,15 +210,22 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(y == 0 && 
-				d_ly != null && 
-				d_ly[x 						    + 
-					(CHUNK_Y_MASK << CHUNK_X_S) + 
-					(z			  << CHUNK_XY_S)] == 0) ||
-			(y > 0 && 
-				data[idx-CHUNK_Y_STEP] == 0) )
+		//Add -y face
+		if(y > 0)
 		{
-			//Add -y face
+			ob = data[idx-CHUNK_Y_STEP]; 
+		}
+		else if(y == 0 && d_ly != null)
+		{
+			ob = d_ly[x + (CHUNK_Y_MASK << CHUNK_X_S) + (z << CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
 			add_face();
 			
 			appendv([
@@ -199,13 +237,22 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 2);
 		}
 		
-		if(	(y == CHUNK_Y-1 && 
-				d_uy != null && 
-				d_uy[x + (z << CHUNK_XY_S)] == 0) ||
-			(y < CHUNK_Y-1 && 
-				data[idx+CHUNK_Y_STEP] == 0) )
+		//Add +y face
+		if(y < CHUNK_Y-1)
 		{
-			//Add +y face
+			ob = data[idx+CHUNK_Y_STEP];
+		}
+		else if(y == CHUNK_Y-1 && d_uy != null)
+		{
+			ob = d_uy[x + (z << CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
 			add_face();
 			
 			appendv([
@@ -217,15 +264,24 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 0);
 		}
 		
-		if(	(z == 0 && 
-				d_lz != null && 
-				d_lz[x + 
-					(y				<<CHUNK_X_S) + 
-					(CHUNK_Z_MASK	<<CHUNK_XY_S)] == 0) ||
-			(z > 0 && 
-				data[idx-CHUNK_Z_STEP] == 0) )
+		
+		//Add -z face
+		if(z > 0)
 		{
-			//Add -z face
+			ob = data[idx-CHUNK_Z_STEP];
+		}		
+		else if(z == 0 && d_lz != null)
+		{
+			ob = d_lz[x + (y<<CHUNK_X_S) + (CHUNK_Z_MASK<<CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		
+		if(Transparent[ob] && ob != block_id)
+		{
 			add_face();
 			
 			appendv([
@@ -238,13 +294,22 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(z == CHUNK_Z-1 && 
-				d_uz != null && 
-				d_uz[x + (y<<CHUNK_X_S)] == 0) ||
-			(z < CHUNK_Z-1 && 
-				data[idx+CHUNK_Z_STEP] == 0) )
+		//Add +z face
+		if(z < CHUNK_Z-1)
 		{
-			//Add +z face
+			ob = data[idx+CHUNK_Z_STEP];
+		}
+		else if(z == CHUNK_Z-1 && d_uz != null)
+		{
+			ob = d_uz[x + (y<<CHUNK_X_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
 			add_face();
 			
 			appendv([

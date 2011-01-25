@@ -426,8 +426,9 @@ void do_get_chunk(HttpEvent& ev)
 	HttpBlobReader blob(ev.conn);
 	
 	//Read out the session id
-	if(blob.len <= sizeof(SessionID) + sizeof(ChunkID))
+	if(blob.len < sizeof(SessionID) + sizeof(ChunkID))
 	{
+		cout << "Get chunk request is invalid size!" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
@@ -438,6 +439,7 @@ void do_get_chunk(HttpEvent& ev)
 	if(!get_session_data(session_id, session) || 
 		session.state != SessionState::InGame)
 	{
+		cout << "Player is not logged in!" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
