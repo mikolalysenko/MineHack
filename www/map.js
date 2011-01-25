@@ -74,6 +74,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 {
 	var vertices = new Array();
 	var indices  = new Array();
+	var tindices = new Array();
 	var tex_coords = new Array();
 	var n_elements = 0;
 	var nv = 0;
@@ -91,14 +92,26 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 	}
 	
-	var add_face = function()
+	var add_face = function(b)
 	{
-		indices.push(nv);
-		indices.push(nv+1);
-		indices.push(nv+2);
-		indices.push(nv);
-		indices.push(nv+2);
-		indices.push(nv+3);
+		if(Transparent[b])
+		{
+			tindices.push(nv);
+			tindices.push(nv+1);
+			tindices.push(nv+2);
+			tindices.push(nv);
+			tindices.push(nv+2);
+			tindices.push(nv+3);
+		}
+		else
+		{
+			indices.push(nv);
+			indices.push(nv+1);
+			indices.push(nv+2);
+			indices.push(nv);
+			indices.push(nv+2);
+			indices.push(nv+3);
+		}
 	}
 	
 	var add_tex_coord = function(block_t, dir)
@@ -170,7 +183,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		
 		if(Transparent[ob] && ob != block_id)
 		{
-			add_face();
+			add_face(block_id);
 			
 			appendv( [
 				[x,y  ,z  ],
@@ -198,7 +211,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		
 		if(Transparent[ob] && ob != block_id)
 		{
-			add_face();
+			add_face(block_id);
 			
 			appendv([
 				[x+1,y,  z+1],
@@ -226,7 +239,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		
 		if(Transparent[ob] && ob != block_id)
 		{
-			add_face();
+			add_face(block_id);
 			
 			appendv([
 				[x,  y,  z  ],
@@ -253,7 +266,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		
 		if(Transparent[ob] && ob != block_id)
 		{
-			add_face();
+			add_face(block_id);
 			
 			appendv([
 				[x,  y+1,  z  ],
@@ -282,7 +295,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		
 		if(Transparent[ob] && ob != block_id)
 		{
-			add_face();
+			add_face(block_id);
 			
 			appendv([
 				[x+1,y,  z],
@@ -310,7 +323,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		
 		if(Transparent[ob] && ob != block_id)
 		{
-			add_face();
+			add_face(block_id);
 			
 			appendv([
 				[x,  y,  z+1],
@@ -323,6 +336,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 	}
 
 	this.num_elements = indices.length;
+	this.num_transparent_elements = tindices.length;
 	
 	if(this.vb == null)
 		this.vb = gl.createBuffer();
@@ -334,6 +348,11 @@ ChunkVB.prototype.gen_vb = function(gl)
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.DYNAMIC_DRAW);
 	
+	if(this.tib == null)
+		this.tib = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tindices), gl.DYNAMIC_DRAW);
+	
 	if(this.tb == null)
 		this.tb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
@@ -342,6 +361,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 	//Clean up temporary data
 	delete vertices;
 	delete indices;
+	delete tindices;
 	delete tex_coords;
 	
 	//No longer need to generate
@@ -349,10 +369,15 @@ ChunkVB.prototype.gen_vb = function(gl)
 }
 
 //Draws a chunk
-ChunkVB.prototype.draw = function(gl, chunk_shader)
+ChunkVB.prototype.draw = function(gl, chunk_shader, transp)
 {
 	if(this.dirty)
 		this.gen_vb(gl);
+		
+	if(transp && this.num_transparent_elements == 0)
+		return;
+	if(!transp && this.num_elements == 0)
+		return;
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	gl.vertexAttribPointer(chunk_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
@@ -360,8 +385,16 @@ ChunkVB.prototype.draw = function(gl, chunk_shader)
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
 	gl.vertexAttribPointer(chunk_shader.tc_attr, 2, gl.FLOAT, false, 0, 0);
 
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
-	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
+	if(transp)
+	{
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
+		gl.drawElements(gl.TRIANGLES, this.num_transparent_elements, gl.UNSIGNED_SHORT, 0);
+	}
+	else
+	{
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
+		gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
+	}
 }
 
 //Releases the resources associated to a chunk
@@ -371,11 +404,14 @@ ChunkVB.prototype.release = function(gl)
 		gl.deleteBuffer(this.vb);
 	if(this.ib)
 		gl.deleteBuffer(this.ib);
+	if(this.tib)
+		gl.deleteBuffer(this.tib);
 	if(this.tb)
 		gl.deleteBuffer(this.tb);
 		
 	delete this.vb;
 	delete this.ib;
+	delete this.tib;
 	delete this.tb;
 }
 
@@ -476,7 +512,7 @@ Chunk.prototype.force_regen = function(gl)
 }
 
 //Draws the chunk
-Chunk.prototype.draw = function(gl, chunk_shader, cam)
+Chunk.prototype.draw = function(gl, chunk_shader, cam, transp)
 {
 	if(!this.in_frustum(cam))
 		return;
@@ -492,7 +528,7 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam)
 	
 	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
 	
-	this.vb.draw(gl, chunk_shader);
+	this.vb.draw(gl, chunk_shader, transp);
 }
 
 //Releases a chunk and its associated resources
@@ -592,7 +628,7 @@ Map.update_cache = function()
 Map.draw = function(gl, camera)
 {
 	gl.useProgram(Map.chunk_shader);
-	
+		
 	//Enable attributes
 	gl.enableVertexAttribArray(Map.chunk_shader.pos_attr);
 	gl.enableVertexAttribArray(Map.chunk_shader.tc_attr);
@@ -608,10 +644,20 @@ Map.draw = function(gl, camera)
 	//Draw all the chunks
 	for(c in Map.index)
 	{
-		Map.index[c].draw(gl, Map.chunk_shader, camera);
+		Map.index[c].draw(gl, Map.chunk_shader, camera, false);
 	}
+
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+	gl.depthMask(0);
+	for(c in Map.index)
+	{
+		Map.index[c].draw(gl, Map.chunk_shader, camera, true);
+	}
+	gl.depthMask(1);
 }
 
+//Decodes a run-length encoded chunk
 Map.decompress_chunk = function(arr, data)
 {
 	if(arr.length == 0)
