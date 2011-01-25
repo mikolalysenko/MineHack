@@ -1,4 +1,3 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
 "use strict";
 
 const BlockType =
@@ -18,7 +17,7 @@ const BlockType =
 // 0 = top
 // 1 = side
 // 2 = bottom
-//Like minecraft, blocks can have 3 different special labels
+//Indices into tile map are of the form (row x column)
 const BlockTexCoords =
 [
 	[ [0,0], [0,0], [0,0] ], //Air
@@ -28,8 +27,22 @@ const BlockTexCoords =
 	[ [1,0], [1,0], [1,0] ], //Cobble
 	[ [0,4], [0,4], [0,4] ], //Wood
 	[ [1,5], [1,4], [1,5] ],  //Log
-	[ [15,15], [15,15], [15,15] ],  //Water	
+	[ [12,15], [12,15], [12,15] ],  //Water	
 	[ [1,2], [1,2], [1,2] ]  //Sand	
+];
+
+//If true, then block type is transparent
+const Transparent =
+[
+	true,	//Air
+	false,	//Stone
+	false, 	//Dirt
+	false,	//Grass
+	false, 	//Cobble
+	false,	//Wood
+	false,	//Log
+	true, 	//Water
+	false,	//Sand
 ];
 
 function ChunkVB(p, 
@@ -61,6 +74,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 {
 	var vertices = new Array();
 	var indices  = new Array();
+	var tindices = new Array();
 	var tex_coords = new Array();
 	var n_elements = 0;
 	var nv = 0;
@@ -78,14 +92,26 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 	}
 	
-	var add_face = function()
+	var add_face = function(b)
 	{
-		indices.push(nv);
-		indices.push(nv+1);
-		indices.push(nv+2);
-		indices.push(nv);
-		indices.push(nv+2);
-		indices.push(nv+3);
+		if(Transparent[b])
+		{
+			tindices.push(nv);
+			tindices.push(nv+1);
+			tindices.push(nv+2);
+			tindices.push(nv);
+			tindices.push(nv+2);
+			tindices.push(nv+3);
+		}
+		else
+		{
+			indices.push(nv);
+			indices.push(nv+1);
+			indices.push(nv+2);
+			indices.push(nv);
+			indices.push(nv+2);
+			indices.push(nv+3);
+		}
 	}
 	
 	var add_tex_coord = function(block_t, dir)
@@ -135,20 +161,29 @@ ChunkVB.prototype.gen_vb = function(gl)
 	{
 		var idx = x + (y<<CHUNK_X_S) + (z<<(CHUNK_XY_S));
 		var block_id = data[idx];
+		var ob;
 		
 		if(block_id == 0)
 			continue;
 		
-		if(	(x == 0 && 
-				d_lx != null && 
-				d_lx[CHUNK_X_MASK 				 + 
-					(y				<<CHUNK_X_S) + 
-					(z				<<CHUNK_XY_S)] == 0 ) ||
-			(x > 0 && 
-				data[idx-CHUNK_X_STEP] == 0) )
+		
+		//Add -x face
+		if(x > 0)
 		{
-			//Add -x face
-			add_face();
+			ob = data[idx - CHUNK_X_STEP];
+		}
+		else if(x == 0 && d_lx != null)
+		{
+			ob = d_lx[CHUNK_X_MASK + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
+			add_face(block_id);
 			
 			appendv( [
 				[x,y  ,z  ],
@@ -160,15 +195,23 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(x == CHUNK_X-1 && 
-				d_ux != null && 
-				d_ux[(y				<<CHUNK_X_S) + 
-					 (z				<<CHUNK_XY_S)] == 0) ||
-			(x < CHUNK_X-1 && 
-				data[idx+CHUNK_X_STEP] == 0) )
+		//Add +x face	
+		if(x < CHUNK_X - 1)
 		{
-			//Add +x face
-			add_face();
+			ob = data[idx+CHUNK_X_STEP]; 
+		}
+		else if(x == CHUNK_X-1 && d_ux != null)
+		{
+			ob = d_ux[(y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
+			add_face(block_id);
 			
 			appendv([
 				[x+1,y,  z+1],
@@ -180,16 +223,23 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(y == 0 && 
-				d_ly != null && 
-				d_ly[x 						    + 
-					(CHUNK_Y_MASK << CHUNK_X_S) + 
-					(z			  << CHUNK_XY_S)] == 0) ||
-			(y > 0 && 
-				data[idx-CHUNK_Y_STEP] == 0) )
+		//Add -y face
+		if(y > 0)
 		{
-			//Add -y face
-			add_face();
+			ob = data[idx-CHUNK_Y_STEP]; 
+		}
+		else if(y == 0 && d_ly != null)
+		{
+			ob = d_ly[x + (CHUNK_Y_MASK << CHUNK_X_S) + (z << CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
+			add_face(block_id);
 			
 			appendv([
 				[x,  y,  z  ],
@@ -200,14 +250,23 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 2);
 		}
 		
-		if(	(y == CHUNK_Y-1 && 
-				d_uy != null && 
-				d_uy[x + (z << CHUNK_XY_S)] == 0) ||
-			(y < CHUNK_Y-1 && 
-				data[idx+CHUNK_Y_STEP] == 0) )
+		//Add +y face
+		if(y < CHUNK_Y-1)
 		{
-			//Add +y face
-			add_face();
+			ob = data[idx+CHUNK_Y_STEP];
+		}
+		else if(y == CHUNK_Y-1 && d_uy != null)
+		{
+			ob = d_uy[x + (z << CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
+			add_face(block_id);
 			
 			appendv([
 				[x,  y+1,  z  ],
@@ -218,16 +277,25 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 0);
 		}
 		
-		if(	(z == 0 && 
-				d_lz != null && 
-				d_lz[x + 
-					(y				<<CHUNK_X_S) + 
-					(CHUNK_Z_MASK	<<CHUNK_XY_S)] == 0) ||
-			(z > 0 && 
-				data[idx-CHUNK_Z_STEP] == 0) )
+		
+		//Add -z face
+		if(z > 0)
 		{
-			//Add -z face
-			add_face();
+			ob = data[idx-CHUNK_Z_STEP];
+		}		
+		else if(z == 0 && d_lz != null)
+		{
+			ob = d_lz[x + (y<<CHUNK_X_S) + (CHUNK_Z_MASK<<CHUNK_XY_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		
+		if(Transparent[ob] && ob != block_id)
+		{
+			add_face(block_id);
 			
 			appendv([
 				[x+1,y,  z],
@@ -239,14 +307,23 @@ ChunkVB.prototype.gen_vb = function(gl)
 			add_tex_coord(block_id, 1);
 		}
 		
-		if(	(z == CHUNK_Z-1 && 
-				d_uz != null && 
-				d_uz[x + (y<<CHUNK_X_S)] == 0) ||
-			(z < CHUNK_Z-1 && 
-				data[idx+CHUNK_Z_STEP] == 0) )
+		//Add +z face
+		if(z < CHUNK_Z-1)
 		{
-			//Add +z face
-			add_face();
+			ob = data[idx+CHUNK_Z_STEP];
+		}
+		else if(z == CHUNK_Z-1 && d_uz != null)
+		{
+			ob = d_uz[x + (y<<CHUNK_X_S)];
+		}
+		else
+		{
+			ob = 0;
+		}
+		
+		if(Transparent[ob] && ob != block_id)
+		{
+			add_face(block_id);
 			
 			appendv([
 				[x,  y,  z+1],
@@ -259,6 +336,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 	}
 
 	this.num_elements = indices.length;
+	this.num_transparent_elements = tindices.length;
 	
 	if(this.vb == null)
 		this.vb = gl.createBuffer();
@@ -270,6 +348,11 @@ ChunkVB.prototype.gen_vb = function(gl)
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.DYNAMIC_DRAW);
 	
+	if(this.tib == null)
+		this.tib = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tindices), gl.DYNAMIC_DRAW);
+	
 	if(this.tb == null)
 		this.tb = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
@@ -278,6 +361,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 	//Clean up temporary data
 	delete vertices;
 	delete indices;
+	delete tindices;
 	delete tex_coords;
 	
 	//No longer need to generate
@@ -285,10 +369,15 @@ ChunkVB.prototype.gen_vb = function(gl)
 }
 
 //Draws a chunk
-ChunkVB.prototype.draw = function(gl, chunk_shader)
+ChunkVB.prototype.draw = function(gl, chunk_shader, transp)
 {
 	if(this.dirty)
 		this.gen_vb(gl);
+		
+	if(transp && this.num_transparent_elements == 0)
+		return;
+	if(!transp && this.num_elements == 0)
+		return;
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	gl.vertexAttribPointer(chunk_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
@@ -296,8 +385,16 @@ ChunkVB.prototype.draw = function(gl, chunk_shader)
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
 	gl.vertexAttribPointer(chunk_shader.tc_attr, 2, gl.FLOAT, false, 0, 0);
 
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
-	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
+	if(transp)
+	{
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
+		gl.drawElements(gl.TRIANGLES, this.num_transparent_elements, gl.UNSIGNED_SHORT, 0);
+	}
+	else
+	{
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
+		gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
+	}
 }
 
 ChunkVB.prototype.draw_vis = function(gl, vis_shader)
@@ -321,11 +418,14 @@ ChunkVB.prototype.release = function(gl)
 		gl.deleteBuffer(this.vb);
 	if(this.ib)
 		gl.deleteBuffer(this.ib);
+	if(this.tib)
+		gl.deleteBuffer(this.tib);
 	if(this.tb)
 		gl.deleteBuffer(this.tb);
 		
 	delete this.vb;
 	delete this.ib;
+	delete this.tib;
 	delete this.tb;
 }
 
@@ -426,7 +526,7 @@ Chunk.prototype.force_regen = function(gl)
 }
 
 //Draws the chunk
-Chunk.prototype.draw = function(gl, chunk_shader, cam)
+Chunk.prototype.draw = function(gl, chunk_shader, cam, transp)
 {
 	if(!this.in_frustum(cam))
 		return;
@@ -442,7 +542,7 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam)
 	
 	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
 	
-	this.vb.draw(gl, chunk_shader);
+	this.vb.draw(gl, chunk_shader, transp);
 }
 
 Chunk.prototype.draw_vis = function(gl, vis_shader, cam)
@@ -700,7 +800,7 @@ Map.update_cache = function()
 Map.draw = function(gl, camera)
 {
 	gl.useProgram(Map.chunk_shader);
-	
+		
 	//Enable attributes
 	gl.enableVertexAttribArray(Map.chunk_shader.pos_attr);
 	gl.enableVertexAttribArray(Map.chunk_shader.tc_attr);
@@ -716,10 +816,20 @@ Map.draw = function(gl, camera)
 	//Draw all the chunks
 	for(c in Map.index)
 	{
-		Map.index[c].draw(gl, Map.chunk_shader, camera);
+		Map.index[c].draw(gl, Map.chunk_shader, camera, false);
 	}
+
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+	gl.depthMask(0);
+	for(c in Map.index)
+	{
+		Map.index[c].draw(gl, Map.chunk_shader, camera, true);
+	}
+	gl.depthMask(1);
 }
 
+//Decodes a run-length encoded chunk
 Map.decompress_chunk = function(arr, data)
 {
 	if(arr.length == 0)
@@ -943,7 +1053,7 @@ Map.trace_ray = function(
 	
 	while(t <= max_d)
 	{
-		var b = Map.get_block(Math.round(ox), Math.round(oy), Math.round(oz));
+		var b = Map.get_block(Math.floor(ox), Math.floor(oy), Math.floor(oz));
 		if(b != 0)
 			return [ox, oy, oz, b, norm[0], norm[1], norm[2]];
 			

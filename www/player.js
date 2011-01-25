@@ -1,4 +1,3 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
 "use strict";
 
 var Player =
@@ -148,6 +147,12 @@ Player.show_chat_input = function()
 
 Player.tick = function()
 {
+	if(Player.input["chat"] == 1)
+	{
+		Player.show_chat_input();
+		Player.input["chat"] = 0;
+	}
+
 	if(Player.in_chat)
 	{
 		for(i in Player.input)
@@ -187,6 +192,23 @@ Player.tick = function()
 	if(Player.input["crouch"] == 1)
 		move(up, -Player.speed);
 
+
+
+	Player.entity.yaw -= Player.dx * Player.dx * Player.dx;
+
+	if(Player.entity.yaw > Math.PI)
+		Player.entity.yaw -= 2.0 * Math.PI;
+	if(Player.entity.yaw < -Math.PI)
+		Player.entity.yaw += 2.0 * Math.PI;
+	
+	Player.entity.pitch += Player.dy * Player.dy * Player.dy;
+
+	if(Player.entity.pitch < -Math.PI/2.0)
+		Player.entity.pitch = -Math.PI/2.0;
+	if(Player.entity.pitch > Math.PI/2.0)
+		Player.entity.pitch = Math.PI/2.0;
+
+
 	if(Player.input["dig"] == 1)
 	{
 		var R = Player.eye_ray();
@@ -225,27 +247,6 @@ Player.tick = function()
 		Player.digging = false;
 	}
 
-
-	if(Player.input["chat"] == 1)
-	{
-		Player.show_chat_input();
-		Player.input["chat"] = 0;
-	}
-
-	Player.entity.yaw -= Player.dx * Player.dx * Player.dx;
-
-	if(Player.entity.yaw > Math.PI)
-		Player.entity.yaw -= 2.0 * Math.PI;
-	if(Player.entity.yaw < -Math.PI)
-		Player.entity.yaw += 2.0 * Math.PI;
-	
-	Player.entity.pitch += Player.dy * Player.dy * Player.dy;
-
-	if(Player.entity.pitch < -Math.PI/2.0)
-		Player.entity.pitch = -Math.PI/2.0;
-	if(Player.entity.pitch > Math.PI/2.0)
-		Player.entity.pitch = Math.PI/2.0;
-
 	//Check for dig conditions
 	if( Player.digging )
 	{
@@ -254,7 +255,6 @@ Player.tick = function()
 			Math.abs(Player.entity.y - Player.dig_target[1]) > DIG_RADIUS ||
 			Math.abs(Player.entity.z - Player.dig_target[2]) > DIG_RADIUS )
 		{
-			alert("walked away");
 			InputHandler.push_event(["DigStop"]);
 			Player.digging = false;
 		}

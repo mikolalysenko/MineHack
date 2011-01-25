@@ -361,9 +361,6 @@ void World::handle_action(EntityID const& player_id, Action const& action)
 			{
 			case ActionType::DigStart:
 			{
-				
-
-				
 				if( abs(entity.base.x - V->action.target_block.x) > DIG_RADIUS || 
 					abs(entity.base.y - V->action.target_block.y) > DIG_RADIUS || 
 					abs(entity.base.z - V->action.target_block.z) > DIG_RADIUS )
@@ -375,17 +372,18 @@ void World::handle_action(EntityID const& player_id, Action const& action)
 				if( entity.player.state == PlayerState::Neutral ||
 					entity.player.state == PlayerState::Digging )
 				{
-				cout << "Digging!" << endl;
+					cout << "Digging!" << endl;
 					
-				entity.player.state				= PlayerState::Digging;
-				entity.player.dig_state.start	= V->action.tick;
-				entity.player.dig_state.x 		= V->action.target_block.x;	
-				entity.player.dig_state.y 		= V->action.target_block.y;
-				entity.player.dig_state.z 		= V->action.target_block.z;
+					entity.player.state				= PlayerState::Digging;
+					entity.player.dig_state.start	= V->action.tick;
+					entity.player.dig_state.x 		= V->action.target_block.x;	
+					entity.player.dig_state.y 		= V->action.target_block.y;
+					entity.player.dig_state.z 		= V->action.target_block.z;
 			
-				return EntityUpdateControl::Update;
+					return EntityUpdateControl::Update;
 				}
 			}
+			break;
 			
 			case ActionType::DigStop:
 			{
@@ -395,6 +393,7 @@ void World::handle_action(EntityID const& player_id, Action const& action)
 				entity.player.state = PlayerState::Neutral;
 				return EntityUpdateControl::Update;
 			}
+			break;
 			}
 			
 			
@@ -706,6 +705,7 @@ void World::tick_players()
 					abs(entity.base.y - entity.player.dig_state.y) > DIG_RADIUS ||
 					abs(entity.base.z - entity.player.dig_state.z) > DIG_RADIUS )
 				{
+					cout << "Player stopped digging!" << endl;
 					entity.player.state = PlayerState::Neutral;
 				}
 				else if(dig_finish_time <= world->tick_count)

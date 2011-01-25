@@ -426,8 +426,9 @@ void do_get_chunk(HttpEvent& ev)
 	HttpBlobReader blob(ev.conn);
 	
 	//Read out the session id
-	if(blob.len <= sizeof(SessionID) + sizeof(ChunkID))
+	if(blob.len < sizeof(SessionID) + sizeof(ChunkID))
 	{
+		cout << "Get chunk request is invalid size!" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
@@ -438,6 +439,7 @@ void do_get_chunk(HttpEvent& ev)
 	if(!get_session_data(session_id, session) || 
 		session.state != SessionState::InGame)
 	{
+		cout << "Player is not logged in!" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
@@ -643,6 +645,10 @@ void do_heartbeat(HttpEvent& ev)
 			action.target_block.x = target.x + (int)pl.x;
 			action.target_block.y = target.y + (int)pl.y;
 			action.target_block.z = target.z + (int)pl.z;
+			
+			cout << "base = " << (int)pl.x << ',' << (int)pl.y << ',' << (int)pl.z << endl;
+			cout << "offset = " << (int)target.x << ',' << (int)target.y << ',' << (int)target.z << endl;
+			cout << "Target block = " << action.target_block.x << ',' << action.target_block.y << ',' << action.target_block.z << endl;
 		}
 		else if(action.target_type == ActionTarget::Entity)
 		{
