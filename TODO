@@ -53,3 +53,6 @@ Need to test code on other platforms:
 	(IE support is not going to happen, at least until MS commits to supporting webgl)
 
 
+Big issues:
+	How to conserve bandwidth?  Need some measurements to figure out how much we are using...
+

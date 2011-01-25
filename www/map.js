@@ -148,12 +148,12 @@ ChunkVB.prototype.gen_vb = function(gl)
 		d_ly = null, d_uy = null,
 		d_lz = null, d_uz = null;
 		
-	if(left)	d_lx = left.data;
-	if(right)	d_ux = right.data;
-	if(bottom)	d_ly = bottom.data;
-	if(top)		d_uy = top.data;
-	if(front)	d_lz = front.data;
-	if(back)	d_uz = back.data;
+	if(left		&& !left.pending)	d_lx = left.data;
+	if(right	&& !right.pending)	d_ux = right.data;
+	if(bottom	&& !bottom.pending)	d_ly = bottom.data;
+	if(top		&& !top.pending)	d_uy = top.data;
+	if(front	&& !front.pending)	d_lz = front.data;
+	if(back		&& !back.pending)	d_uz = back.data;
 	
 	for(var x=this.x_min; x<this.x_max; ++x)
 	for(var y=this.y_min; y<this.y_max; ++y)
@@ -178,10 +178,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		else
 		{
-			ob = 0;
+			ob = -1;
 		}
 		
-		if(Transparent[ob] && ob != block_id)
+		if(ob != -1 && Transparent[ob] && ob != block_id)
 		{
 			add_face(block_id);
 			
@@ -206,10 +206,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		else
 		{
-			ob = 0;
+			ob = -1;
 		}
 		
-		if(Transparent[ob] && ob != block_id)
+		if(ob != -1 && Transparent[ob] && ob != block_id)
 		{
 			add_face(block_id);
 			
@@ -234,10 +234,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		else
 		{
-			ob = 0;
+			ob = -1;
 		}
 		
-		if(Transparent[ob] && ob != block_id)
+		if(ob != -1 && Transparent[ob] && ob != block_id)
 		{
 			add_face(block_id);
 			
@@ -261,10 +261,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		else
 		{
-			ob = 0;
+			ob = -1;
 		}
 		
-		if(Transparent[ob] && ob != block_id)
+		if(ob != -1 && Transparent[ob] && ob != block_id)
 		{
 			add_face(block_id);
 			
@@ -289,11 +289,11 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		else
 		{
-			ob = 0;
+			ob = 0xff;
 		}
 		
 		
-		if(Transparent[ob] && ob != block_id)
+		if(ob != 0xff && Transparent[ob] && ob != block_id)
 		{
 			add_face(block_id);
 			
@@ -318,10 +318,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		else
 		{
-			ob = 0;
+			ob = -1;
 		}
 		
-		if(Transparent[ob] && ob != block_id)
+		if(ob != -1 && Transparent[ob] && ob != block_id)
 		{
 			add_face(block_id);
 			
@@ -580,12 +580,13 @@ var Map =
 	terrain_tex		: null,
 	max_chunks		: 1024,
 	chunk_count 	: 0,
-	chunk_radius	: 2,
+	chunk_radius	: 2,	//These chunks are always fetched.
 	vis_radius		: 16,
 	vis_width		: 64,
 	vis_height		: 64,
 	last_chunk		: [0, 0, 0],
-	found_chunks	: false
+	found_chunks	: false,
+	show_debug		: true
 };
 
 Map.init = function(gl)
@@ -726,6 +727,61 @@ Map.init = function(gl)
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     
     Map.box_elements = indices.length;
+    
+    //Create debug shader
+	var res = getProgram(gl, "shaders/simple.fs", "shaders/simple.vs");
+	if(res[0] != "Ok")
+	{
+		return res[1];
+	}
+	
+	//Read in return variables
+	Map.simple_fs 	 = res[1];
+	Map.simple_vs 	 = res[2];
+	Map.simple_shader = res[3];
+	
+	//Get attributes
+	Map.simple_shader.pos_attr = gl.getAttribLocation(Map.simple_shader, "pos");
+	if(Map.simple_shader.pos_attr == null)
+		return "Could not locate position attribute";
+
+	Map.simple_shader.tc_attr = gl.getAttribLocation(Map.simple_shader, "texCoord");
+	if(Map.simple_shader.tc_attr == null)
+		return "Could not locate tex coord attribute";
+
+	Map.simple_shader.tex_samp = gl.getUniformLocation(Map.simple_shader, "tex");
+	if(Map.simple_shader.tex_samp == null)
+		return "Could not locate sampler uniform";
+		
+	
+	var debug_verts = new Float32Array([
+		0, 0, 0,
+		0, 1, 0,
+		1, 1, 0,
+		1, 0, 0]);
+
+	var debug_tc = new Float32Array([
+		0, 0,
+		0, 1,
+		1, 1,
+		1, 0] );
+		
+	var debug_ind = new Uint16Array([0, 1, 2, 0, 2, 3]);
+	
+	Map.debug_vb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_vb);
+	gl.bufferData(gl.ARRAY_BUFFER, debug_verts, gl.STATIC_DRAW);
+	
+	Map.debug_tb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_tb);
+	gl.bufferData(gl.ARRAY_BUFFER, debug_tc, gl.STATIC_DRAW);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, null);
+	
+	Map.debug_ib = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.debug_ib);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, debug_ind, gl.STATIC_DRAW);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     
 	
 	return "Ok";
@@ -941,6 +997,33 @@ Map.draw = function(gl, camera)
 		Map.index[c].draw(gl, Map.chunk_shader, camera, true);
 	}
 	gl.depthMask(1);
+	
+	if(Map.show_debug)
+	{
+		gl.disable(gl.BLEND);
+		gl.disable(gl.DEPTH_TEST);
+		gl.enable(gl.TEXTURE_2D);
+		
+		//Enable attributes
+		gl.useProgram(Map.simple_shader);
+		gl.enableVertexAttribArray(Map.simple_shader.pos_attr);
+		gl.enableVertexAttribArray(Map.simple_shader.tc_attr);
+
+		//Set texture index
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, Map.vis_tex);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		gl.uniform1i(Map.simple_shader.tex_samp, 0);
+		
+		gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_vb);
+		gl.vertexAttribPointer(Map.simple_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
+	
+		gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_tb);
+		gl.vertexAttribPointer(Map.simple_shader.tc_attr, 2, gl.FLOAT, false, 0, 0);
+		
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.debug_ib);
+		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+	}	
 }
 
 //Decodes a run-length encoded chunk
@@ -989,6 +1072,7 @@ Map.fetch_chunk = function(x, y, z)
 
 	//Add new chunk, though leave it empty
 	var chunk = new Chunk(x, y, z, new Uint8Array(CHUNK_SIZE));
+	chunk.pending = true;
 	Map.add_chunk(chunk);
 	Map.pending_chunks.push(chunk);
 }
@@ -1035,6 +1119,7 @@ Map.grab_chunks = function()
 		for(var i=0; i<chunks.length; i++)
 		{
 			var chunk = chunks[i];
+			
 		
 			var res = Map.decompress_chunk(arr, chunk.data);
 			
@@ -1052,6 +1137,7 @@ Map.grab_chunks = function()
 			arr = arr.slice(res, arr.length);
 			
 			chunk.vb.set_dirty();
+			chunk.pending = false;
 			
 			//Regenerate vertex buffers for neighboring chunks
 			var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
