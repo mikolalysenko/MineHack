@@ -1,4 +1,3 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
 "use strict";
 
 const BlockType =
@@ -18,7 +17,7 @@ const BlockType =
 // 0 = top
 // 1 = side
 // 2 = bottom
-//Like minecraft, blocks can have 3 different special labels
+//Indices into tile map are of the form (row x column)
 const BlockTexCoords =
 [
 	[ [0,0], [0,0], [0,0] ], //Air
@@ -28,7 +27,7 @@ const BlockTexCoords =
 	[ [1,0], [1,0], [1,0] ], //Cobble
 	[ [0,4], [0,4], [0,4] ], //Wood
 	[ [1,5], [1,4], [1,5] ],  //Log
-	[ [15,15], [15,15], [15,15] ],  //Water	
+	[ [12,15], [12,15], [12,15] ],  //Water	
 	[ [1,2], [1,2], [1,2] ]  //Sand	
 ];
 
