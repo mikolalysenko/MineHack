@@ -24,6 +24,11 @@ namespace Game
 		Sand
 	};
 
+	//Block lighting parameters
+	extern const float BLOCK_REFLECTANCE[];
+	extern const float BLOCK_TRANSMISSION[];
+	extern const float BLOCK_EMISSIVITY[];
+
 	//A chunk index into the map
 	struct ChunkID
 	{

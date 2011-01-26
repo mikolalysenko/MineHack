@@ -1,3 +1,45 @@
+Lighting - How to do it?
+	Need to have a mixture of global/local illumination
+	Local stuff will be handled on client
+		Including AO, diffuse, some specular stuff (maybe)
+		
+	Global illumination - some form of radiosity
+		Possibilities:
+			Store a 6-directional light propagtion sphere at each map cell
+				+ O(n) update cost
+				
+				- May take multiple frames to propagate
+				
+			Store only surface data and recalculate lighting per voxel
+				+ < n update cost
+				
+				- Complicated
+				- More bugs...
+				
+		Need to figure out how to synchronize client with server
+			Strategy 1: Have client do dead reckoning
+				+ Low bandwidth
+				- Client needs to get enough data to properly compute
+				- Could cause bandwidth problems
+			Strategy 2: Replicate all data
+				+ easy client
+				- Expensive
+				
+			Maybe try replicating the incident radiance at the boundary of each
+			chunk to the client, use dead reckoning on the client to interpolate
+			light values within a chunk
+			
+			So client should know:
+				1. Lighting conditions within chunk (via torches, blocks, etc.), etc.
+				2. Lighting conditions at chunk boundary (sent from server)
+				3. Need to then replicate 16*16*6 light values to client per
+				 block
+				4. And update these values when they change.... (nasty)
+				
+				
+			Another possibility:
+				Use GPU on client to update visibility map...
+
 Debug the new entity replication framework
 
 Add stuff for rendering entities
@@ -43,6 +85,11 @@ Need to test code on other platforms:
 Big issues:
 	How to conserve bandwidth?  Need some measurements to figure out how much we are using...
 
+
+Different visibility strategies for surface/cave/air chunks
+	For air chunks, client should use default vis stuff
+	For surface, when client does fetch, should also pull in column above
+	For caves, client should grab a ball of chunks nearby
 
 Add some fog to hide loading new chunks
 

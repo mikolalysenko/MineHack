@@ -49,11 +49,15 @@
 
 #define COORD_BITS				(CHUNK_X_S + CHUNK_IDX_S)
 
+//Map parameters
+#define MAX_MAP_X	(1<<27)
+#define MAX_MAP_Y	(1<<27)
+#define MAX_MAP_Z	(1<<27)
+
 //Converts a coordinate into a chunk index
 #define COORD2CHUNKID(X,Y,Z)	(Game::ChunkID( ((X)>>(CHUNK_X_S)) & CHUNK_IDX_MASK, \
 												((Y)>>(CHUNK_Y_S)) & CHUNK_IDX_MASK, \
 												((Z)>>(CHUNK_Z_S)) & CHUNK_IDX_MASK ) )
-
 
 //Precision for network coordinates
 #define COORD_NET_PRECISION_S	6
@@ -84,8 +88,8 @@
 #define PLAYER_START_Y			((1 << 20)+32)
 #define PLAYER_START_Z			(1 << 20)
 
-//Player time out (in ticks) default is approx. 1 minute
-#define PLAYER_TIMEOUT			1500
+//Player time out (in ticks) default is approx. 2 minutes
+#define PLAYER_TIMEOUT			3000
 
 //Sleep time for the main loop
 #define SLEEP_TIME				40

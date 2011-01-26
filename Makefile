@@ -15,9 +15,10 @@ CXX = g++ -std=c++0x
 # C compiler
 CC = gcc
 
+#URL for the server
 URL = http://127.0.0.1:8081/index.html
 
-#FIXME: Make this a config string
+#Chrome path
 BROWSER = $(CHROME) --enable-webgl
 
 # source files directory
@@ -29,7 +30,7 @@ builddir = obj
 datadir = data
 
 # preprocessor options to find all included files
-INC_PATH = -I$(srcdir) -I/usr/local/include
+INC_PATH = -I$(srcdir) -I/usr/local/include -I$(CUDA_INSTALL_PATH)/include
 
 # libraries link options ('-lm' is common to link with the math library)
 LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lz -lbz2 -lrt -pthread -ldl -lm -lc
@@ -45,6 +46,7 @@ EWARN_OPTS = $(BWARN_OPTS) -pedantic\
 	     -Wtraditional -Wshadow -Wpointer-arith -Wcast-qual -Wcast-align\
 	     -Wwrite-strings -Wstrict-prototypes -Wredundant-decls\
 	     -Wnested-externs -Woverloaded-virtual -Winline
+
 
 ###############################################################################
 # INTERNAL VARIABLES
@@ -113,7 +115,7 @@ CPPOPTS = $(INC_PATH)
 CXXOPTS = $(GOAL_OPTS) $(COMPILE_OPTS) $(WARN_OPTS) $(OPTIMISE_OPTS)
 
 # linker options
-LDOPTS = $(GOAL_OPTS) $(LNK_LIBS)
+LDOPTS = $(GOAL_OPTS) $(LNK_LIBS) -fPIC
 
 # source files in this project
 cppsources := $(wildcard $(srcdir)/*.cc)

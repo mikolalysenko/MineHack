@@ -6,6 +6,47 @@ using namespace std;
 namespace Game
 {
 
+
+//Block lighting parameters
+const float BLOCK_REFLECTANCE[] =
+{
+	0, 		//Air
+	0.8,	//Stone
+	0.5,	//Dirt
+	0.6,	//Grass
+	0.65,	//Cobblestone
+	0.6,	//Wood
+	0.5,	//Log
+	0.1,	//Water
+	0.7		//Sand
+};
+
+const float BLOCK_TRANSMISSION[] =
+{
+	1.,		//Air
+	0,		//Stone
+	0,		//Dirt
+	0,		//Grass
+	0,		//Cobblestone
+	0,		//Wood
+	0,		//Log
+	0.8,	//Water
+	0		//Sand
+};
+
+const float BLOCK_EMISSIVITY[] = 
+{
+	0,		//Air
+	0,		//Stone
+	0,		//Dirt
+	0,		//Grass
+	0,		//Cobblestone
+	0,		//Wood
+	0,		//Log
+	0,		//Water
+	0		//Sand
+};
+
 //Just interleaves the bits for each of the coordinates, giving z-order indexing
 //Future idea: switch to Hilbert order curve
 uint64_t ChunkID::hash() const

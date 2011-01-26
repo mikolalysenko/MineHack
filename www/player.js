@@ -220,9 +220,9 @@ Player.tick = function()
 			
 		if(hit_rec.length > 0)
 		{
-			var hit = [ Math.floor(hit_rec[0]), 
-						Math.floor(hit_rec[1]), 
-						Math.floor(hit_rec[2]) ];
+			var hit = [ Math.round(hit_rec[0]), 
+						Math.round(hit_rec[1]), 
+						Math.round(hit_rec[2]) ];
 		
 			if(!Player.digging)
 			{

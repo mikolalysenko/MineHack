@@ -1282,18 +1282,18 @@ Map.trace_ray = function(
 	dy /= ds;
 	dz /= ds;
 	
-	//Step block-by-bloc along ray
+	//Step block-by-bloc along raywc
 	var t = 0.0;
 	
 	var norm = [0, 0, 0];
 	
 	while(t <= max_d)
 	{
-		var b = Map.get_block(Math.floor(ox), Math.floor(oy), Math.floor(oz));
+		var b = Map.get_block(Math.round(ox), Math.round(oy), Math.round(oz));
 		if(b != 0)
 			return [ox, oy, oz, b, norm[0], norm[1], norm[2]];
 			
-		var step = 1.0;
+		var step = 0.5;
 		
 		var fx = ox - Math.floor(ox);
 		var fy = oy - Math.floor(oy);
