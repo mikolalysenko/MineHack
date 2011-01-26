@@ -415,7 +415,7 @@ int World::get_compressed_chunk(
 	EntityID const& player_id,
 	ChunkID const& chunk_id,
 	uint8_t* buf,
-	size_t buf_len)
+	int buf_len)
 {
 	//Do sanity check on chunk request
 	Entity entity;

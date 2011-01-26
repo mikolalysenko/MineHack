@@ -17,13 +17,16 @@ uint64_t ChunkID::hash() const
 
 
 //Compresses a chunk for serialization
-int Chunk::compress(void* buffer, size_t len)
+int Chunk::compress(void* buffer, int len)
 {
 	auto data_ptr	= data;
 	auto buf_ptr	= (uint8_t*) buffer;
-	size_t n = 0;
+	size_t n = 0, i;
 	
-	for(size_t i=0; i<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z); )
+	if(len <= 0)
+		return -1;
+	
+	for(i=0; i<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z); )
 	{
 		Block cur = *data_ptr;
 		
@@ -38,13 +41,14 @@ int Chunk::compress(void* buffer, size_t len)
 		data_ptr += l;
 		
 		//Runs < 256 long get single byte encoded
-		if(l < 256)
+		--l;
+		if(l < 0xff)
 		{
 			n += 2;
-			if(n >= len)
+			if(n > len)
 				return -1;
 			
-			*(buf_ptr++) = (uint8_t)(l-1);
+			*(buf_ptr++) = (uint8_t)(l);
 			*(buf_ptr++) = (uint8_t)cur;
 			
 		}
@@ -52,7 +56,7 @@ int Chunk::compress(void* buffer, size_t len)
 		else
 		{
 			n += 4;
-			if(n >= len)
+			if(n > len)
 				return -1;
 				
 			*(buf_ptr++) = 0xff;

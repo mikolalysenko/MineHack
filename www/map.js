@@ -847,7 +847,7 @@ Map.visibility_query = function(gl, camera)
 			Map.last_chunk[1] + cy, 
 			Map.last_chunk[2] + cz);
 		
-		if(!c)
+		if(!c || c.pending)
 		{
 			Map.draw_box(gl, cx, cy, cz);
 			Map.just_drew_box = true;
@@ -1032,28 +1032,28 @@ Map.decompress_chunk = function(arr, data)
 	if(arr.length == 0)
 		return -1;
 
-	var i = 0, k=0;
+	var i = 0, j, k = 0, l, c;
 	while(k<arr.length)
 	{
-		var n = arr[k];
-		++k;
-
-		if(n == 0xff)
+		l = arr[k];
+		if(l == 0xff)
 		{
-			var n = arr[k] + (arr[k+1] << 8);
-			k += 2;
+			l = arr[k+1] + (arr[k+2] << 8);
+			c = arr[k+3];
+			k += 4;
 		}
 		else
 		{
-			n++;
+			c = arr[k+1];
+			k += 2;
 		}
 		
-		var c = arr[k++];
-		
-		if(i + n > CHUNK_SIZE)
+		if(i + l > CHUNK_SIZE)
+		{
 			return -1;
+		}
 		
-		for(var j=0; j<n; ++j)
+		for(j=0; j<=l; ++j)
 		{
 			data[i++] = c;
 		}
@@ -1115,7 +1115,9 @@ Map.grab_chunks = function()
 
 	asyncGetBinary("g", 
 	function(arr)
-	{	
+	{
+		arr = arr.slice(1);
+	
 		for(var i=0; i<chunks.length; i++)
 		{
 			var chunk = chunks[i];
@@ -1126,10 +1128,7 @@ Map.grab_chunks = function()
 			//EOF, clear out remaining chunks
 			if(res < 0)
 			{
-				for(var j=i; j<chunks.length; j++)
-				{
-					Map.remove_chunk(chunks[j]);
-				}
+				Map.pending_chunks = chunks.slice(i).concat(Map.pending_chunks);
 				return;
 			}
 

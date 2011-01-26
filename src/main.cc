@@ -448,6 +448,10 @@ void do_get_chunk(HttpEvent& ev)
 	uint8_t	*buf_ptr = chunk_buf;
 	int		buf_len = 0;
 	
+	//Add a leading 0 to avoid making a weird byte order mask.
+	*(buf_ptr++) = 0;
+	buf_len++;
+	
 	ChunkID* chunk_end = (ChunkID*)(blob.data + blob.len);
 	for(ChunkID* chunk_ptr = (ChunkID*)(blob.data + sizeof(SessionID)); chunk_ptr < chunk_end; ++chunk_ptr)
 	{

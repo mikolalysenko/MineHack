@@ -66,7 +66,7 @@ namespace Game
 			EntityID const&,
 			ChunkID const&,
 			uint8_t* buf,
-			size_t buf_len);
+			int buf_len);
 		
 		//Processes queued messages for a particular client, main network IO event
 		bool heartbeat(

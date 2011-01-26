@@ -62,7 +62,7 @@ namespace Game
 		
 		//Compress this chunk into the target buffer
 		//Returns the length of the encoded chunk, or -1 if it failed
-		int compress(void* target, size_t len);
+		int compress(void* target, int len);
 	};
 	
 	
