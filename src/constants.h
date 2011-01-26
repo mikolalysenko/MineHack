@@ -28,7 +28,7 @@
 #define CHUNK_OFFSET(X,Y,Z)		((X)+((Y)<<CHUNK_X_S)+((Z)<<(CHUNK_X_S+CHUNK_Y_S)))
 
 //Maximum length for a compressed chunk
-#define MAX_CHUNK_BUFFER_LEN	(CHUNK_X*CHUNK_Y*CHUNK_Z*2)
+#define MAX_CHUNK_BUFFER_LEN	(CHUNK_X*CHUNK_Y*CHUNK_Z*16)
 
 //Number of bits for a chunk index
 #define CHUNK_IDX_S				19ULL
@@ -65,6 +65,7 @@
 //Radius of one network update region (for a player)
 #define UPDATE_RADIUS			256
 
+#define CHUNK_RADIUS			(2*UPDATE_RADIUS)
 
 //Bounds on chat line
 #define CHAT_LINE_MAX_LEN		128

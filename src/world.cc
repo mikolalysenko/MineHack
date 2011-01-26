@@ -422,9 +422,9 @@ int World::get_compressed_chunk(
 	if( !entity_db->get_entity(player_id, entity) ||
 		entity.base.type != EntityType::Player ||
 		(entity.base.flags & EntityFlags::Inactive) || 
-		abs(entity.base.x - (chunk_id.x + .5) * CHUNK_X) > (UPDATE_RADIUS+CHUNK_X) ||
-		abs(entity.base.y - (chunk_id.y + .5) * CHUNK_Y) > (UPDATE_RADIUS+CHUNK_Y) ||
-		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) > (UPDATE_RADIUS+CHUNK_Z) )
+		abs(entity.base.x - (chunk_id.x + .5) * CHUNK_X) > CHUNK_RADIUS ||
+		abs(entity.base.y - (chunk_id.y + .5) * CHUNK_Y) > CHUNK_RADIUS ||
+		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) > CHUNK_RADIUS )
 	{
 		cout << "Bad chunk request" << endl;
 		return 0;

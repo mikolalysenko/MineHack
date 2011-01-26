@@ -585,7 +585,6 @@ var Map =
 	vis_width		: 64,
 	vis_height		: 64,
 	last_chunk		: [0, 0, 0],
-	found_chunks	: false,
 	show_debug		: true
 };
 
@@ -687,7 +686,7 @@ Map.init = function(gl)
 	
 	//Clear out FBO
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
-	gl.clearColor(1, 1, 1, 1);
+	gl.clearColor(0, 0, 0, 1);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 	
@@ -816,7 +815,6 @@ Map.visibility_query = function(gl, camera)
 	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	
-	
 	//Initialize background
 	gl.clearColor(0, 0, 0, 1);
 	gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
@@ -859,57 +857,33 @@ Map.visibility_query = function(gl, camera)
 		}
 	}
 	
+	var d = (Player.eye_ray())[1];
+	
 	//Render all chunks to front-to-back
 	query_chunk(0, 0, 0);
 	for(var r=1; r<=Map.vis_radius; ++r)
 	{
-		query_chunk(0, 0, r);
-		query_chunk(0, 0, -r);
-	
-		for(var d=1; d<=r; ++d)
+		for(var a=-r; a<=r; ++a)
+		for(var b=-r; b<=r; ++b)
 		{
-			query_chunk(0,  d, r-d);
-			query_chunk(0, -d, r-d);
-			if(d != r)
-			{
-				query_chunk(0,  d, d-r);
-				query_chunk(0, -d, d-r);
-			}
-		}
-	
-		for(var c=1; c<=r; ++c)
-		{
-			query_chunk( c, 0, r-c);
-			query_chunk(-c, 0, r-c);
-			if(c != r)
-			{
-				query_chunk( c, 0, c-r);
-				query_chunk(-c, 0, c-r);
-			}
-		
-			for(var d=1; d<=r-c; ++d)
-			{
-				var cx = c, cy = d, cz = r-c-d;
-		
-				query_chunk( cx, cy, cz);
-				query_chunk(-cx, cy, cz);
-				query_chunk( cx,-cy, cz);
-				query_chunk(-cx,-cy, cz);
-				
-				if(c+d != r)
-				{
-					query_chunk( cx, cy,-cz);
-					query_chunk(-cx, cy,-cz);
-					query_chunk( cx,-cy,-cz);
-					query_chunk(-cx,-cy,-cz);
-				}
-			}
+			if(d[0] > 0)
+				query_chunk( r, a, b);
+			else
+				query_chunk(-r, a, b);
+			if(d[1] > 0)			
+				query_chunk(a, r, b);
+			else
+				query_chunk(a, -r, b);
+			if(d[2] > 0)
+				query_chunk(a, b, r);
+			else
+				query_chunk(a, b, -r);
 		}
 	}
 	
 	//Read pixels
-	gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);
-	
+	gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
+
 	//Process data to find visible chunks
 	for(var i=0; i<Map.vis_data.length; i+=4)
 	{
@@ -928,8 +902,7 @@ Map.visibility_query = function(gl, camera)
 			Map.last_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
 			Map.last_chunk[2] + ((Map.vis_data[i+2]<<24)>>24) );
 	}
-	
-	
+		
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
@@ -946,9 +919,8 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	if((Map.pending_chunks.length == 0) && (Map.found_chunks || (Game.local_ticks % 20 == 0)) )
+	if(Map.pending_chunks.length == 0 && Game.local_ticks % 20 == 3)
 	{
-		Map.found_chunks = false;
 		Map.visibility_query(Game.gl);
 	}
 	
@@ -1087,8 +1059,6 @@ Map.grab_chunks = function()
 	
 	var bb = new BlobBuilder();
 	bb.append(Session.get_session_id_arr().buffer);
-	
-	Map.found_chunks = true;
 	
 	for(var i=0; i<chunks.length; i++)
 	{
