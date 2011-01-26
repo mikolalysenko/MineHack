@@ -428,13 +428,23 @@ void do_delete_player(HttpEvent& ev)
 //    Game event handlers
 // --------------------------------------------------------------------------------
 
+#pragma pack(push,1)
+
+struct NetChunk
+{
+	int8_t	dx, dy, dz;
+};
+
+#pragma pack(pop)
+
 //Retrieves a chunk
 void do_get_chunk(HttpEvent& ev)
 {
 	HttpBlobReader blob(ev.conn);
 	
 	//Read out the session id
-	if(blob.len < sizeof(SessionID) + sizeof(ChunkID))
+	if( blob.len <= sizeof(SessionID) + sizeof(ChunkID) ||
+		((blob.len - sizeof(SessionID)) % 3 != 0) )
 	{
 		cout << "Get chunk request is invalid size!" << endl;
 		ajax_error(ev.conn);
@@ -456,19 +466,32 @@ void do_get_chunk(HttpEvent& ev)
 	uint8_t	*buf_ptr = chunk_buf;
 	int		buf_len = 0;
 	
-	//Add a leading 0 to avoid making a weird byte order mask.
-	*(buf_ptr++) = 0;
+	//Add a leading 1 to avoid making a weird byte order mask and confusing the client
+	*(buf_ptr++) = 1;
 	buf_len++;
 	
-	ChunkID* chunk_end = (ChunkID*)(blob.data + blob.len);
-	for(ChunkID* chunk_ptr = (ChunkID*)(blob.data + sizeof(SessionID)); chunk_ptr < chunk_end; ++chunk_ptr)
+	//Get all pending chunks
+	ChunkID base_chunk = *(ChunkID*)(blob.data + sizeof(SessionID));
+	NetChunk* chunk_end = (NetChunk*)(blob.data + blob.len);
+	for(NetChunk* chunk_ptr = (NetChunk*)(blob.data + sizeof(SessionID) + sizeof(ChunkID)); 
+		chunk_ptr < chunk_end; 
+		++chunk_ptr)
 	{
+		//Compute chunk id
+		ChunkID chunk_id(
+			base_chunk.x + chunk_ptr->dx, 
+			base_chunk.y + chunk_ptr->dy, 
+		  	base_chunk.z + chunk_ptr->dz);
+	
 		//Extract the chunk
 		int len = game_instance->get_compressed_chunk(
-			session.player_id, *chunk_ptr, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
+			session.player_id, chunk_id, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
 	
 		if(len < 0)
+		{
+			cout << "Ran out of space in chunk buffer" << endl;
 			break;
+		}
 			
 		buf_ptr += len;
 		buf_len += len;

@@ -1107,34 +1107,38 @@ Map.grab_chunks = function()
 	if(Map.pending_chunks.length == 0)
 		return;
 
+	var c = Player.chunk();
 	var chunks = Map.pending_chunks;
 	Map.pending_chunks = [];
 	
 	var bb = new BlobBuilder();
 	bb.append(Session.get_session_id_arr().buffer);
-	
-	for(var i=0; i<chunks.length; i++)
-	{
-		var arr = new Uint8Array(12);
-		var k = 0;
-		
-		arr[k++] = (chunks[i].x)		& 0xff;
-		arr[k++] = (chunks[i].x >> 8)	& 0xff;
-		arr[k++] = (chunks[i].x >> 16)	& 0xff;
-		arr[k++] = (chunks[i].x >> 24)	& 0xff;
-		
-		arr[k++] = (chunks[i].y)		& 0xff;
-		arr[k++] = (chunks[i].y >> 8)	& 0xff;
-		arr[k++] = (chunks[i].y >> 16)	& 0xff;
-		arr[k++] = (chunks[i].y >> 24)	& 0xff;
 
-		arr[k++] = (chunks[i].z)		& 0xff;
-		arr[k++] = (chunks[i].z >> 8)	& 0xff;
-		arr[k++] = (chunks[i].z >> 16)	& 0xff;
-		arr[k++] = (chunks[i].z >> 24)	& 0xff;
+	var arr = new Uint8Array(12);
+	var k = 0;	
+	for(var i=0; i<3; ++i)
+	{
+		arr[k++] = (c[i])		& 0xff;
+		arr[k++] = (c[i] >> 8)	& 0xff;
+		arr[k++] = (c[i] >> 16)	& 0xff;
+		arr[k++] = (c[i] >> 24)	& 0xff;
 		
-		bb.append(arr.buffer);
 	}
+	bb.append(arr.buffer);
+	
+	
+	//Encode chunk offsets
+	for(i=0; i<chunks.length; ++i)
+	{
+		var delta = new Uint8Array(3);
+		
+		delta[0] = chunks[i].x - c[0];
+		delta[1] = chunks[i].y - c[1];
+		delta[2] = chunks[i].z - c[2];
+		
+		bb.append(delta.buffer);
+	}
+	
 
 	asyncGetBinary("g", 
 	function(arr)
