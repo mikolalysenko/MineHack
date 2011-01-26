@@ -605,7 +605,7 @@ var Map =
 	chunk_count 	: 0,
 	chunk_radius	: 2,	//These chunks are always fetched.
 	
-	show_debug		: true,
+	show_debug		: false,
 	
 	vis_width		: 64,
 	vis_height		: 64,

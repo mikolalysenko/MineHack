@@ -457,6 +457,17 @@ int World::get_compressed_chunk(
 }
 
 
+
+
+
+//Retrieves a compressed chunk from the server
+void World::get_chunk(
+	ChunkID const& chunk_id,
+	Chunk* chunk)
+{
+	return game_map->get_chunk(chunk_id, chunk);
+}
+
 //---------------------------------------------------------------
 // Heartbeat
 //---------------------------------------------------------------
