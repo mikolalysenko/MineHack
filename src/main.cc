@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <algorithm>
 
+#include <tcutil.h>
+
 #include "mongoose.h"
 
 #include "constants.h"
@@ -140,15 +142,21 @@ void ajax_printf(mg_connection* conn, const char* fmt, ...)
 //Sends a binary blob to the client
 void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 {
+	int sz;
+	ScopeFree G((void*)tcdeflate((const char*)buf, len, &sz));
+	
+	cout << "Old size = " << len << ", Compressed size = " << sz << endl;
+
 	mg_printf(conn,
 	  "HTTP/1.1 200 OK\n"
 	  "Cache: no-cache\n"
 	  "Content-Type: application/octet-stream; charset=x-user-defined\n"
 	  "Content-Transfer-Encoding: binary\n"
+	  "Content-Encoding: deflate\n"
 	  "Content-Length: %d\n"
-	  "\n", len);
+	  "\n", sz);
 
-	mg_write(conn, buf, len);	
+	mg_write(conn, G.ptr, sz);	
 }
 
 // --------------------------------------------------------------------------------

@@ -26,7 +26,7 @@ Game =
 	ping : 0,
 	
 	TICKS_PER_HEARTBEAT : 20,
-	FINE_TICKS_PER_HEARTBEAT : 3,
+	FINE_TICKS_PER_HEARTBEAT : 2,
 	
 	update_rate : 40,
 

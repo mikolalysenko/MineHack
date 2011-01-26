@@ -49,8 +49,11 @@ function ChunkVB(p,
 	x_min, y_min, z_min,
 	x_max, y_max, z_max)
 {
+	this.empty = false;
+	this.tempty = false;
 	this.vb = null;
 	this.ib = null;
+	this.tib = null;
 	this.tb = null;
 	this.num_elements = 0;
 	this.p 		 = p;
@@ -67,6 +70,7 @@ function ChunkVB(p,
 ChunkVB.prototype.set_dirty = function(gl)
 {
 	this.dirty = true;
+	this.empty = false;
 }
 
 //Construct vertex buffer for this chunk
@@ -335,6 +339,25 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 	}
 
+	if(indices.length == 0 && tindices.length == 0)
+	{
+		this.empty = true;
+
+		//Clean up temporary data
+		delete vertices;
+		delete indices;
+		delete tindices;
+		delete tex_coords;
+	
+		//No longer need to generate
+		this.dirty = false;
+		
+		return;
+	}
+	
+	
+	this.empty = false;
+
 	this.num_elements = indices.length;
 	this.num_transparent_elements = tindices.length;
 	
@@ -528,7 +551,7 @@ Chunk.prototype.force_regen = function(gl)
 //Draws the chunk
 Chunk.prototype.draw = function(gl, chunk_shader, cam, transp)
 {
-	if(!this.in_frustum(cam))
+	if(this.vb.empty || !this.in_frustum(cam))
 		return;
 		
 	var c = Player.chunk();
@@ -547,10 +570,10 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam, transp)
 
 Chunk.prototype.draw_vis = function(gl, vis_shader, cam)
 {
-	if(!this.in_frustum(cam))
+	if(this.vb.empty || !this.in_frustum(cam))
 		return;
 
-	var c = Map.last_chunk;
+	var c = Map.vis_base_chunk;
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
@@ -581,11 +604,22 @@ var Map =
 	max_chunks		: 1024,
 	chunk_count 	: 0,
 	chunk_radius	: 2,	//These chunks are always fetched.
-	vis_radius		: 16,
+	
+	show_debug		: true,
+	
 	vis_width		: 64,
 	vis_height		: 64,
-	last_chunk		: [0, 0, 0],
-	show_debug		: true
+	vis_state		: 0,	
+	vis_bounds		: [ [1, 3],
+						[4, 4],
+						[5, 5],
+						[6, 6],
+						[7, 7],
+						[8, 8],
+						[9, 9],
+						[10, 10],
+						[11, 11],
+						[12, 12] ]
 };
 
 Map.init = function(gl)
@@ -786,6 +820,7 @@ Map.init = function(gl)
 	return "Ok";
 }
 
+//Used for visibility testing
 Map.draw_box = function(gl, cx, cy, cz)
 {
 	var pos = new Float32Array([1, 0, 0, 0,
@@ -811,98 +846,110 @@ Map.draw_box = function(gl, cx, cy, cz)
 
 Map.visibility_query = function(gl, camera)
 {
+	if(Map.vis_state == Map.vis_bounds.length+2)
+	{
+		//Process data to find visible chunks
+		for(var i=0; i<Map.vis_data.length; i+=4)
+		{
+			if(i > 0 && 
+				Map.vis_data[i]   == Map.vis_data[i-4] &&
+				Map.vis_data[i+1] == Map.vis_data[i-3] &&
+				Map.vis_data[i+2] == Map.vis_data[i-2] )
+			{
+				continue;
+			}
+	
+			//Issue the fetch request
+			Map.fetch_chunk(
+				Map.vis_base_chunk[0] + ((Map.vis_data[i]<<24)>>24), 
+				Map.vis_base_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
+				Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24) );
+		}
+		
+		Map.vis_state = 0;
+		return;
+	}
+
 	//Start by binding fbo
 	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	
-	//Initialize background
-	gl.clearColor(0, 0, 0, 1);
-	gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
-	
-	//Get camera
-	var camera = Game.camera_matrix(Map.vis_width, Map.vis_height);
-	
-	//Set up shader program
-	gl.useProgram(Map.vis_shader);
-	gl.enableVertexAttribArray(Map.vis_shader.pos_attr);
-	gl.uniformMatrix4fv(Map.vis_shader.proj_mat, false, camera);
-	
-	//Set state flags
-	gl.disable(gl.BLEND);
-	gl.blendFunc(gl.ONE, gl.ZERO);
-	gl.enable(gl.DEPTH_TEST);
-	gl.frontFace(gl.CW);
-	gl.enable(gl.CULL_FACE);
-
-	//Save last chunk	
-	Map.last_chunk = Player.chunk();
-	Map.just_drew_box = false;
-	
-	var query_chunk = function(cx, cy, cz)
+	if(Map.vis_state == Map.vis_bounds.length+1)
 	{
-		var c = Map.lookup_chunk(
-			Map.last_chunk[0] + cx, 
-			Map.last_chunk[1] + cy, 
-			Map.last_chunk[2] + cz);
-		
-		if(!c || c.pending)
-		{
-			Map.draw_box(gl, cx, cy, cz);
-			Map.just_drew_box = true;
-		}
-		else
-		{
-			Map.just_drew_box = false;
-			c.draw_vis(gl, Map.vis_shader, camera);
-		}
+		//Read pixels
+		gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
 	}
-	
-	var d = (Player.eye_ray())[1];
-	
-	//Render all chunks to front-to-back
-	query_chunk(0, 0, 0);
-	for(var r=1; r<=Map.vis_radius; ++r)
+	else if(Map.vis_state == 0)
 	{
-		for(var a=-r; a<=r; ++a)
-		for(var b=-r; b<=r; ++b)
+		//Initialize background
+		gl.clearColor(0, 0, 0, 1);
+		gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
+	
+		//Get camera
+		Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height);
+		Map.vis_base_chunk = Player.chunk();
+	}
+	else
+	{
+		//Set up shader program
+		gl.useProgram(Map.vis_shader);
+		gl.enableVertexAttribArray(Map.vis_shader.pos_attr);
+		gl.uniformMatrix4fv(Map.vis_shader.proj_mat, false, Map.vis_camera);
+	
+		//Set state flags
+		gl.disable(gl.BLEND);
+		gl.blendFunc(gl.ONE, gl.ZERO);
+		gl.enable(gl.DEPTH_TEST);
+		gl.frontFace(gl.CW);
+		gl.enable(gl.CULL_FACE);
+
+		Map.vis_just_drew_box = false;
+	
+		var query_chunk = function(cx, cy, cz)
 		{
-			if(d[0] > 0)
+			var c = Map.lookup_chunk(
+				Map.vis_base_chunk[0] + cx, 
+				Map.vis_base_chunk[1] + cy, 
+				Map.vis_base_chunk[2] + cz);
+	
+			if(!c || c.pending)
+			{
+				Map.draw_box(gl, cx, cy, cz);
+				Map.vis_just_drew_box = true;
+			}
+			else
+			{
+				Map.vis_just_drew_box = false;
+				c.draw_vis(gl, Map.vis_shader, Map.vis_camera);
+			}
+		}
+
+	
+		if(Map.vis_state == 1)
+		{
+			query_chunk(0, 0, 0);
+		}
+	
+		//Render all chunks to front-to-back
+		var rlo = Map.vis_bounds[Map.vis_state-1][0],
+			rhi = Map.vis_bounds[Map.vis_state-1][1];
+		
+		for(var r=rlo; r<=rhi; ++r)
+		{
+			for(var a=-r; a<=r; ++a)
+			for(var b=-r; b<=r; ++b)
+			{
 				query_chunk( r, a, b);
-			else
 				query_chunk(-r, a, b);
-			if(d[1] > 0)			
 				query_chunk(a, r, b);
-			else
 				query_chunk(a, -r, b);
-			if(d[2] > 0)
 				query_chunk(a, b, r);
-			else
 				query_chunk(a, b, -r);
+			}
 		}
 	}
 	
-	//Read pixels
-	gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
-
-	//Process data to find visible chunks
-	for(var i=0; i<Map.vis_data.length; i+=4)
-	{
-		if(i > 0 && 
-			Map.vis_data[i]   == Map.vis_data[i-4] &&
-			Map.vis_data[i+1] == Map.vis_data[i-3] &&
-			Map.vis_data[i+2] == Map.vis_data[i-2] )
-		{
-			continue;
-		}
-				
-	
-		//Issue the fetch request
-		Map.fetch_chunk(
-			Map.last_chunk[0] + ((Map.vis_data[i]<<24)>>24), 
-			Map.last_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
-			Map.last_chunk[2] + ((Map.vis_data[i+2]<<24)>>24) );
-	}
-		
+	++Map.vis_state;
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
@@ -919,7 +966,7 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	if(Map.pending_chunks.length == 0 && Game.local_ticks % 20 == 3)
+	if(Map.pending_chunks.length == 0 && Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
@@ -999,7 +1046,7 @@ Map.draw = function(gl, camera)
 }
 
 //Decodes a run-length encoded chunk
-Map.decompress_chunk = function(arr, data)
+Map.decompress_chunk = function(arr, data, surface)
 {
 	if(arr.length == 0)
 		return -1;
@@ -1018,6 +1065,12 @@ Map.decompress_chunk = function(arr, data)
 		{
 			c = arr[k+1];
 			k += 2;
+		}
+		
+		//Check for grass
+		if(c == 3)
+		{
+			surface.val = true;
 		}
 		
 		if(i + l > CHUNK_SIZE)
@@ -1092,8 +1145,8 @@ Map.grab_chunks = function()
 		{
 			var chunk = chunks[i];
 			
-		
-			var res = Map.decompress_chunk(arr, chunk.data);
+			var surface = { val : false };
+			var res = Map.decompress_chunk(arr, chunk.data, surface);
 			
 			//EOF, clear out remaining chunks
 			if(res < 0)
@@ -1126,6 +1179,15 @@ Map.grab_chunks = function()
 
 			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
 			if(c)	c.vb.set_dirty();
+			
+			//If we got a surface chunk, issue some more requests for the 5 chunks immediately above it
+			if(surface.val)
+			{
+				for(var k=1; k<=10; ++k)
+				{
+					Map.fetch_chunk(chunk.x, chunk.y + k, chunk.z);
+				}
+			}
 		}
 	}, 
 	function()
