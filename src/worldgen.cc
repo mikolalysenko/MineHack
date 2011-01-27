@@ -266,6 +266,9 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 	
 	SurfaceCell surface[CHUNK_Z + (SURFACE_GEN_PADDING << 1)][CHUNK_X + (SURFACE_GEN_PADDING << 1)];
 	
+	//Mik - Flags for cave/surface properties of chunk
+	bool is_surface = false, is_cave = false, is_non_empty = false;
+	
 	//generate the surface of the world
 	y = (idx.z << CHUNK_Z_S) - SURFACE_GEN_PADDING;
 	for(int64_t yp = 0; yp < CHUNK_Z + (SURFACE_GEN_PADDING << 1); yp++)
@@ -274,6 +277,19 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 		for(int64_t xp = 0; xp < CHUNK_X + (SURFACE_GEN_PADDING << 1); xp++)
 		{
 			surface[yp][xp] = generate_surface_data(x, y);
+			
+			//Check if surface intersects chunk
+			int s = surface[yp][xp].height;
+			int h = (idx.y << CHUNK_Y_S);
+			
+			if(s <= h + CHUNK_Y)
+			{
+				is_non_empty = true;	
+				if(h <= s)
+				{
+					is_surface = true;
+				}
+			}
 			x++;
 		}
 		y++;
@@ -304,13 +320,39 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 			x = idx.x << CHUNK_X_S;
 			for(int64_t i=0; i<CHUNK_X; i++)
 			{
-				res->set(i, j, k, generate_block(x, y, z, surface[k + SURFACE_GEN_PADDING][i + SURFACE_GEN_PADDING]));
+				auto b = generate_block(x, y, z, surface[k + SURFACE_GEN_PADDING][i + SURFACE_GEN_PADDING]);
+			
+				res->set(i, j, k, b);
+				
+				if(!is_surface & is_non_empty && b == Block::Air)
+				{
+					is_cave = true;
+				}
 				x++;
 			}
 			y++;
 		}
 		z++;
 	}
+	
+	//Mik - Set chunk flags
+	if(is_surface)
+	{
+		res->flags = ChunkFlags::Surface;
+	}
+	else if(is_cave)
+	{
+		res->flags = ChunkFlags::Cave;
+	}
+	else if(is_non_empty)
+	{
+		res->flags = ChunkFlags::Solid;
+	}
+	else
+	{
+		res->flags = ChunkFlags::Air;
+	}
+	
 	cout << "Completed chunk generation" << endl;
 }
 

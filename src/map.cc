@@ -28,9 +28,9 @@ Map::Map(WorldGen* gen, string const& filename) : world_gen(gen)
 	//Set options
 	tchdbsetmutex(map_db);
 	tchdbtune(map_db,
-		0,										//Number of buckets
-		CHUNK_X_S + CHUNK_Y_S + CHUNK_Z_S,		//Record alignment (size of a chunk)
-		10,										//Free elements
+		0,							//Number of buckets
+		16,							//Record alignment
+		10,							//Free elements
 		HDBTLARGE | HDBTBZIP);
 	tchdbsetcache(map_db,
 		1024);
@@ -99,6 +99,16 @@ void Map::set_block(int x, int y, int z, Block b)
 		c.data[CHUNK_OFFSET(x & CHUNK_X_MASK, 
 							y & CHUNK_Y_MASK, 
 							z & CHUNK_Z_MASK)] = b;
+						
+		//Update chunk flags	
+		if(b == Block::Air && (c.flags & ChunkFlags::TypeMask) == ChunkFlags::Solid)
+		{
+			c.flags |= 1;
+		}
+		else if(b != Block::Air && (c.flags & ChunkFlags::TypeMask) == ChunkFlags::Air)
+		{
+			c.flags &= ~1;
+		}
 	
 		tchdbput(map_db,
 			(const void*)&idx, sizeof(ChunkID),

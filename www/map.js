@@ -604,7 +604,7 @@ var Map =
 	terrain_tex		: null,
 	max_chunks		: 1024,
 	chunk_count 	: 0,
-	chunk_radius	: 2,	//These chunks are always fetched.
+	chunk_radius	: 3,	//These chunks are always fetched.
 	
 	show_debug		: false,
 	
@@ -620,7 +620,9 @@ var Map =
 						[9, 9],
 						[10, 10],
 						[11, 11],
-						[12, 12] ]
+						[12, 12] ],
+						
+	wait_chunks		: false	//Chunks are waiting
 };
 
 Map.init = function(gl)
@@ -967,7 +969,7 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	if(Map.pending_chunks.length == 0 && Game.local_ticks % 2 == 1)
+	if(!Map.wait_chunks && Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
@@ -1047,7 +1049,7 @@ Map.draw = function(gl, camera)
 }
 
 //Decodes a run-length encoded chunk
-Map.decompress_chunk = function(arr, data, surface)
+Map.decompress_chunk = function(arr, data)
 {
 	if(arr.length == 0)
 		return -1;
@@ -1066,12 +1068,6 @@ Map.decompress_chunk = function(arr, data, surface)
 		{
 			c = arr[k+1];
 			k += 2;
-		}
-		
-		//Check for grass
-		if(c == 3)
-		{
-			surface.val = true;
 		}
 		
 		if(i + l > CHUNK_SIZE)
@@ -1095,6 +1091,8 @@ Map.fetch_chunk = function(x, y, z)
 	//If chunk is already stored, don't get it
 	if(Map.lookup_chunk(x,y,z))
 		return;
+
+	Map.wait_chunks = true;
 
 	//Add new chunk, though leave it empty
 	var chunk = new Chunk(x, y, z, new Uint8Array(CHUNK_SIZE));
@@ -1144,14 +1142,19 @@ Map.grab_chunks = function()
 	asyncGetBinary("g", 
 	function(arr)
 	{
+		Map.wait_chunks = false;
 		arr = arr.slice(1);
 	
 		for(var i=0; i<chunks.length; i++)
 		{
-			var chunk = chunks[i];
+			var chunk = chunks[i], res = -1, flags;
+
+			if(arr.length >= 1)
+			{
+				flags = arr[0];	
+				res = Map.decompress_chunk(arr.slice(1), chunk.data);
+			}
 			
-			var surface = { val : false };
-			var res = Map.decompress_chunk(arr, chunk.data, surface);
 			
 			//EOF, clear out remaining chunks
 			if(res < 0)
@@ -1161,7 +1164,7 @@ Map.grab_chunks = function()
 			}
 
 			//Resize array
-			arr = arr.slice(res, arr.length);
+			arr = arr.slice(res+1);
 			
 			chunk.vb.set_dirty();
 			chunk.pending = false;
@@ -1185,10 +1188,10 @@ Map.grab_chunks = function()
 			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
 			if(c)	c.vb.set_dirty();
 			
-			//If we got a surface chunk, issue some more requests for the 5 chunks immediately above it
-			if(surface.val)
+			//If we got a surface chunk, issue some more requests for the 10 chunks immediately above it
+			if(flags == 1)
 			{
-				for(var k=1; k<=10; ++k)
+				for(var k=1; k<=16; ++k)
 				{
 					Map.fetch_chunk(chunk.x, chunk.y + k, chunk.z);
 				}
