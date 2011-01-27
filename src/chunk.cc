@@ -47,6 +47,20 @@ const float BLOCK_EMISSIVITY[] =
 	0		//Sand
 };
 
+
+const float BLOCK_SCATTER[] = 
+{
+	0,		//Air
+	0,		//Stone
+	0,		//Dirt
+	0,		//Grass
+	0,		//Cobblestone
+	0,		//Wood
+	0,		//Log
+	0,		//Water
+	0		//Sand
+};
+
 //Just interleaves the bits for each of the coordinates, giving z-order indexing
 //Future idea: switch to Hilbert order curve
 uint64_t ChunkID::hash() const

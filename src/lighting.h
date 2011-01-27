@@ -1,5 +1,5 @@
-#ifndef MAP_H
-#define MAP_H
+#ifndef LIGHT_H
+#define LIGHT_H
 
 #include <string>
 #include <cstdint>
@@ -10,14 +10,16 @@
 #include <tcutil.h>
 #include <tchdb.h>
 
-#include <map>
 #include "chunk.h"
+#include "map.h"
 
 namespace Game
 {
-	//TODO: Need to think carefully about how to implement this...
-	struct LightingEngine
+	struct LightCalculator
 	{
+		Map* game_map;
+		
+		void compute_light(ChunkID const& lo, ChunkID const& hi, int niter=30);
 	};
 };
 

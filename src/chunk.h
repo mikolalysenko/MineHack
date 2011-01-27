@@ -23,11 +23,12 @@ namespace Game
 		Water,
 		Sand
 	};
-
+	
 	//Block lighting parameters
 	extern const float BLOCK_REFLECTANCE[];
 	extern const float BLOCK_TRANSMISSION[];
 	extern const float BLOCK_EMISSIVITY[];
+	extern const float BLOCK_SCATTER[];
 
 	//A chunk index into the map
 	struct ChunkID
@@ -41,6 +42,24 @@ namespace Game
 		//Generates a hash for this chunk id (which is actually a unique descriptor in this case)
 		std::uint64_t hash() const;
 	};
+	
+	//Face directions
+	struct FaceDir
+	{
+		const static int Left 	= 0;	//-x
+		const static int Right	= 1;	//+x
+		const static int Bottom	= 2;	//-y
+		const static int Top	= 3;	//+y
+		const static int Back	= 4;	//-z
+		const static int Front	= 5;	//+z
+	};
+	
+	#pragma pack(push,1)
+	struct LightVal
+	{
+		uint8_t face[6];
+	};
+	#pragma pack(pop)
 	
 	//Chunk flags
 	struct ChunkFlags
@@ -58,7 +77,8 @@ namespace Game
 	// basic unit the game map/vehicles are composed of
 	struct Chunk
 	{
-		Block data[CHUNK_X*CHUNK_Y*CHUNK_Z];
+		Block 		data[CHUNK_X*CHUNK_Y*CHUNK_Z];
+		LightVal	light[CHUNK_X*CHUNK_Y*CHUNK_Z];
 		uint8_t flags;
 		
 		//Block accessor functions
