@@ -45,6 +45,20 @@ const Transparent =
 	false,	//Sand
 ];
 
+//Format is:
+// Transmission, Scatter, Reflectance, Emissivity
+const BlockMaterials =
+[
+	[ 1.0, 0.01, 0, 0 ],	//Air
+	[ 0, 0, 0.7, 0 ],		//Stone
+	[ 0, 0, 0.5, 0 ],		//Dirt
+	[ 0, 0, 1, 0 ],		//Grass
+	[ 0, 0, 0.55, 0 ],		//Cobble
+	[ 0, 0, 0.8, 0 ],		//Wood
+	[ 0, 0, 0.6, 0 ],		//Log
+	[ 0.8, 0.15, 0, 0 ],	//Water
+	[ 0, 0, 0.95, 0 ]		//Sand
+];
 
 function ChunkVB(p, 
 	x_min, y_min, z_min,
@@ -55,7 +69,6 @@ function ChunkVB(p,
 	this.vb = null;
 	this.ib = null;
 	this.tib = null;
-	this.tb = null;
 	this.num_elements = 0;
 	this.p 		 = p;
 	this.x_min   = x_min;
@@ -80,21 +93,58 @@ ChunkVB.prototype.gen_vb = function(gl)
 	var vertices = new Array();
 	var indices  = new Array();
 	var tindices = new Array();
-	var tex_coords = new Array();
-	var n_elements = 0;
 	var nv = 0;
 	var p = this.p;
 	
-	var appendv = function(v)
+	var appendv = function(v, block_id, dir, light)
 	{
-		for(var i=0; i<v.length; i++)
-		{
-			vertices.push(v[i][0] - 0.5);
-			vertices.push(v[i][1] - 0.5);
-			vertices.push(v[i][2] - 0.5);
-			
-			++nv;
-		}
+		var tc, tx, ty, dt;
+		
+		light /= 255.0;
+		tc = BlockTexCoords[block_id][dir];
+		tx = tc[1] / 16.0;
+		ty = tc[0] / 16.0;
+		dt = 1.0 / 16.0 - 1.0/256.0;
+	
+		vertices.push(v[0][0] - 0.5);
+		vertices.push(v[0][1] - 0.5);
+		vertices.push(v[0][2] - 0.5);
+		vertices.push(1);
+		vertices.push(tx);
+		vertices.push(ty+dt);
+		vertices.push(light);
+		vertices.push(0);
+		
+		vertices.push(v[1][0] - 0.5);
+		vertices.push(v[1][1] - 0.5);
+		vertices.push(v[1][2] - 0.5);
+		vertices.push(1);
+		vertices.push(tx);
+		vertices.push(ty);
+		vertices.push(light);
+		vertices.push(0);
+
+
+		vertices.push(v[2][0] - 0.5);
+		vertices.push(v[2][1] - 0.5);
+		vertices.push(v[2][2] - 0.5);
+		vertices.push(1);
+		vertices.push(tx+dt);
+		vertices.push(ty);
+		vertices.push(light);
+		vertices.push(0);
+
+
+		vertices.push(v[3][0] - 0.5);
+		vertices.push(v[3][1] - 0.5);
+		vertices.push(v[3][2] - 0.5);
+		vertices.push(1);
+		vertices.push(tx+dt);
+		vertices.push(ty+dt);	
+		vertices.push(light);
+		vertices.push(0);
+				
+		nv += 4;
 	}
 	
 	var add_face = function(b)
@@ -119,26 +169,8 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 	}
 	
-	var add_tex_coord = function(block_t, dir)
-	{
-		tc = BlockTexCoords[block_t][dir];
-		
-		tx = tc[1] / 16.0;
-		ty = tc[0] / 16.0;
-		dt = 1.0 / 16.0 - 1.0/256.0;
-		
-		tex_coords.push(tx);
-		tex_coords.push(ty+dt);
-
-		tex_coords.push(tx);
-		tex_coords.push(ty);
-
-		tex_coords.push(tx+dt);
-		tex_coords.push(ty);
-
-		tex_coords.push(tx+dt);
-		tex_coords.push(ty+dt);	
-	}
+	var light = p.light_block.light;
+	var loff = (p.x&1) + (p.y&1)*CHUNK_X*2 + (p.z&1)*CHUNK_X*CHUNK_Y*4;
 	
 	var data = p.data;
 	
@@ -171,6 +203,8 @@ ChunkVB.prototype.gen_vb = function(gl)
 		if(block_id == 0)
 			continue;
 		
+		var lidx = loff + x + y*CHUNK_X*2 + z*CHUNK_X*CHUNK_Y*4;
+		var l = light.slice(lidx, lidx+6);
 		
 		//Add -x face
 		if(x > 0)
@@ -195,9 +229,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,y+1,z  ],
 				[x,y+1,z+1],
 				[x,y  ,z+1]				
-				]);
-				
-			add_tex_coord(block_id, 1);
+				], block_id, 1, l[LEFT]);
 		}
 		
 		//Add +x face	
@@ -223,9 +255,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x+1,y+1,z+1],
 				[x+1,y+1,z  ],
 				[x+1,y,  z  ]
-				]);
-				
-			add_tex_coord(block_id, 1);
+				], block_id, 1, l[RIGHT]);
 		}
 		
 		//Add -y face
@@ -250,9 +280,8 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,  y,  z  ],
 				[x,  y,  z+1],
 				[x+1,y,  z+1],
-				[x+1,y,  z  ]]);
-				
-			add_tex_coord(block_id, 2);
+				[x+1,y,  z  ]
+				], block_id, 2, l[TOP]);
 		}
 		
 		//Add +y face
@@ -277,9 +306,8 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,  y+1,  z  ],
 				[x+1,y+1,  z  ],
 				[x+1,y+1,  z+1],
-				[x,  y+1,  z+1]]);
-				
-			add_tex_coord(block_id, 0);
+				[x,  y+1,  z+1]
+				], block_id, 0, l[BOTTOM]);
 		}
 		
 		
@@ -307,9 +335,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x+1,y+1,z],				
 				[x,  y+1,z],				
 				[x,  y,  z]
-			]);
-				
-			add_tex_coord(block_id, 1);
+				], block_id, 1, l[FRONT]);
 		}
 		
 		//Add +z face
@@ -334,9 +360,8 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,  y,  z+1],
 				[x,  y+1,z+1],
 				[x+1,y+1,z+1],
-				[x+1,y,  z+1]]);
-				
-			add_tex_coord(block_id, 1);
+				[x+1,y,  z+1]
+				], block_id, 1, l[BACK]);
 		}
 	}
 
@@ -377,16 +402,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tindices), gl.DYNAMIC_DRAW);
 	
-	if(this.tb == null)
-		this.tb = gl.createBuffer();
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(tex_coords), gl.DYNAMIC_DRAW);
-	
 	//Clean up temporary data
 	delete vertices;
 	delete indices;
 	delete tindices;
-	delete tex_coords;
 	
 	//No longer need to generate
 	this.dirty = false;
@@ -404,10 +423,8 @@ ChunkVB.prototype.draw = function(gl, chunk_shader, transp)
 		return;
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
-	gl.vertexAttribPointer(chunk_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
-	
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.tb);
-	gl.vertexAttribPointer(chunk_shader.tc_attr, 2, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(chunk_shader.pos_attr,	4, gl.FLOAT, false, 32, 0);
+	gl.vertexAttribPointer(chunk_shader.tc_attr, 	4, gl.FLOAT, false, 32, 16);
 
 	if(transp)
 	{
@@ -427,7 +444,7 @@ ChunkVB.prototype.draw_vis = function(gl, vis_shader)
 		this.gen_vb(gl);
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
-	gl.vertexAttribPointer(vis_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
+	gl.vertexAttribPointer(vis_shader.pos_attr,	4, gl.FLOAT, false, 32, 0);
 	
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
 	gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
@@ -459,15 +476,22 @@ function Chunk(x, y, z, data)
 	//Set chunk data
 	this.data = data;
 	
+	//Set pending
+	this.pending = true;
+	
 	//Set position
 	this.x = x;
 	this.y = y;
 	this.z = z;
 	
+	this.light_block = LightEngine.create_block(x, y, z);
+	
 	//Create vertex buffers for facets
 	this.vb = new ChunkVB(this, 
 		0, 0, 0,
 		CHUNK_X, CHUNK_Y, CHUNK_Z);
+		
+	this.is_air = false;
 }
 
 //Returns true of the chunk is in the frustum
@@ -541,6 +565,8 @@ Chunk.prototype.set_block = function(x, y, z, b)
 				c.vb.set_dirty();
 		}
 	}
+	
+	this.is_air = false;
 }
 
 //Forces a chunk to regenerate its vbs
@@ -594,7 +620,12 @@ Chunk.prototype.release = function(gl)
 	this.vb.release(gl);
 	delete this.vb;
 	delete this.data;
+	
+	//TODO: Need to figure out how to deallocate light block
 }
+
+
+
 
 //The map
 var Map =
@@ -732,15 +763,16 @@ Map.init = function(gl)
 	
 	//Create box array
     var vertices = new Float32Array( [
-    	0,			CHUNK_Y,	0,
-    	CHUNK_X,	CHUNK_Y,	0,
-    	0,			0,			0,
-    	CHUNK_X,	0,			0,
-    	0,			CHUNK_Y,	CHUNK_Z,
-    	CHUNK_X,	CHUNK_Y,	CHUNK_Z,
-    	0,			0,			CHUNK_Z,
-    	CHUNK_X,	0,			CHUNK_Z]);
+    	0,			CHUNK_Y,	0,		1,
+    	CHUNK_X,	CHUNK_Y,	0,		1,
+    	0,			0,			0,		1,
+    	CHUNK_X,	0,			0,		1,
+    	0,			CHUNK_Y,	CHUNK_Z,1,
+    	CHUNK_X,	CHUNK_Y,	CHUNK_Z,1,
+    	0,			0,			CHUNK_Z,1,
+    	CHUNK_X,	0,			CHUNK_Z,1]);
     
+    //FIXME: Convert this to a triangle strip
     var indices = new Uint16Array( [
 			0,4,2, 2,4,6,		//-x
 			1,7,5, 1,3,7,		//+x
@@ -841,7 +873,7 @@ Map.draw_box = function(gl, cx, cy, cz)
 	if(!Map.just_drew_box)
 	{
 		gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
-		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
 	}
 	gl.drawElements(gl.TRIANGLES, Map.box_elements, gl.UNSIGNED_SHORT, 0);
@@ -1096,7 +1128,6 @@ Map.fetch_chunk = function(x, y, z)
 
 	//Add new chunk, though leave it empty
 	var chunk = new Chunk(x, y, z, new Uint8Array(CHUNK_SIZE));
-	chunk.pending = true;
 	Map.add_chunk(chunk);
 	Map.pending_chunks.push(chunk);
 }
@@ -1195,6 +1226,16 @@ Map.grab_chunks = function()
 				{
 					Map.fetch_chunk(chunk.x, chunk.y + k, chunk.z);
 				}
+			}
+			else if(flags == 1 || flags == 3)
+			{
+				//Add job to lighting engine
+				LightEngine.add_job(chunk.x, chunk.y, chunk.z);
+			}
+			
+			if(flags == 0)
+			{
+				chunk.is_air = true;
 			}
 		}
 	}, 

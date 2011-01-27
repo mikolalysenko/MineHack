@@ -35,7 +35,7 @@ Lighting - How to do it?
 				3. Need to then replicate 16*16*6 light values to client per
 				 block
 				4. And update these values when they change.... (nasty)
-				
+				5. Only need to do lighting for chunks that contain surface regions
 				
 			Another possibility:
 				Use GPU on client to update visibility map...
