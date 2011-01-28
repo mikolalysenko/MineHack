@@ -244,7 +244,7 @@ bool EntityBase::from_map(const TCMAP* map)
 	if(!get_int(map, "flags", tmp))
 		return false;
 	flags = tmp;
-
+	
 	if(!get_double(map, "x", x))
 		return false;	
 	if(!get_double(map, "y", y))
@@ -267,11 +267,11 @@ void EntityBase::to_map(TCMAP* res) const
 	insert_str		(res, "type",	(int)type);
 	
 	//Set flags and search strings
-	insert_str (res, "active",	(int)((flags & EntityFlags::Inactive) == 0));
-	bool poll = (flags & (EntityFlags::Poll | EntityFlags::Inactive)) == EntityFlags::Poll;
+	bool poll = (flags & EntityFlags::Poll) != 0,
+		active = flags != EntityFlags::Inactive;
+	insert_str (res, "active",	(int)(active));
 	insert_str (res, "poll", 	(int)(poll));
 	insert_str (res, "flags",	(int)flags);
-
 
 	//Add position bucket field, used for optimizing range searches
 	char str[20];

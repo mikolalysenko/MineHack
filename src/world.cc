@@ -668,7 +668,7 @@ void World::tick_players()
 			//Check for timed out players
 			if(world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
 			{
-				cout << "Player timeout!" << endl;
+				cout << "Player timeout! ID = " << entity.entity_id.id << ", Flags = " <<  entity.base.flags << endl;
 				entity.base.flags = EntityFlags::Inactive;
 				world->mailbox->del_player(entity.entity_id);
 				return EntityUpdateControl::Update;

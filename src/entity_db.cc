@@ -46,11 +46,11 @@ EntityDB::EntityDB(string const& path, Config* config) :
 	tctdbgenuid(entity_db);
 	
 	//Set indices
-	tctdbsetindex(entity_db, "bucket", TDBITLEXICAL | TDBITKEEP);
-	tctdbsetindex(entity_db, "player_name", TDBITLEXICAL  | TDBITKEEP);
-	tctdbsetindex(entity_db, "type", TDBITLEXICAL | TDBITKEEP);
-	tctdbsetindex(entity_db, "active", TDBITLEXICAL | TDBITKEEP);
-	tctdbsetindex(entity_db, "poll", TDBITLEXICAL | TDBITKEEP);
+	tctdbsetindex(entity_db, "bucket", TDBITLEXICAL);
+	tctdbsetindex(entity_db, "player_name", TDBITLEXICAL);
+	tctdbsetindex(entity_db, "type", TDBITLEXICAL);
+	tctdbsetindex(entity_db, "active", TDBITLEXICAL);
+	tctdbsetindex(entity_db, "poll", TDBITLEXICAL);
 }
 
 
@@ -203,6 +203,7 @@ bool EntityDB::foreach(
 	//Add active restriction
 	if(only_active)
 	{
+		cout << "adding active query" << endl;
 		tctdbqryaddcond(Q.query, "active", TDBQCSTREQ, "1");
 	}
 	
