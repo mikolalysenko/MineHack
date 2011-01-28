@@ -504,35 +504,39 @@ function Chunk(x, y, z, data)
 Chunk.prototype.in_frustum = function(m)
 {
 	var c = Player.chunk();
-	var v = [(this.x-c[0])*CHUNK_X,    (this.y-c[1])*CHUNK_Y,    (this.z-c[2])*CHUNK_Z];
-	var in_p = 0;
+	var vx = (this.x-c[0])*CHUNK_X,
+		vy = (this.y-c[1])*CHUNK_Y,
+		vz = (this.z-c[2])*CHUNK_Z,
+		qx, qy, qz, in_p = 0, w, x, y, z;
 	
 	
 	for(var dx=-1; dx<=CHUNK_X; dx+=CHUNK_X+1)
 	for(var dy=-1; dy<=CHUNK_Y; dy+=CHUNK_Y+1)
 	for(var dz=-1; dz<=CHUNK_Z; dz+=CHUNK_Z+1)	
 	{
-		var q = [v[0] + dx, v[1] + dy, v[2] + dz];
-		
-		var w = q[0]*m[3] + q[1]*m[7] + q[2]*m[11] + m[15];
-		var x = q[0]*m[0] + q[1]*m[4] + q[2]*m[8]  + m[12];
+		qx = dx + vx;
+		qy = dy + vy;
+		qz = dz + vz;
+	
+		w = qx*m[3] + qy*m[7] + qz*m[11] + m[15];
+		x = qx*m[0] + qy*m[4] + qz*m[8]  + m[12];
 		
 		if(x <=  w) in_p |= 1;
+		if(in_p == 63)	return true;
 		if(x >= -w) in_p |= 2;
-		if(in_p == 63)
-			return true;
+		if(in_p == 63)	return true;
 		
-		var y = q[0]*m[1] + q[1]*m[5] + q[2]*m[9]  + m[13];
+		y = qx*m[1] + qy*m[5] + qz*m[9]  + m[13];
 		if(y <=  w) in_p |= 4;
+		if(in_p == 63)	return true;
 		if(y >= -w) in_p |= 8;
-		if(in_p == 63)
-			return true;
+		if(in_p == 63)	return true;
 			
-		var z = q[0]*m[2] + q[1]*m[6] + q[2]*m[10] + m[14];
+		z = qx*m[2] + qy*m[6] + qz*m[10] + m[14];
 		if(z <=  w) in_p |= 16;
+		if(in_p == 63)	return true;
 		if(z >= -w) in_p |= 32;
-		if(in_p == 63)
-			return true;
+		if(in_p == 63)	return true;
 	}
 
 	return false;

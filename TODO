@@ -40,6 +40,21 @@ Lighting - How to do it?
 			Another possibility:
 				Use GPU on client to update visibility map...
 
+Goal:
+	Make the client look like Minecraft HD: http://www.youtube.com/watch?v=qjhtjDnneLQ
+	HDR rendering
+	Ambient occlusion
+	Neat water effects
+		
+Shadows:
+	Need to do a global shadow mapping pass for the sun / most surface chunks
+	For torches, only calculate shadows in chunk/adjacent chunks
+		Also if we use hemicube for shadow map, could save some time
+		
+	Lava: This seems trickier
+		Need to find a good way to fake area lights...
+	
+
 Debug the new entity replication framework
 
 Add stuff for rendering entities
