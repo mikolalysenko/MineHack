@@ -9,8 +9,10 @@ varying float radiosity;
 
 void main(void)
 {
-	vec4 color = clamp(texture2D(tex, (tc.zw + fract(tc.xy)) / 16.0 ) * radiosity, 0.0, 1.0);
+	vec4 texColor = texture2D(tex, (tc.zw + fract(tc.xy)) / 16.0 );
 
-	gl_FragColor = vec4(color.xyz, 1);
+	vec3 rgbColor = clamp(texColor.xyz * radiosity, 0.0, 1.0);
+
+	gl_FragColor = vec4(rgbColor.xyz, texColor.w);
 }
 

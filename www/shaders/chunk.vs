@@ -18,6 +18,6 @@ void main(void)
 	vec2 t = texCoord.xy * 16.0;
 	tc = vec4(fract(t), floor(t));
 	
-	radiosity = 1.0;
+	radiosity = texCoord.z *.5 + .5;
 }
 

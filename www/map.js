@@ -60,6 +60,15 @@ const BlockMaterials =
 	[ 0, 0, 0.95, 0 ]		//Sand
 ];
 
+//Block face index
+const LEFT		= 0;
+const RIGHT		= 1;
+const BOTTOM	= 2;
+const TOP		= 3;
+const FRONT		= 4;
+const BACK		= 5;
+
+
 function ChunkVB(p, 
 	x_min, y_min, z_min,
 	x_max, y_max, z_max)
@@ -100,7 +109,6 @@ ChunkVB.prototype.gen_vb = function(gl)
 	{
 		var tc, tx, ty, dt;
 		
-		light /= 255.0;
 		tc = BlockTexCoords[block_id][dir];
 		tx = tc[1] / 16.0;
 		ty = tc[0] / 16.0;
@@ -169,10 +177,9 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 	}
 	
-	var light = p.light_block.light;
-	var loff = (p.x&1) + (p.y&1)*CHUNK_X*2 + (p.z&1)*CHUNK_X*CHUNK_Y*4;
-	
 	var data = p.data;
+	
+	var c_height	= Map.get_height_cell(p.x, p.z);
 	
 	var left	= Map.lookup_chunk(p.x-1, p.y, p.z),
 		right	= Map.lookup_chunk(p.x+1, p.y, p.z),
@@ -192,9 +199,9 @@ ChunkVB.prototype.gen_vb = function(gl)
 	if(front	&& !front.pending)	d_lz = front.data;
 	if(back		&& !back.pending)	d_uz = back.data;
 	
-	for(var x=this.x_min; x<this.x_max; ++x)
-	for(var y=this.y_min; y<this.y_max; ++y)
 	for(var z=this.z_min; z<this.z_max; ++z)
+	for(var y=this.y_min; y<this.y_max; ++y)
+	for(var x=this.x_min; x<this.x_max; ++x)
 	{
 		var idx = x + (y<<CHUNK_X_S) + (z<<(CHUNK_XY_S));
 		var block_id = data[idx];
@@ -202,9 +209,10 @@ ChunkVB.prototype.gen_vb = function(gl)
 		
 		if(block_id == 0)
 			continue;
+			
+		var surf_h = c_height[x + (z<<CHUNK_X_S)];
+		var cell_h = y + (p.y<<CHUNK_Y_S);
 		
-		var lidx = loff + x + y*CHUNK_X*2 + z*CHUNK_X*CHUNK_Y*4;
-		var l = light.slice(lidx, lidx+6);
 		
 		//Add -x face
 		if(x > 0)
@@ -229,7 +237,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,y+1,z  ],
 				[x,y+1,z+1],
 				[x,y  ,z+1]				
-				], block_id, 1, l[LEFT]);
+				], block_id, 1, 0);
 		}
 		
 		//Add +x face	
@@ -255,7 +263,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x+1,y+1,z+1],
 				[x+1,y+1,z  ],
 				[x+1,y,  z  ]
-				], block_id, 1, l[RIGHT]);
+				], block_id, 1, 0);
 		}
 		
 		//Add -y face
@@ -281,7 +289,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,  y,  z+1],
 				[x+1,y,  z+1],
 				[x+1,y,  z  ]
-				], block_id, 2, l[TOP]);
+				], block_id, 2, 0);
 		}
 		
 		//Add +y face
@@ -307,7 +315,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x+1,y+1,  z  ],
 				[x+1,y+1,  z+1],
 				[x,  y+1,  z+1]
-				], block_id, 0, l[BOTTOM]);
+				], block_id, 0, ((cell_h >= surf_h) ? 1 : 0) );
 		}
 		
 		
@@ -335,7 +343,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x+1,y+1,z],				
 				[x,  y+1,z],				
 				[x,  y,  z]
-				], block_id, 1, l[FRONT]);
+				], block_id, 1, 0);
 		}
 		
 		//Add +z face
@@ -361,7 +369,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 				[x,  y+1,z+1],
 				[x+1,y+1,z+1],
 				[x+1,y,  z+1]
-				], block_id, 1, l[BACK]);
+				], block_id, 1, 0);
 		}
 	}
 
@@ -484,8 +492,6 @@ function Chunk(x, y, z, data)
 	this.y = y;
 	this.z = z;
 	
-	this.light_block = LightEngine.create_block(x, y, z);
-	
 	//Create vertex buffers for facets
 	this.vb = new ChunkVB(this, 
 		0, 0, 0,
@@ -532,9 +538,29 @@ Chunk.prototype.in_frustum = function(m)
 	return false;
 }
 
+//Brute force calculate the height
+Chunk.prototype.brute_force_height = function(x, z, cell)
+{
+	for(var y = CHUNK_Y-1; y>=0; --y)
+	{
+		if(!Transparent[this.data[x + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)]])
+		{
+			cell[x + (z<<CHUNK_X_S)] = y + (this.y<<CHUNK_Y_S);
+			return true;
+		}
+	}
+	
+	return false;
+}
+
 //Sets the block type and updates vertex buffers as needed
 Chunk.prototype.set_block = function(x, y, z, b)
 {
+	var pb = this.data[x + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
+	
+	if(pb == b)
+		return;
+
 	this.data[x + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)] = b;
 	this.vb.set_dirty();
 
@@ -567,6 +593,67 @@ Chunk.prototype.set_block = function(x, y, z, b)
 	}
 	
 	this.is_air = false;
+	
+	//Update surface
+	if(Transparent[pb] == Transparent[b])
+		return;
+		
+	var cell = Map.surface_index[this.x + ":" + this.z];
+	var pheight = cell[x + (z<<CHUNK_X_S)],
+		nheight = y + (this.y << CHUNK_Y_S);
+		
+		
+	if(pheight > nheight)
+		return;
+	
+	if(Transparent[b])
+	{
+		//Set this flag to force us to drill down
+		cell[x + (z << CHUNK_X_S)] = 0;
+	
+		//Need to drill down to find new surface value
+		for(var j=this.y; j>0; --j)
+		{
+			var c = Map.lookup_chunk(this.x, j, this.z);
+			if(c)
+			{
+				//Set dirty flags for light changes
+				for(var dx=this.x-1; dx<this.x+1; ++dx)
+				for(var dz=this.z-1; dz<this.z+1; ++dz)
+				{
+					var q = Map.lookup_chunk(dx, j, dz);
+					if(q)
+						q.vb.set_dirty();
+				}
+				
+				if(c.brute_force_height(x, z, cell))
+					break;
+			}
+			else
+			{
+				Map.fetch_chunk(this.x, j, this.z);
+				break;
+			}
+		}
+	}
+	else
+	{
+		if(nheight == pheight)
+			return;
+	
+		cell[x + (z<<CHUNK_X_S)] = nheight;
+	
+		//Set dirty flags for light changes
+		for(var j=this.y; j>=(pheight>>CHUNK_Y_S); --j)
+		for(var dx=this.x-1; dx<this.x+1; ++dx)
+		for(var dz=this.z-1; dz<this.z+1; ++dz)
+		{
+			var q = Map.lookup_chunk(dx, j, dy);
+			if(q)
+				q.vb.set_dirty();
+		}
+	}
+
 }
 
 //Forces a chunk to regenerate its vbs
@@ -620,8 +707,6 @@ Chunk.prototype.release = function(gl)
 	this.vb.release(gl);
 	delete this.vb;
 	delete this.data;
-	
-	//TODO: Need to figure out how to deallocate light block
 }
 
 
@@ -631,11 +716,14 @@ Chunk.prototype.release = function(gl)
 var Map =
 {
 	index			: {},	//The chunk index
-	pending_chunks	: [],	//Chunks waiting to be fetched
 	terrain_tex		: null,
-	max_chunks		: 1024,
-	chunk_count 	: 0,
-	chunk_radius	: 3,	//These chunks are always fetched.
+	
+	
+	surface_index	: {},	//The surface cell index
+	
+	max_chunks		: 80000,	//Maximum number of chunks to load (not used yet)
+	chunk_count 	: 0,		//Number of loaded chunks
+	chunk_radius	: 3,		//These chunks are always fetched.
 	
 	show_debug		: false,
 	
@@ -652,8 +740,11 @@ var Map =
 						[10, 10],
 						[11, 11],
 						[12, 12] ],
-						
+				
+	pending_chunks	: [],	//Chunks waiting to be fetched						
 	wait_chunks		: false	//Chunks are waiting
+	
+	
 };
 
 Map.init = function(gl)
@@ -854,6 +945,80 @@ Map.init = function(gl)
 	
 	return "Ok";
 }
+
+//Returns the height of the column at the location x,z
+Map.get_height = function(x, z)
+{
+	var cell = Map.surface_index[(x>>CHUNK_X_S) + ":" + (z>>CHUNK_Z_S)];
+	if(cell)
+		return cell[(x&CHUNK_X_MASK) + ((z&CHUNK_Z_MASK)<<CHUNK_X_S)];
+	return 0;
+}
+
+Map.get_height_cell = function(x, z)
+{
+	var cell_idx = x + ":" + z;
+	var cell = Map.surface_index[cell_idx];
+
+	if(!cell)
+	{
+		cell = new Uint32Array(CHUNK_X * CHUNK_Z);
+		Map.surface_index[cell_idx] = cell;
+	}
+
+	return cell;
+}
+
+//Updates the surface based on the data in a new chunk
+Map.update_height = function(chunk)
+{
+	var cell = Map.get_height_cell(chunk.x, chunk.z);
+	
+	var idx = 0, should_drill = false, update_depth = chunk.y;
+	for(var z=0; z<CHUNK_Z; ++z)
+	for(var x=0; x<CHUNK_X; ++x)
+	{
+		var pheight = cell[idx];
+		
+		for(var y=CHUNK_Y-1; y>=0; --y)
+		{
+			if(!Transparent[chunk.data[x + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)]])
+			{
+				var nheight = y + (chunk.y<<CHUNK_Y_S);
+				
+				
+				if(pheight < nheight)
+				{		
+					cell[idx] = nheight;
+					if(pheight > 0)
+						update_depth = Math.min(update_depth, (pheight>>CHUNK_Y_S));
+				}
+				break;
+			}
+		}
+		
+		if(cell[idx] == 0)
+			should_drill = true;
+		++idx;
+	}
+	
+	//Update chunks below this chunk, which may have changed
+	for(var y=update_depth; y<=chunk.y; ++y)
+	for(var dx=chunk.x-1; dx<=chunk.x+1; ++dx)
+	for(var dz=chunk.z-1; dz<=chunk.z+1; ++dz)
+	{
+		var Q = Map.lookup_chunk(dx, y, dz);
+		if(Q)
+			Q.vb.set_dirty();
+	}
+	
+	//Need to dig down to the bottom to find correct surface height value
+	if(should_drill)
+	{
+		Map.fetch_chunk(this.x, this.y-1, this.z);
+	}
+}
+
 
 //Used for visibility testing
 Map.draw_box = function(gl, cx, cy, cz)
@@ -1132,6 +1297,7 @@ Map.fetch_chunk = function(x, y, z)
 	Map.pending_chunks.push(chunk);
 }
 
+
 Map.grab_chunks = function()
 {
 	if(Map.pending_chunks.length == 0)
@@ -1179,6 +1345,7 @@ Map.grab_chunks = function()
 		for(var i=0; i<chunks.length; i++)
 		{
 			var chunk = chunks[i], res = -1, flags;
+			
 
 			if(arr.length >= 1)
 			{
@@ -1193,6 +1360,9 @@ Map.grab_chunks = function()
 				Map.pending_chunks = chunks.slice(i).concat(Map.pending_chunks);
 				return;
 			}
+			
+			//Update height field
+			Map.update_height(chunk);
 
 			//Resize array
 			arr = arr.slice(res+1);
@@ -1226,11 +1396,6 @@ Map.grab_chunks = function()
 				{
 					Map.fetch_chunk(chunk.x, chunk.y + k, chunk.z);
 				}
-			}
-			else if(flags == 1 || flags == 3)
-			{
-				//Add job to lighting engine
-				LightEngine.add_job(chunk.x, chunk.y, chunk.z);
 			}
 			
 			if(flags == 0)
@@ -1307,7 +1472,8 @@ Map.set_block = function(x, y, z, b)
 	var c = Map.lookup_chunk(cx, cy, cz);		
 	if(!c)
 		return;
-	
+		
+	//Need to update the height field	
 	var bx = (x & CHUNK_X_MASK), 
 		by = (y & CHUNK_Y_MASK), 
 		bz = (z & CHUNK_Z_MASK);
