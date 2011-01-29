@@ -209,6 +209,7 @@ EntityDB.destroy_entity = function(entity_id)
 //Tick all entities
 EntityDB.tick = function()
 {
+	var i;
 	for(i in EntityDB.index)
 	{
 		EntityDB.index[i].tick();
@@ -218,6 +219,7 @@ EntityDB.tick = function()
 //Draws all entities
 EntityDB.draw = function(gl, cam)
 {
+	var i;
 	for(i in EntityDB.index)
 	{
 		EntityDB.index[i].draw(gl);

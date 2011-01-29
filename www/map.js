@@ -92,13 +92,16 @@ function ChunkVB(p,
 //Sets the vb to dirty, will regenerate as needed
 ChunkVB.prototype.set_dirty = function(gl)
 {
-	this.dirty = true;
-	this.empty = false;
+	this.dirty	= true;
+	this.empty	= false;
+	this.tempty = false;
 }
 
 //Construct vertex buffer for this chunk
 ChunkVB.prototype.gen_vb = function(gl)
 {
+	this.dirty = false;
+
 	var vertices = new Array();
 	var indices  = new Array();
 	var tindices = new Array();
@@ -373,24 +376,19 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 	}
 
-	if(indices.length == 0 && tindices.length == 0)
-	{
-		this.empty = true;
+	this.empty	= indices.length == 0;
+	this.tempty	= tindices.length == 0;
 
+	if(this.empty && this.tempty)
+	{
 		//Clean up temporary data
 		delete vertices;
 		delete indices;
 		delete tindices;
 		delete tex_coords;
 	
-		//No longer need to generate
-		this.dirty = false;
-		
 		return;
 	}
-	
-	
-	this.empty = false;
 
 	this.num_elements = indices.length;
 	this.num_transparent_elements = tindices.length;
@@ -414,9 +412,6 @@ ChunkVB.prototype.gen_vb = function(gl)
 	delete vertices;
 	delete indices;
 	delete tindices;
-	
-	//No longer need to generate
-	this.dirty = false;
 }
 
 //Draws a chunk
@@ -424,11 +419,6 @@ ChunkVB.prototype.draw = function(gl, chunk_shader, transp)
 {
 	if(this.dirty)
 		this.gen_vb(gl);
-		
-	if(transp && this.num_transparent_elements == 0)
-		return;
-	if(!transp && this.num_elements == 0)
-		return;
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	gl.vertexAttribPointer(chunk_shader.pos_attr,	4, gl.FLOAT, false, 32, 0);
@@ -496,8 +486,6 @@ function Chunk(x, y, z, data)
 	this.vb = new ChunkVB(this, 
 		0, 0, 0,
 		CHUNK_X, CHUNK_Y, CHUNK_Z);
-		
-	this.is_air = false;
 }
 
 //Returns true of the chunk is in the frustum
@@ -596,8 +584,6 @@ Chunk.prototype.set_block = function(x, y, z, b)
 		}
 	}
 	
-	this.is_air = false;
-	
 	//Update surface
 	if(Transparent[pb] == Transparent[b])
 		return;
@@ -669,11 +655,23 @@ Chunk.prototype.force_regen = function(gl)
 //Draws the chunk
 Chunk.prototype.draw = function(gl, chunk_shader, cam, transp)
 {
-	if(this.vb.empty || !this.in_frustum(cam))
+	if(this.pending)
 		return;
+	if(!transp)
+	{
+		if(this.vb.empty)
+			return;
+	}
+	else if(this.vb.tempty)
+	{
+		return;
+	}
+	else if(!this.in_frustum(cam))
+	{
+		return;
+	}
 		
 	var c = Player.chunk();
-
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
@@ -727,7 +725,7 @@ var Map =
 	
 	max_chunks		: 80000,	//Maximum number of chunks to load (not used yet)
 	chunk_count 	: 0,		//Number of loaded chunks
-	chunk_radius	: 3,		//These chunks are always fetched.
+	chunk_radius	: 1,		//These chunks are always fetched.
 	
 	show_debug		: false,
 	
@@ -1006,6 +1004,7 @@ Map.update_height = function(chunk)
 		++idx;
 	}
 	
+	
 	//Update chunks below this chunk, which may have changed
 	for(var y=update_depth; y<=chunk.y; ++y)
 	for(var dx=chunk.x-1; dx<=chunk.x+1; ++dx)
@@ -1019,8 +1018,26 @@ Map.update_height = function(chunk)
 	//Need to dig down to the bottom to find correct surface height value
 	if(should_drill)
 	{
-		Map.fetch_chunk(this.x, this.y-1, this.z);
+		Map.fetch_chunk(chunk.x, chunk.y-1, chunk.z);
 	}
+}
+
+//Gets bounds for the surface (in y) for the given cell
+Map.surface_bounds = function(x, z)
+{
+	var cell = Map.get_height_cell(x, z), 
+		ymin, ymax, idx, y;
+		
+	ymin = cell[0];
+	ymax = ymin;
+		
+	for(idx=1; idx<CHUNK_X*CHUNK_Z; ++idx)
+	{
+		ymin = Math.min(ymin, y);
+		ymax = Math.max(ymax, y);
+	}
+	
+	return [ymin, ymax];	
 }
 
 
@@ -1180,7 +1197,6 @@ Map.update_cache = function()
 		Map.visibility_query(Game.gl);
 	}
 	
-	
 	//If we are over the chunk count, remove old chunks
 	if(Map.chunk_count > Map.max_chunks)
 	{
@@ -1197,6 +1213,7 @@ Map.update_cache = function()
 //  camera - the current camera matrix
 Map.draw = function(gl, camera)
 {
+	var c, chunk;
 	gl.useProgram(Map.chunk_shader);
 		
 	//Enable attributes
@@ -1214,7 +1231,9 @@ Map.draw = function(gl, camera)
 	//Draw all the chunks
 	for(c in Map.index)
 	{
-		Map.index[c].draw(gl, Map.chunk_shader, camera, false);
+		var chunk = Map.index[c];
+		if(chunk instanceof Chunk)
+			chunk.draw(gl, Map.chunk_shader, camera, false);
 	}
 
 	gl.enable(gl.BLEND);
@@ -1222,7 +1241,9 @@ Map.draw = function(gl, camera)
 	gl.depthMask(0);
 	for(c in Map.index)
 	{
-		Map.index[c].draw(gl, Map.chunk_shader, camera, true);
+		var chunk = Map.index[c];
+		if(chunk instanceof Chunk)
+			chunk.draw(gl, Map.chunk_shader, camera, true);
 	}
 	gl.depthMask(1);
 	
@@ -1312,7 +1333,7 @@ Map.grab_chunks = function()
 	if(Map.pending_chunks.length == 0)
 		return;
 
-	var c = Player.chunk();
+	var pchunk = Player.chunk();
 	var chunks = Map.pending_chunks;
 	Map.pending_chunks = [];
 	
@@ -1323,10 +1344,10 @@ Map.grab_chunks = function()
 	var k = 0;	
 	for(var i=0; i<3; ++i)
 	{
-		arr[k++] = (c[i])		& 0xff;
-		arr[k++] = (c[i] >> 8)	& 0xff;
-		arr[k++] = (c[i] >> 16)	& 0xff;
-		arr[k++] = (c[i] >> 24)	& 0xff;
+		arr[k++] = (pchunk[i])			& 0xff;
+		arr[k++] = (pchunk[i] >> 8)		& 0xff;
+		arr[k++] = (pchunk[i] >> 16)	& 0xff;
+		arr[k++] = (pchunk[i] >> 24)	& 0xff;
 		
 	}
 	bb.append(arr.buffer);
@@ -1337,9 +1358,9 @@ Map.grab_chunks = function()
 	{
 		var delta = new Uint8Array(3);
 		
-		delta[0] = chunks[i].x - c[0];
-		delta[1] = chunks[i].y - c[1];
-		delta[2] = chunks[i].z - c[2];
+		delta[0] = chunks[i].x - pchunk[0];
+		delta[1] = chunks[i].y - pchunk[1];
+		delta[2] = chunks[i].z - pchunk[2];
 		
 		bb.append(delta.buffer);
 	}
@@ -1355,7 +1376,6 @@ Map.grab_chunks = function()
 		{
 			var chunk = chunks[i], res = -1, flags;
 			
-
 			if(arr.length >= 1)
 			{
 				flags = arr[0];	
@@ -1372,12 +1392,13 @@ Map.grab_chunks = function()
 			
 			//Update height field
 			Map.update_height(chunk);
+			
+			//Update state flags
+			chunk.vb.set_dirty();
+			chunk.pending = false;
 
 			//Resize array
 			arr = arr.slice(res+1);
-			
-			chunk.vb.set_dirty();
-			chunk.pending = false;
 			
 			//Regenerate vertex buffers for neighboring chunks
 			var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
@@ -1397,20 +1418,6 @@ Map.grab_chunks = function()
 
 			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
 			if(c)	c.vb.set_dirty();
-			
-			//If we got a surface chunk, issue some more requests for the 10 chunks immediately above it
-			if(flags == 1)
-			{
-				for(var k=1; k<=16; ++k)
-				{
-					Map.fetch_chunk(chunk.x, chunk.y + k, chunk.z);
-				}
-			}
-			
-			if(flags == 0)
-			{
-				chunk.is_air = true;
-			}
 		}
 	}, 
 	function()
