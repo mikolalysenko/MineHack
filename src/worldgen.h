@@ -51,7 +51,7 @@ namespace Game
 		
 		void generate_chunk(ChunkID const&, Chunk*);
 		
-		Block generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surface);
+		Block generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surface, CaveSystem s);
 		
 		CaveSystem generate_local_caves(ChunkID const&);
 		

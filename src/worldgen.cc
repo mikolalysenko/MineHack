@@ -25,9 +25,6 @@ using namespace std;
 namespace Game
 {
 
-CaveSystem cave;
-int64_t nodex, nodey, nodez;
-
 WorldGen::WorldGen(Config* mapconfig)
 {
 	int mapseed = mapconfig->readInt("mapseed");
@@ -94,7 +91,7 @@ int64_t Cave::dist(int64_t px, int64_t py, int64_t pz)
 	return dist;
 }
 
-Block WorldGen::generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surface)
+Block WorldGen::generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surface, CaveSystem cave)
 {
 	for(int index = 0; index < 54; index++)
 	{
@@ -256,12 +253,8 @@ CaveSystem WorldGen::generate_local_caves(ChunkID const& idx)
 	return c;
 }
 
-int chunknum = 0;
-
 void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 {
-	cout << "Starting chunk generation: " << chunknum << "coords: " << idx.x << ", " << idx.y << ", " << idx.z << endl;
-	chunknum++;
 	int64_t x, y, z;
 	
 	SurfaceCell surface[CHUNK_Z + (SURFACE_GEN_PADDING << 1)][CHUNK_X + (SURFACE_GEN_PADDING << 1)];
@@ -308,7 +301,7 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 		y++;
 	}
 	
-	cave = generate_local_caves(idx);
+	CaveSystem cave = generate_local_caves(idx);
 	
 	//given the surface, generate each of the blocks in the chunk
 	z = idx.z << CHUNK_Z_S;
@@ -320,7 +313,7 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 			x = idx.x << CHUNK_X_S;
 			for(int64_t i=0; i<CHUNK_X; i++)
 			{
-				auto b = generate_block(x, y, z, surface[k + SURFACE_GEN_PADDING][i + SURFACE_GEN_PADDING]);
+				auto b = generate_block(x, y, z, surface[k + SURFACE_GEN_PADDING][i + SURFACE_GEN_PADDING], cave);
 			
 				res->set(i, j, k, b);
 				
@@ -352,8 +345,6 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 	{
 		res->flags = ChunkFlags::Air;
 	}
-	
-	cout << "Completed chunk generation" << endl;
 }
 
 };
