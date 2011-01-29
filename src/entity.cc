@@ -101,7 +101,7 @@ bool get_int(const TCMAP* map, const char* key, int64_t& x)
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	x = strtol(str, NULL, 10);
+	x = strtoll(str, NULL, 10);
 	return true;
 }
 
@@ -110,7 +110,7 @@ bool get_uint(const TCMAP* map, const char* key, uint64_t& x)
 	const char* str = tcmapget2(map, key);
 	if(str == NULL)
 		return false;
-	x = strtoul(str, NULL, 10);
+	x = strtoull(str, NULL, 10);
 	return true;
 }
 

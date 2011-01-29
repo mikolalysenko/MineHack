@@ -664,8 +664,6 @@ void World::tick_players()
 		{
 			World* world = (World*)data;
 			
-			cout << "HERE!" << endl;
-		
 			//Check for timed out players
 			if(world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
 			{
