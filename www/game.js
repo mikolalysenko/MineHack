@@ -32,7 +32,7 @@ Game =
 
 	znear : 1.0,
 	zfar  : 256.0,
-	fov   : Math.PI / 2.0,
+	fov   : Math.PI / 4.0,
 	
 	wait_for_heartbeat : false,
 	
