@@ -53,7 +53,9 @@ Shadows:
 		
 	Lava: This seems trickier
 		Need to find a good way to fake area lights...
-	
+		Fortunately light radius should be small, like torches
+			So only need to do local lighting calculations
+		
 
 Debug the new entity replication framework
 
