@@ -202,7 +202,7 @@ bool get_session_id(
 	
 	//Scan in the session id
 	char* ptr;
-	session_id.id = strtoul(session_id_str, &ptr, 16);
+	session_id.id = strtoull(session_id_str, &ptr, 16);
 	
 	if(valid_session_id(session_id))
 		return true;
