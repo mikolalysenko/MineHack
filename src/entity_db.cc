@@ -203,7 +203,6 @@ bool EntityDB::foreach(
 	//Add active restriction
 	if(only_active)
 	{
-		cout << "adding active query" << endl;
 		tctdbqryaddcond(Q.query, "active", TDBQCSTREQ, "1");
 	}
 	

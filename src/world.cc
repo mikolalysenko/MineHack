@@ -648,7 +648,6 @@ void World::tick()
 	//Increment tick counter
 	mailbox->set_tick_count(++tick_count);
 	
-	cout << "Tick count = " << tick_count << endl;
 	
 	tick_players();
 	tick_mobs();
@@ -664,6 +663,8 @@ void World::tick_players()
 		static EntityUpdateControl call(Entity& entity, void* data)
 		{
 			World* world = (World*)data;
+			
+			cout << "HERE!" << endl;
 		
 			//Check for timed out players
 			if(world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
@@ -712,6 +713,7 @@ void World::tick_players()
 				}
 				else if(dig_finish_time <= world->tick_count)
 				{
+					cout << "SETTING BLOCK!" << endl;
 					world->set_block(
 						entity.player.dig_state.x,
 						entity.player.dig_state.y,

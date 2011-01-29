@@ -70,7 +70,7 @@ void Map::get_chunk(ChunkID const& idx, Chunk* chunk)
 		world_gen->generate_chunk(idx, chunk);
 		
 		//Store chunk in database
-		tchdbputasync(map_db,
+		tchdbputkeep(map_db,
 			(const void*)&idx, sizeof(ChunkID),
 			(const void*)chunk, sizeof(Chunk));
 	}
@@ -111,7 +111,7 @@ void Map::set_block(int x, int y, int z, Block b)
 			c.flags &= ~1;
 		}
 	
-		tchdbputasync(map_db,
+		tchdbput(map_db,
 			(const void*)&idx, sizeof(ChunkID),
 			(void*)&c, sizeof(Chunk));
 		
