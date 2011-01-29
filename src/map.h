@@ -32,6 +32,9 @@ namespace Game
 		//Retrieves the specific chunk
 		void get_chunk(ChunkID const&, Chunk* res);
 		
+		//Returns a chunk with only visible cells labeled
+		void get_surface_chunk(ChunkID const&, Chunk* res);
+		
 		//Sets a block
 		void set_block(int x, int y, int z, Block t);
 		

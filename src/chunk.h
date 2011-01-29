@@ -21,7 +21,9 @@ namespace Game
 		Wood,
 		Log,
 		Water,
-		Sand
+		Sand,
+		
+		Nonsense = 0xff
 	};
 	
 	//A chunk index into the map

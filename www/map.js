@@ -1085,7 +1085,7 @@ Map.visibility_query = function(gl, camera)
 				by = Map.vis_base_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
 				bz = Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24);	
 			for(var dx=bx-1; dx<=bx+1; ++dx)
-			for(var dy=by-1; dy<=by+1; ++dy)
+			for(var dy=by; dy<=by+1; ++dy)
 			for(var dz=bz-1; dz<=bz+1; ++dz)
 			{
 				Map.fetch_chunk(dx, dy, dz);
