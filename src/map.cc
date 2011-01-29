@@ -20,9 +20,6 @@ namespace Game
 
 Map::Map(WorldGen* gen, string const& filename) : world_gen(gen)
 {
-	//Initialize the world gen mutex
-	pthread_mutex_init(&world_gen_lock, NULL);
-	
 	//Initialize the map database
 	map_db = tchdbnew();
 	
@@ -57,22 +54,18 @@ void Map::get_chunk(ChunkID const& idx, Chunk* chunk)
 	//If the value of l was not set correctly, need to regenerate the chunk
 	if(l != sizeof(Chunk))
 	{
-		MutexLock wgl(&world_gen_lock);
-	
-		//Verify that the chunk has not been regenerated
-		l = tchdbget3(map_db, 
-			(const void*)&idx, sizeof(ChunkID),
-			(void*)chunk, sizeof(Chunk));
-		if(l == sizeof(Chunk))
-			return;
-		
 		//Generate the chunk
 		world_gen->generate_chunk(idx, chunk);
 		
 		//Store chunk in database
-		tchdbputkeep(map_db,
+		if(!tchdbputkeep(map_db,
 			(const void*)&idx, sizeof(ChunkID),
-			(const void*)chunk, sizeof(Chunk));
+			(const void*)chunk, sizeof(Chunk)))
+		{
+			tchdbget3(map_db, 
+				(const void*)&idx, sizeof(ChunkID),
+				(void*)chunk, sizeof(Chunk));
+		}
 	}
 }
 

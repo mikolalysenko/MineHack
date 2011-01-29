@@ -41,9 +41,6 @@ namespace Game
 	private:
 		TCHDB* map_db;
 		
-		//When held, the world generator is executing.
-		//Since it is not assumed to be reentrant, we can only do one thing at a time with the world generator
-		pthread_mutex_t world_gen_lock;
 		WorldGen* world_gen;
 	};
 	
