@@ -270,10 +270,6 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 	
 	SurfaceCell surface[CHUNK_Z + (SURFACE_GEN_PADDING << 1)][CHUNK_X + (SURFACE_GEN_PADDING << 1)];
 	
-	//Mik - Flags for cave/surface properties of chunk
-	bool is_surface = false, is_cave = false, is_non_empty = false;
-	
-	
 	bool only_air_chunk = true;  //start off as true, and if we find a place where the surface is higher than the bottom of the chunk, set it to false.
 	if(chunk_height <= WORLD_MAX_HEIGHT)  //early out for air chunks that are above the max height of the surface
 	{
@@ -292,18 +288,6 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 				if(surface[yp][xp].height >= chunk_height)
 					only_air_chunk = false;
 				
-				//Check if surface intersects chunk
-				int s = surface[yp][xp].height;
-				int h = (idx.y << CHUNK_Y_S);
-				
-				if(s <= h + CHUNK_Y)
-				{
-					is_non_empty = true;	
-					if(h <= s)
-					{
-						is_surface = true;
-					}
-				}
 				x++;
 			}
 			y++;
@@ -346,10 +330,6 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 			
 				res->set(i, j, k, b);
 				
-				if((!is_surface & is_non_empty) && b == Block::Air)
-				{
-					is_cave = true;
-				}
 				x++;
 			}
 			y++;
@@ -357,23 +337,6 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 		z++;
 	}
 	
-	//Mik - Set chunk flags
-	if(is_surface)
-	{
-		res->flags = ChunkFlags::Surface;
-	}
-	else if(is_cave)
-	{
-		res->flags = ChunkFlags::Cave;
-	}
-	else if(is_non_empty)
-	{
-		res->flags = ChunkFlags::Solid;
-	}
-	else
-	{
-		res->flags = ChunkFlags::Air;
-	}
 }
 
 };

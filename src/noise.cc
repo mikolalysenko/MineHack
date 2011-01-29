@@ -3,6 +3,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 static int64_t grad3[12][3] = {
 {1,1,0},
@@ -22,13 +23,12 @@ int64_t seed = 0;
 void setNoiseSeed(int64_t i)
 {
 	seed = i;
+	printf("Setting seed to %lld\n", seed);
 }
 
-//TODO: rand is really slow. This function should be replaced with a fast pseudorandom number generator. This
-//is just here for the time being, because it's easy to write and I want to get the noise function working
 int32_t pseudorand(int32_t a)
 {
-	a += seed;
+	//a += seed;
     a = (a ^ 61) ^ (a >> 16);
     a = a + (a << 3);
     a = a ^ (a >> 4);
