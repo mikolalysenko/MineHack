@@ -94,16 +94,6 @@ void Map::set_block(int x, int y, int z, Block b)
 							y & CHUNK_Y_MASK, 
 							z & CHUNK_Z_MASK)] = b;
 						
-		//Update chunk flags	
-		if(b == Block::Air && (c.flags & ChunkFlags::TypeMask) == ChunkFlags::Solid)
-		{
-			c.flags |= 1;
-		}
-		else if(b != Block::Air && (c.flags & ChunkFlags::TypeMask) == ChunkFlags::Air)
-		{
-			c.flags &= ~1;
-		}
-	
 		tchdbput(map_db,
 			(const void*)&idx, sizeof(ChunkID),
 			(void*)&c, sizeof(Chunk));

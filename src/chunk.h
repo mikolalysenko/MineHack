@@ -25,6 +25,7 @@ namespace Game
 	};
 	
 	//A chunk index into the map
+	#pragma pack(push, 1)
 	struct ChunkID
 	{
 		//Chunk coordinates are 21-bit unsigned ints
@@ -36,6 +37,7 @@ namespace Game
 		//Generates a hash for this chunk id (which is actually a unique descriptor in this case)
 		std::uint64_t hash() const;
 	};
+	#pragma pack(pop)
 	
 	//Face directions
 	struct FaceDir
@@ -48,24 +50,11 @@ namespace Game
 		const static int Front	= 5;	//+z
 	};
 	
-	//Chunk flags
-	struct ChunkFlags
-	{
-		//Used for lighting / visibility culling operations
-		const static uint8_t Air		= 0;
-		const static uint8_t Surface	= 1;
-		const static uint8_t Solid		= 2;
-		const static uint8_t Cave		= 3;
-		
-		const static uint8_t TypeMask	= 3;
-	};
-
 	//Chunks are blobs of blocks
 	// basic unit the game map/vehicles are composed of
 	struct Chunk
 	{
 		Block 		data[CHUNK_X*CHUNK_Y*CHUNK_Z];
-		uint8_t flags;
 		
 		//Block accessor functions
 		Block get(int x, int y, int z) const

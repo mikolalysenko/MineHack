@@ -1379,7 +1379,7 @@ Map.grab_chunks = function()
 			if(arr.length >= 1)
 			{
 				flags = arr[0];	
-				res = Map.decompress_chunk(arr.slice(1), chunk.data);
+				res = Map.decompress_chunk(arr, chunk.data);
 			}
 			
 			
@@ -1398,7 +1398,7 @@ Map.grab_chunks = function()
 			chunk.pending = false;
 
 			//Resize array
-			arr = arr.slice(res+1);
+			arr = arr.slice(res);
 			
 			//Regenerate vertex buffers for neighboring chunks
 			var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);

@@ -462,7 +462,18 @@ void do_get_chunk(HttpEvent& ev)
 		return;
 	}
 	
-	uint8_t chunk_buf[MAX_CHUNK_BUFFER_LEN];
+	//Allocate chunk buffer
+	int n_chunks		= (blob.len - sizeof(SessionID) - sizeof(ChunkID)) / sizeof(NetChunk);
+	int max_buf_len		= n_chunks * sizeof(Chunk);
+	uint8_t* chunk_buf	= (uint8_t*)alloca(max_buf_len);
+	
+	ScopeFree G(NULL);	
+	if(chunk_buf == NULL)
+	{
+		chunk_buf = (uint8_t*)malloc(max_buf_len);
+		G.ptr = chunk_buf;
+	}
+	
 	uint8_t	*buf_ptr = chunk_buf;
 	int		buf_len = 0;
 	
@@ -471,8 +482,9 @@ void do_get_chunk(HttpEvent& ev)
 	buf_len++;
 	
 	//Get all pending chunks
-	ChunkID base_chunk = *(ChunkID*)(blob.data + sizeof(SessionID));
+	ChunkID base_chunk	= *(ChunkID*)(blob.data + sizeof(SessionID));
 	NetChunk* chunk_end = (NetChunk*)(blob.data + blob.len);
+	
 	for(NetChunk* chunk_ptr = (NetChunk*)(blob.data + sizeof(SessionID) + sizeof(ChunkID)); 
 		chunk_ptr < chunk_end; 
 		++chunk_ptr)
@@ -485,7 +497,7 @@ void do_get_chunk(HttpEvent& ev)
 	
 		//Extract the chunk
 		int len = game_instance->get_compressed_chunk(
-			session.player_id, chunk_id, buf_ptr, MAX_CHUNK_BUFFER_LEN - buf_len);
+			session.player_id, chunk_id, buf_ptr, max_buf_len - buf_len);
 	
 		if(len < 0)
 		{

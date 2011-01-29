@@ -76,15 +76,11 @@ int Chunk::compress(void* buffer, int len)
 {
 	auto data_ptr	= data;
 	auto buf_ptr	= (uint8_t*) buffer;
-	size_t n = 1, i;
+	size_t n = 0, i;
 	
-	if(len <= 1)
+	if(len <= 0)
 		return -1;
-	
-	//Write flags
-	n = 1;
-	*(buf_ptr++) = flags;
-	
+		
 	for(i=0; i<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z); )
 	{
 		Block cur = *data_ptr;
