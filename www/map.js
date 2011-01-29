@@ -733,6 +733,7 @@ var Map =
 	
 	vis_width		: 64,
 	vis_height		: 64,
+	vis_fov			: Math.PI * 3.0 / 4.0,
 	vis_state		: 0,	
 	vis_bounds		: [ [1, 3],
 						[4, 4],
@@ -990,7 +991,6 @@ Map.update_height = function(chunk)
 			{
 				var nheight = y + (chunk.y<<CHUNK_Y_S);
 				
-				
 				if(pheight < nheight)
 				{		
 					cell[idx] = nheight;
@@ -1064,10 +1064,15 @@ Map.visibility_query = function(gl, camera)
 			}
 	
 			//Issue the fetch request
-			Map.fetch_chunk(
-				Map.vis_base_chunk[0] + ((Map.vis_data[i]<<24)>>24), 
-				Map.vis_base_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
-				Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24) );
+			var bx = Map.vis_base_chunk[0] + ((Map.vis_data[i]<<24)>>24),
+				by = Map.vis_base_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
+				bz = Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24);	
+			for(var dx=bx-1; dx<=bx+1; ++dx)
+			for(var dy=by-1; dy<=by+1; ++dy)
+			for(var dz=bz-1; dz<=bz+1; ++dz)
+			{
+				Map.fetch_chunk(dx, dy, dz);
+			}
 		}
 		
 		Map.vis_state = 0;
@@ -1090,7 +1095,7 @@ Map.visibility_query = function(gl, camera)
 		gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
 	
 		//Get camera
-		Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height);
+		Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov);
 		Map.vis_base_chunk = Player.chunk();
 	}
 	else

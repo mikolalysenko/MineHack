@@ -32,7 +32,7 @@ Game =
 
 	znear : 1.0,
 	zfar  : 256.0,
-	fov   : 45.0,
+	fov   : Math.PI / 2.0,
 	
 	wait_for_heartbeat : false,
 	
@@ -111,13 +111,13 @@ Game.init = function(canvas)
 }
 
 //Create projection matrix
-Game.proj_matrix = function(w, h)
+Game.proj_matrix = function(w, h, fov)
 {
 	var aspect = w / h;
 	var znear = Game.znear;
 	var zfar = Game.zfar;
 	
-	var ymax = znear * Math.tan(Game.fov * Math.PI / 360.0);
+	var ymax = znear * Math.tan(0.5 * fov);
 	var ymin = -ymax;
 	var xmin = ymin * aspect;
 	var xmax = ymax * aspect;
@@ -136,15 +136,16 @@ Game.proj_matrix = function(w, h)
 }
 
 //Creates the total cmera matrix
-Game.camera_matrix = function(width, height)
+Game.camera_matrix = function(width, height, fov)
 {
 	if(!width)
 	{
 		width = Game.width;
 		height = Game.height;
+		fov = Game.fov;
 	}
 
-	return mmult(Game.proj_matrix(width, height), Player.entity.pose_matrix());
+	return mmult(Game.proj_matrix(width, height, fov), Player.entity.pose_matrix());
 }
 
 Game.draw = function()
