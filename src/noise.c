@@ -24,12 +24,14 @@ void setNoiseSeed(int i)
 	seed = i;
 }
 
-//TODO: rand is really slow. This function should be replaced with a fast pseudorandom number generator. This
-//is just here for the time being, because it's easy to write and I want to get the noise function working
-int pseudorand(int x)
-{	
-	srand(x + seed);
-	return rand();
+int pseudorand( uint32_t a)
+{
+    a = (a ^ 61) ^ (a >> 16);
+    a = a + (a << 3);
+    a = a ^ (a >> 4);
+    a = a * 0x27d4eb2d;
+    a = a ^ (a >> 15);
+    return a;
 }
 
 int pseudorand_var(int i, ...)

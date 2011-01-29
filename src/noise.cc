@@ -194,9 +194,9 @@ float simplexNoise2D(float xin, float yin, int64_t octaves)
 	retval += contrib2D(ii + i1, jj + j1, x1, y1);
 	retval += contrib2D(ii + 1, jj + 1, x2, y2);
 	
-	//scale the output by 35 and add .5 so that it returns values in the interval [0, 1]
-	retval *= 35.0;
-	retval += .5;
+	//scale the output by 17.5 and add .25 so that it returns values in the interval [0, .5]
+	retval *= 17.5;
+	retval += .25;
 	
 	// Add contributions from each corner to get the final noise value.
 	// The result is scaled to return values in the interval [-1,1].

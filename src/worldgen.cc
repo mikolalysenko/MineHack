@@ -2,6 +2,8 @@
 #include "world.h"
 #include "noise.h"
 
+#include <string.h>
+
 using namespace std;
 
 
@@ -9,10 +11,10 @@ using namespace std;
 #define WATER_LEVEL				(1<<20)
 
 //height of the tallest possible mountain
-#define WORLD_MAX_HEIGHT		(WATER_LEVEL+30)
+#define WORLD_MAX_HEIGHT		(WATER_LEVEL+60)
 
 //height of the lowest possible point of the ocean
-#define WORLD_MIN_HEIGHT		(WATER_LEVEL-30)
+#define WORLD_MIN_HEIGHT		(WATER_LEVEL-60)
 
 //scalar for the noise function
 #define NOISE_SCALAR    		256
@@ -93,14 +95,22 @@ int64_t Cave::dist(int64_t px, int64_t py, int64_t pz)
 
 Block WorldGen::generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surface, CaveSystem cave)
 {
-	for(int index = 0; index < 54; index++)
+	//early out for stuff over the surface, not needed for correct execution
+	if(y > surface.height && y > WATER_LEVEL)
+		return Block::Air;
+	
+	if(y <= surface.height)  //don't need to check caves in the water or air
 	{
-		if(cave.caves[index].used)
+		//check to see if this block is inside a cave
+		for(int index = 0; index < 54; index++)
 		{
-			for(int seg = 0; seg < CAVE_SEGMENT_COUNT; seg++)
+			if(cave.caves[index].used)
 			{
-				if(cave.caves[index].dist(x, y, z) < 16)
-					return Block::Air;
+				for(int seg = 0; seg < CAVE_SEGMENT_COUNT; seg++)
+				{
+					if(cave.caves[index].dist(x, y, z) < 16)
+						return Block::Air;
+				}
 			}
 		}
 	}
@@ -256,36 +266,55 @@ CaveSystem WorldGen::generate_local_caves(ChunkID const& idx)
 void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 {
 	int64_t x, y, z;
+	int64_t chunk_height = (idx.y << CHUNK_Y_S);
 	
 	SurfaceCell surface[CHUNK_Z + (SURFACE_GEN_PADDING << 1)][CHUNK_X + (SURFACE_GEN_PADDING << 1)];
 	
 	//Mik - Flags for cave/surface properties of chunk
 	bool is_surface = false, is_cave = false, is_non_empty = false;
 	
-	//generate the surface of the world
-	y = (idx.z << CHUNK_Z_S) - SURFACE_GEN_PADDING;
-	for(int64_t yp = 0; yp < CHUNK_Z + (SURFACE_GEN_PADDING << 1); yp++)
+	
+	bool only_air_chunk = true;  //start off as true, and if we find a place where the surface is higher than the bottom of the chunk, set it to false.
+	if(chunk_height <= WORLD_MAX_HEIGHT)  //early out for air chunks that are above the max height of the surface
 	{
-		x = (idx.x << CHUNK_X_S) - SURFACE_GEN_PADDING;
-		for(int64_t xp = 0; xp < CHUNK_X + (SURFACE_GEN_PADDING << 1); xp++)
+		if(chunk_height <= WATER_LEVEL)
+			only_air_chunk = false;
+		
+		//generate the surface of the world
+		y = (idx.z << CHUNK_Z_S) - SURFACE_GEN_PADDING;
+		for(int64_t yp = 0; yp < CHUNK_Z + (SURFACE_GEN_PADDING << 1); yp++)
 		{
-			surface[yp][xp] = generate_surface_data(x, y);
-			
-			//Check if surface intersects chunk
-			int s = surface[yp][xp].height;
-			int h = (idx.y << CHUNK_Y_S);
-			
-			if(s <= h + CHUNK_Y)
+			x = (idx.x << CHUNK_X_S) - SURFACE_GEN_PADDING;
+			for(int64_t xp = 0; xp < CHUNK_X + (SURFACE_GEN_PADDING << 1); xp++)
 			{
-				is_non_empty = true;	
-				if(h <= s)
+				surface[yp][xp] = generate_surface_data(x, y);
+				
+				if(surface[yp][xp].height >= chunk_height)
+					only_air_chunk = false;
+				
+				//Check if surface intersects chunk
+				int s = surface[yp][xp].height;
+				int h = (idx.y << CHUNK_Y_S);
+				
+				if(s <= h + CHUNK_Y)
 				{
-					is_surface = true;
+					is_non_empty = true;	
+					if(h <= s)
+					{
+						is_surface = true;
+					}
 				}
+				x++;
 			}
-			x++;
+			y++;
 		}
-		y++;
+	}
+	
+	if(only_air_chunk)  //everything is air, no need to actually do any calculations, just push all 0s to the chunk.
+	{
+		void* ptr = (void*)(res->data);
+		memset(ptr, 0, CHUNK_X*CHUNK_Y*CHUNK_Z*sizeof(Block));
+		return;
 	}
 	
 	//get the surface properties
@@ -317,7 +346,7 @@ void WorldGen::generate_chunk(ChunkID const& idx, Chunk* res)
 			
 				res->set(i, j, k, b);
 				
-				if(!is_surface & is_non_empty && b == Block::Air)
+				if((!is_surface & is_non_empty) && b == Block::Air)
 				{
 					is_cave = true;
 				}
