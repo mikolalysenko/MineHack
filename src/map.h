@@ -38,9 +38,6 @@ namespace Game
 		//Gets a block from a chunk
 		Block get_block(int x, int y, int z);
 		
-		//Updates light values
-		void update_lighting(ChunkID const&, LightVal const*);
-		
 	private:
 		TCHDB* map_db;
 		

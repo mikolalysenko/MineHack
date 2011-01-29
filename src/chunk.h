@@ -24,12 +24,6 @@ namespace Game
 		Sand
 	};
 	
-	//Block lighting parameters
-	extern const float BLOCK_REFLECTANCE[];
-	extern const float BLOCK_TRANSMISSION[];
-	extern const float BLOCK_EMISSIVITY[];
-	extern const float BLOCK_SCATTER[];
-
 	//A chunk index into the map
 	struct ChunkID
 	{
@@ -54,13 +48,6 @@ namespace Game
 		const static int Front	= 5;	//+z
 	};
 	
-	#pragma pack(push,1)
-	struct LightVal
-	{
-		uint8_t face[6];
-	};
-	#pragma pack(pop)
-	
 	//Chunk flags
 	struct ChunkFlags
 	{
@@ -78,7 +65,6 @@ namespace Game
 	struct Chunk
 	{
 		Block 		data[CHUNK_X*CHUNK_Y*CHUNK_Z];
-		LightVal	light[CHUNK_X*CHUNK_Y*CHUNK_Z];
 		uint8_t flags;
 		
 		//Block accessor functions

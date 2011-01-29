@@ -69,19 +69,6 @@ void Map::get_chunk(ChunkID const& idx, Chunk* chunk)
 		//Generate the chunk
 		world_gen->generate_chunk(idx, chunk);
 		
-		//Initialize lighting
-		int t = chunk->flags & ChunkFlags::TypeMask;
-		
-		if(t == ChunkFlags::Air)
-		{
-			memset((void*)chunk->light, 0x80, sizeof(LightVal)*CHUNK_X*CHUNK_Y*CHUNK_Z);
-		}
-		else
-		{
-			memset((void*)chunk->light, 0, sizeof(LightVal)*CHUNK_X*CHUNK_Y*CHUNK_Z);
-		}
-		
-		
 		//Store chunk in database
 		tchdbputasync(map_db,
 			(const void*)&idx, sizeof(ChunkID),
@@ -142,10 +129,6 @@ Block Map::get_block(int x, int y, int z)
 	return c.data[CHUNK_OFFSET(x & CHUNK_X_MASK, 
 								y & CHUNK_Y_MASK, 
 								z & CHUNK_Z_MASK)];
-}
-
-void Map::update_lighting(ChunkID const& chunk, const LightVal* n_light)
-{
 }
 
 };
