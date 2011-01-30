@@ -427,6 +427,18 @@ int World::get_compressed_chunk(
 		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) > CHUNK_RADIUS )
 	{
 		cout << "Bad chunk request" << endl;
+		if(!entity_db->get_entity(player_id, entity))
+			printf("failed entity_db check\n");
+		if(entity.base.type != EntityType::Player)
+			printf("failed entity type check\n");
+		if(entity.base.flags & EntityFlags::Inactive)
+			printf("failed entity flags check\n");
+		if(abs(entity.base.x - (chunk_id.x + .5) * CHUNK_X) > CHUNK_RADIUS)
+			printf("failed x check\n");
+		/*if()
+			printf("failed y check\n");
+		if()
+			printf("failed z check\n"):*/
 		return 0;
 	}
 	

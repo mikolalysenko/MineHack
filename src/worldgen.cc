@@ -130,7 +130,20 @@ Block WorldGen::generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surf
 	}
 	
 	if(y < surface.height)
+	{
+		double dx = x;
+		double dy = y;
+		double dz = z;
+		
+		dx /= 32;
+		dy /= 32;
+		dz /= 32;
+		
+		if(simplexNoise3D(dx, dy, dz, 4) < .3)
+			return Block::Dirt;
+		
 		return Block::Stone;
+	}
 	
 	if(y > WATER_LEVEL)
 		return Block::Air;
