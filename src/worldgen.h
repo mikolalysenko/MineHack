@@ -27,12 +27,9 @@ namespace Game
 		
 		Block generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surface, CaveSystem s);
 		
-			bool cave_used(CavePoint start, CavePoint end);
-			CavePoint generate_cave_point(int64_t scx, int64_t scy, int64_t scz);
+		private:
 			SurfaceCell generate_surface_data(int64_t, int64_t);
 			bool near_water(int64_t x, int64_t y, SurfaceCell surface[CHUNK_Z + (SURFACE_GEN_PADDING << 1)][CHUNK_X + (SURFACE_GEN_PADDING << 1)]);
-		private:
-			
 	};
 };
 

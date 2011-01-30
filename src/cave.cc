@@ -127,7 +127,6 @@ bool CaveSystem::check_dist(int64_t px, int64_t py, int64_t pz, int64_t testdist
 		{
 			for(int seg = 0; seg < CAVE_SEGMENT_COUNT; seg++)
 			{
-				//printf("Checking dist: %d\n", caves[index].dist(px, py, pz));
 				if(caves[index].dist(px, py, pz) < testdist)
 					return true;
 			}
