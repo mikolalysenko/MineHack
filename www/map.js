@@ -482,6 +482,9 @@ function Chunk(x, y, z, data)
 	this.y = y;
 	this.z = z;
 	
+	//Pending blocks to write
+	this.pending_blocks = [];
+	
 	//Create vertex buffers for facets
 	this.vb = new ChunkVB(this, 
 		0, 0, 0,
@@ -548,6 +551,12 @@ Chunk.prototype.brute_force_height = function(x, z, cell)
 //Sets the block type and updates vertex buffers as needed
 Chunk.prototype.set_block = function(x, y, z, b)
 {
+	if(this.pending)
+	{
+		this.pending_blocks.push( [x, y, z, b] );
+		return;
+	}
+
 	var pb = this.data[x + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
 	
 	if(pb == b)
@@ -1396,6 +1405,12 @@ Map.grab_chunks = function()
 			//Update state flags
 			chunk.vb.set_dirty();
 			chunk.pending = false;
+			for(var j=0; j<chunk.pending_blocks.length; ++j)
+			{
+				var block = chunk.pending_blocks[j];
+				chunk.set_block(block[0], block[1], block[2], block[3]);
+			}
+			delete chunk.pending_blocks;
 
 			//Resize array
 			arr = arr.slice(res);
