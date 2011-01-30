@@ -23,12 +23,11 @@ int64_t seed = 0;
 void setNoiseSeed(int64_t i)
 {
 	seed = i;
-	printf("Setting seed to %lld\n", seed);
 }
 
 int32_t pseudorand(int32_t a)
 {
-	//a += seed;
+	a += seed;
     a = (a ^ 61) ^ (a >> 16);
     a = a + (a << 3);
     a = a ^ (a >> 4);
@@ -266,8 +265,8 @@ float simplexNoise3D(float xin, float yin, float zin, int64_t octaves)
 	retval += contrib3D(ii+i2, jj+j2, kk+k2, x2, y2, z2);
 	retval += contrib3D(ii+1 , jj+1 , kk+1 , x3, y3, z3);
 	
-	retval *= 16.0;
-	retval += .5;
+	retval *= 8.0;
+	retval += .25;
 	
 	return retval + (.5 * simplexNoise3D(xin * 2, yin * 2, zin * 2, octaves - 1));
 }
