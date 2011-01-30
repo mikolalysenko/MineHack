@@ -642,11 +642,22 @@ void World::set_block(int x, int y, int z, Block b)
 {
 	game_map->set_block(x, y, z, b);
 	
+	
 	Region r(
 		x - UPDATE_RADIUS, y - UPDATE_RADIUS, z - UPDATE_RADIUS,
 		x + UPDATE_RADIUS, y + UPDATE_RADIUS, z + UPDATE_RADIUS );
 	
 	mailbox->broadcast_block(r, x, y, z, b);
+	
+	if(b == Block::Air)
+	{
+		mailbox->broadcast_block(r, x-1, y, z, game_map->get_block(x-1, y, z));
+		mailbox->broadcast_block(r, x+1, y, z, game_map->get_block(x+1, y, z));
+		mailbox->broadcast_block(r, x, y-1, z, game_map->get_block(x, y-1, z));
+		mailbox->broadcast_block(r, x, y+1, z, game_map->get_block(x, y+1, z));
+		mailbox->broadcast_block(r, x, y, z-1, game_map->get_block(x, y, z-1));
+		mailbox->broadcast_block(r, x, y, z+1, game_map->get_block(x, y, z+1));
+	}
 }
 
 
