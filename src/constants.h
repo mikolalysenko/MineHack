@@ -16,6 +16,8 @@
 #define CHUNK_Y_S				4
 #define CHUNK_Z_S				4
 
+#define CHUNK_XY_S				(CHUNK_X_S + CHUNK_Y_S)
+
 #define CHUNK_X					(1<<CHUNK_X_S)
 #define CHUNK_Y					(1<<CHUNK_Y_S)
 #define CHUNK_Z					(1<<CHUNK_Z_S)

@@ -69,6 +69,124 @@ void Map::get_chunk(ChunkID const& idx, Chunk* chunk)
 	}
 }
 
+//Retrieves a particular chunk from the map
+void Map::get_surface_chunk(ChunkID const& c, Chunk* chunk)
+{
+	Chunk center, left, right, top, bottom, front, back;
+	
+	get_chunk(c, &center);
+	get_chunk(ChunkID(c.x-1, c.y, c.z), &left);
+	get_chunk(ChunkID(c.x+1, c.y, c.z), &right);
+	get_chunk(ChunkID(c.x, c.y-1, c.z), &bottom);
+	get_chunk(ChunkID(c.x, c.y+1, c.z), &top);
+	get_chunk(ChunkID(c.x, c.y, c.z-1), &front);
+	get_chunk(ChunkID(c.x, c.y, c.z+1), &back);
+	
+	for(int iz=0; iz<CHUNK_Z; ++iz)
+	for(int iy=0; iy<CHUNK_Y; ++iy)
+	for(int ix=0; ix<CHUNK_X; ++ix)
+	{
+		int idx = ix + (iy<<CHUNK_X_S) + (iz<<CHUNK_XY_S);
+		
+		//Read in current cell
+		Block b = center.data[idx], ob;
+		
+		if(BLOCK_TRANSPARENCY[(int)b])
+		{
+			chunk->data[idx] = b;
+			continue;
+		}
+	
+		//Check for surface block
+		if(ix > 0)
+		{
+			ob = center.data[idx - 1];
+		}
+		else
+		{
+			ob = left.data[CHUNK_X - 1 + (iy << CHUNK_X_S) + (iz << CHUNK_XY_S)];
+		}
+		if(BLOCK_TRANSPARENCY[(int)ob])
+		{
+			chunk->data[idx] = b;
+			continue;
+		}
+				
+		if(ix < CHUNK_X - 1)
+		{
+			ob = center.data[idx + 1];
+		}
+		else
+		{
+			ob = right.data[(iy << CHUNK_X_S) + (iz << CHUNK_XY_S)];
+		}
+		if(BLOCK_TRANSPARENCY[(int)ob])
+		{
+			chunk->data[idx] = b;
+			continue;
+		}
+		
+		if(iy > 0)
+		{
+			ob = center.data[idx - CHUNK_X];
+		}
+		else
+		{
+			ob = bottom.data[ix + ((CHUNK_Y-1) << CHUNK_X_S) + (iz << CHUNK_XY_S)];
+		}
+		if(BLOCK_TRANSPARENCY[(int)ob])
+		{
+			chunk->data[idx] = b;
+			continue;
+		}
+		
+		if(iy < CHUNK_Y - 1)
+		{
+			ob = center.data[idx + CHUNK_X];
+		}
+		else
+		{
+			ob = top.data[ix + (iz << CHUNK_XY_S)];
+		}
+		if(BLOCK_TRANSPARENCY[(int)ob])
+		{
+			chunk->data[idx] = b;
+			continue;
+		}
+		
+		if(iz > 0)
+		{
+			ob = center.data[idx - CHUNK_X*CHUNK_Y];
+		}
+		else
+		{
+			ob = front.data[ix + (iy << CHUNK_X_S) + ((CHUNK_Z-1) << CHUNK_XY_S)];
+		}
+		if(BLOCK_TRANSPARENCY[(int)ob])
+		{
+			chunk->data[idx] = b;
+			continue;
+		}
+				
+		if(iz < CHUNK_Z - 1)
+		{
+			ob = center.data[idx + CHUNK_X*CHUNK_Y];
+		}
+		else
+		{
+			ob = back.data[ix + (iy << CHUNK_X_S)];
+		}
+		if(BLOCK_TRANSPARENCY[(int)ob])
+		{
+			chunk->data[idx] = b;
+			continue;
+		}
+		
+		chunk->data[idx] = Block::Stone;
+	}
+}
+
+
 //Sets a block in the map
 void Map::set_block(int x, int y, int z, Block b)
 {

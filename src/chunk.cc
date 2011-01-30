@@ -6,59 +6,17 @@ using namespace std;
 namespace Game
 {
 
-
-//Block lighting parameters
-const float BLOCK_REFLECTANCE[] =
+const bool BLOCK_TRANSPARENCY[] =
 {
-	0, 		//Air
-	0.8,	//Stone
-	0.5,	//Dirt
-	0.6,	//Grass
-	0.65,	//Cobblestone
-	0.6,	//Wood
-	0.5,	//Log
-	0.1,	//Water
-	0.7		//Sand
-};
-
-const float BLOCK_TRANSMISSION[] =
-{
-	1.,		//Air
-	0,		//Stone
-	0,		//Dirt
-	0,		//Grass
-	0,		//Cobblestone
-	0,		//Wood
-	0,		//Log
-	0.8,	//Water
-	0		//Sand
-};
-
-const float BLOCK_EMISSIVITY[] = 
-{
-	0,		//Air
-	0,		//Stone
-	0,		//Dirt
-	0,		//Grass
-	0,		//Cobblestone
-	0,		//Wood
-	0,		//Log
-	0,		//Water
-	0		//Sand
-};
-
-
-const float BLOCK_SCATTER[] = 
-{
-	0,		//Air
-	0,		//Stone
-	0,		//Dirt
-	0,		//Grass
-	0,		//Cobblestone
-	0,		//Wood
-	0,		//Log
-	0,		//Water
-	0		//Sand
+	true,		//Air
+	false,		//Stone
+	false,		//Dirt
+	false,		//Grass
+	false,		//Cobblestone
+	false,		//Wood
+	false,		//Log
+	true,		//Water
+	false		//Sand
 };
 
 //Just interleaves the bits for each of the coordinates, giving z-order indexing
@@ -88,12 +46,33 @@ int Chunk::compress(void* buffer, int len)
 		size_t l;
 		for(l=1; 
 			i+l<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z) && 
-			data_ptr[l] == cur; ++l)
+			(data_ptr[l] == cur || 
+			data_ptr[l] == Block::Nonsense); ++l)
 		{
 		}
 		
+		//Nonsense blocks get sucked up into neighboring runs greedily
+		if(cur == Block::Nonsense)
+		{
+			if(i+l < (CHUNK_X)*(CHUNK_Y)*(CHUNK_Z))
+			{
+				cur = data_ptr[l++];
+				for(;
+					i+l<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z) && 
+					(data_ptr[l] == cur || 
+					data_ptr[l] == Block::Nonsense); ++l)
+				{
+				}
+			}
+			else
+			{
+				cur = Block::Stone;
+			}
+		}
+
 		i += l;
 		data_ptr += l;
+
 		
 		//Runs < 256 long get single byte encoded
 		--l;

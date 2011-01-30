@@ -26,6 +26,8 @@ namespace Game
 		Nonsense = 0xff
 	};
 	
+	extern const bool BLOCK_TRANSPARENCY[];
+	
 	//A chunk index into the map
 	#pragma pack(push, 1)
 	struct ChunkID

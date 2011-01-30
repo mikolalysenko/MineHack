@@ -193,11 +193,15 @@ $(GOAL_PROF):	$(GOAL_EXE)
 
 valgrind: $(exe) $(datadir)
 	(sleep 2; $(BROWSER) $(URL)) &
-	valgrind --leak-check=full --log-file=valgrind.log ./$(exe)
+	valgrind --log-file=valgrind.log ./$(exe)
 
 test: $(exe) $(datadir)
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)
+	
+gdb: $(exe) $(datadir)
+	(sleep 2; $(BROWSER) $(URL)) &
+	gdb ./$(exe)
 
 testmap: $(exe) $(datadir)
 	rm -f data/* *.log

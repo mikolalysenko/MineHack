@@ -452,7 +452,7 @@ int World::get_compressed_chunk(
 
 	//Read the chunk from the map
 	Chunk chunk;
-	game_map->get_chunk(chunk_id, &chunk);
+	game_map->get_surface_chunk(chunk_id, &chunk);
 	return chunk.compress((void*)buf, buf_len);
 }
 

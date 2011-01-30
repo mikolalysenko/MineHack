@@ -1,4 +1,6 @@
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <fcntl.h>
 
 #include <iostream>
@@ -140,7 +142,7 @@ void ajax_printf(mg_connection* conn, const char* fmt, ...)
 }
 
 //Sends a binary blob to the client
-void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
+bool ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 {
 	int sz;
 	ScopeFree G((void*)tcdeflate((const char*)buf, len, &sz));
@@ -156,7 +158,7 @@ void ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 	  "Content-Length: %d\n"
 	  "\n", sz);
 
-	mg_write(conn, G.ptr, sz);	
+	return send(mg_steal_socket(conn), G.ptr, sz, 0) >= 0;
 }
 
 // --------------------------------------------------------------------------------
@@ -281,6 +283,13 @@ void do_logout(HttpEvent& ev)
 	SessionID session_id;
 	if(get_session_id(ev.req, session_id))
 	{
+		Session session;
+		if(get_session_data(session_id, session) &&
+			session.state == SessionState::InGame )
+		{
+			game_instance->player_leave(session.player_id);
+		}
+	
 		delete_session(session_id);
 	}
 
@@ -465,17 +474,13 @@ void do_get_chunk(HttpEvent& ev)
 	//Allocate chunk buffer
 	int n_chunks		= (blob.len - sizeof(SessionID) - sizeof(ChunkID)) / sizeof(NetChunk);
 	int max_buf_len		= n_chunks * sizeof(Chunk);
-	uint8_t* chunk_buf	= (uint8_t*)alloca(max_buf_len);
 	
-	ScopeFree G(NULL);	
-	if(chunk_buf == NULL)
-	{
-		chunk_buf = (uint8_t*)malloc(max_buf_len);
-		G.ptr = chunk_buf;
-	}
 	
-	uint8_t	*buf_ptr = chunk_buf;
-	int		buf_len = 0;
+	ScopeFree G(malloc(max_buf_len));
+	assert(G.ptr != NULL);
+	
+	uint8_t	*buf_ptr 	= (uint8_t*)G.ptr;
+	int		buf_len 	= 0;
 	
 	//Add a leading 1 to avoid making a weird byte order mask and confusing the client
 	*(buf_ptr++) = 1;
@@ -509,7 +514,12 @@ void do_get_chunk(HttpEvent& ev)
 		buf_len += len;
 	}
 	
-	ajax_send_binary(ev.conn, (const void*)chunk_buf, buf_len);
+	if(!ajax_send_binary(ev.conn, G.ptr, buf_len))
+	{
+		cout << "Send failed, killing connection" << endl;
+		game_instance->player_leave(session.player_id);
+		delete_session(session_id);
+	}
 }
 
 //Network packet header
@@ -886,6 +896,8 @@ void shutdown_app()
 int main(int argc, char** argv)
 {
 	assert(sizeof(long long int) == sizeof(int64_t));
+	
+	srand(time(NULL));
 
 	init_app();
 	
