@@ -423,7 +423,7 @@ int Mailbox::PlayerRecord::packet_len() const
 //Serialize the packet into binary form on the socket
 void Mailbox::PlayerRecord::net_serialize(int socket) const
 {
-	cout << "Serializing packet, socket = " << socket << endl;
+	//cout << "Serializing packet, socket = " << socket << endl;
 
 	//Send HTTP header
 	{	char header_buf[1024];
@@ -437,7 +437,7 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 	
 		int rc = send(socket, header_buf, len, 0);
 		
-		cout << "Wrote header, " << rc << endl;
+		//cout << "Wrote header, " << rc << endl;
 	}
 
 	//Send header
@@ -457,6 +457,7 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 		send(socket, &header, sizeof(NetHeader), 0);
 	}
 	
+	/*
 	cout << "tick_count = " << tick_count << endl
 		 << "origin = " << ox << ',' << oy << ',' << oz <<endl
 		 << "block_size = " << block_events.size() << endl
@@ -464,7 +465,7 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 		 << "coord_size = " << coords.size() << endl
 		 << "eblob_size = " << eblob.size() << endl
 		 << "kill_size  = " << dead_entities.size() << endl;
-	
+	*/
 	
 	//Send block events
 	for(auto iter = block_events.begin(); iter != block_events.end(); ++iter)

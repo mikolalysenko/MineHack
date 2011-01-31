@@ -160,7 +160,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		ao10, /*ao11,*/ ao12,
 		ao20, ao21, ao22)
 	{
-		var tc, tx, ty, dt;
+		var tc, tx, ty, dt, ox, oy, oz;
 		
 		if(Transparent[block_id])
 		{
@@ -186,36 +186,40 @@ ChunkVB.prototype.gen_vb = function(gl)
 		ty = tc[0] / 16.0;
 		dt = 1.0 / 16.0 - 1.0/256.0;
 	
-		vertices.push(x + nx - ux - vx - 0.5);
-		vertices.push(y + ny - uy - vy - 0.5);
-		vertices.push(z + nz - uz - vz - 0.5);
+		ox = x + 0.5 * (nx - 1);
+		oy = y + 0.5 * (ny - 1);
+		oz = z + 0.5 * (nz - 1);
+	
+		vertices.push(ox);
+		vertices.push(oy);
+		vertices.push(oz);
 		vertices.push(1);
 		vertices.push(tx);
 		vertices.push(ty+dt);
 		vertices.push(ao_value(ao01, ao10, ao00));
 		vertices.push(0);
 		
-		vertices.push(x + nx + ux - vx - 0.5);
-		vertices.push(y + ny + uy - vy - 0.5);
-		vertices.push(z + nz + uz - vz - 0.5);
+		vertices.push(ox + ux);
+		vertices.push(oy + uy);
+		vertices.push(oz + uz);
 		vertices.push(1);
 		vertices.push(tx);
 		vertices.push(ty);
 		vertices.push(ao_value(ao01, ao12, ao02));
 		vertices.push(0);
 
-		vertices.push(x + nx + ux + vx - 0.5);
-		vertices.push(y + ny + uy + vy - 0.5);
-		vertices.push(z + nz + uz + vz - 0.5);
+		vertices.push(ox + ux + vx);
+		vertices.push(oy + uy + vy);
+		vertices.push(oz + uz + vz);
 		vertices.push(1);
 		vertices.push(tx+dt);
 		vertices.push(ty);
 		vertices.push(ao_value(ao12, ao21, ao22));
 		vertices.push(0);
 
-		vertices.push(x + nx - ux + vx - 0.5);
-		vertices.push(y + ny - uy + vy - 0.5);
-		vertices.push(z + nz - uz + vz - 0.5);
+		vertices.push(ox + vx);
+		vertices.push(oy + vy);
+		vertices.push(oz + vz);
 		vertices.push(1);
 		vertices.push(tx+dt);
 		vertices.push(ty+dt);	
@@ -381,17 +385,12 @@ ChunkVB.prototype.gen_vb = function(gl)
 					 0,  0,  1,
 					-1,  0,  0,
 					n111, 1,
-					n000, n
-					
-				
-				[
-					[x,y  ,z  ],
-					[x,y+1,z  ],
-					[x,y+1,z+1],
-					[x,y  ,z+1]				
-					], n111, 1, 1);
+					n000,  n001,  n002,
+					n010,/*n011,*/n012,
+					n020,  n021,  n022);
 			}
 		
+		/*
 			ob = n211;
 			if(ob != 0xff && Transparent[ob] && ob != n111)
 			{
@@ -449,6 +448,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 					[x+1,y,  z+1]
 					], n111, 1, 0);
 			}
+		*/
 		}
 	}
 	

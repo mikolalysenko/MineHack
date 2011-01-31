@@ -578,13 +578,15 @@ void do_heartbeat(HttpEvent& ev)
 					 sizeof(EntityID) * header.forget_size +
 					 header.chat_size +
 					 header.action_size;
-					 
+	
+	/*				 
 	cout << "Expect: " << packet_len << ", got: " << blob.len << endl;
 	
 	cout << "Packet header: " << endl
 		<< "tick = " << header.tick << endl
 		<< "forget size = " << header.forget_size << endl
 		<< "chat size = " << header.chat_size << endl;
+	*/
 	
 	//Check session is valid
 	if( !get_session_data(header.session_id, session) ||
@@ -628,7 +630,7 @@ void do_heartbeat(HttpEvent& ev)
 	
 	game_instance->handle_player_tick(session.player_id, pl, last_tick);
 	
-	cout << "heartbeat:  last = " << last_tick << ", cur = " << header.tick << endl;
+	//cout << "heartbeat:  last = " << last_tick << ", cur = " << header.tick << endl;
 	
 	//Parse out the events
 	uint8_t *ptr = blob.data + sizeof(NetInputHeader),
@@ -742,7 +744,7 @@ void do_heartbeat(HttpEvent& ev)
 	}
 	
 	//Write data directly to socket (nasty, but saves having to allocate extra buffers)
-	cout << "Serializing heartbeat packet" << endl;
+	//cout << "Serializing heartbeat packet" << endl;
 	if(!game_instance->heartbeat(session.player_id, mg_steal_socket(ev.conn)))
 	{
 		cout << "Heartbeat failed" << endl;

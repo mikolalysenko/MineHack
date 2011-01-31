@@ -294,7 +294,7 @@ void World::handle_player_tick(EntityID const& player_id,
 	
 	
 	Visitor V = { &input, tick_count, false, 0 };
-	cout << "Updating player:" << V.tick_count << " -- " << input.tick << ';' << input.x << ',' << input.y << ',' << input.z << endl;
+	//cout << "Updating player:" << V.tick_count << " -- " << input.tick << ';' << input.x << ',' << input.y << ',' << input.z << endl;
 
 	entity_db->update_entity(player_id, Visitor::call, &V);
 	
@@ -464,7 +464,7 @@ int World::get_compressed_chunk(
 
 	//Read the chunk from the map
 	Chunk chunk;
-	game_map->get_surface_chunk(chunk_id, &chunk);
+	game_map->get_chunk(chunk_id, &chunk);
 	return chunk.compress((void*)buf, buf_len);
 }
 
@@ -690,7 +690,7 @@ void World::tick_players()
 			//Check for timed out players
 			if(world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
 			{
-				cout << "Player timeout! ID = " << entity.entity_id.id << ", Flags = " <<  entity.base.flags << endl;
+				//cout << "Player timeout! ID = " << entity.entity_id.id << ", Flags = " <<  entity.base.flags << endl;
 				entity.base.flags = EntityFlags::Inactive;
 				world->mailbox->del_player(entity.entity_id);
 				return EntityUpdateControl::Update;
