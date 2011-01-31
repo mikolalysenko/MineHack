@@ -45,6 +45,7 @@ const Transparent =
 	false,	//Sand
 ];
 
+
 //Format is:
 // Transmission, Scatter, Reflectance, Emissivity
 const BlockMaterials =
@@ -67,7 +68,6 @@ const BOTTOM	= 2;
 const TOP		= 3;
 const FRONT		= 4;
 const BACK		= 5;
-
 
 function ChunkVB(p, 
 	x_min, y_min, z_min,
@@ -97,70 +97,72 @@ ChunkVB.prototype.set_dirty = function(gl)
 	this.tempty = false;
 }
 
+//Allocate an empty buffer for unloaded chunks
+ChunkVB.prototype.empty_data = new Uint8Array(CHUNK_SIZE);
+
 //Construct vertex buffer for this chunk
+// This code makes me want to barf - Mik
 ChunkVB.prototype.gen_vb = function(gl)
 {
-	this.dirty = false;
-
-	var vertices = new Array();
-	var indices  = new Array();
-	var tindices = new Array();
-	var nv = 0;
-	var p = this.p;
+	var vertices = new Array(),
+		indices  = new Array(),
+		tindices = new Array(),
+		nv = 0, x, y, z, p = this.p,
 	
-	var appendv = function(v, block_id, dir, light)
+	//var neighborhood = new Uint32Array(27); (too slow goddammit.  variant arrays even worse)
+		n000, n001, n002,
+		n010, n011, n012,
+		n020, n021, n022,
+		n100, n101, n102,
+		n110, n111, n112,
+		n120, n121, n122,
+		n200, n201, n202,
+		n210, n211, n212,
+		n220, n221, n222,
+	
+	//Buffers for scanning	
+		b00, b01, b02,
+		b10, b11, b12,
+		b20, b21, b22,
+	
+	//Buffers
+		data 			= p.data,
+		left_buffer		= Map.lookup_chunk(p.x-1, p.y, p.z),
+		right_buffer	= Map.lookup_chunk(p.x+1, p.y, p.z);
+	
+	if(left_buffer)		left_buffer = left_buffer.data;
+	if(right_buffer)	right_buffer = right_buffer.data;
+	
+	//Turn off dirty flag
+	this.dirty = false;
+	
+	var ao_value = function(s1, s2, c)
+	{
+		s1 = !Transparent[s1];
+		s2 = !Transparent[s2];
+		c  = !Transparent[c];
+	
+		return 1.0 
+			- (s1 ? 0.25 : 0) 
+			- (s2 ? 0.25 : 0)
+			- (c ? 0.125 : 0)
+			+ (s1 && s2 && c ? 0.125 : 0);
+	}
+	
+
+	var appendv = function(
+		ux, uy, uz,
+		vx, vy, vz,
+		nx, ny, nz,
+		block_id, 
+		dir,
+		ao00, ao01, ao02,
+		ao10, /*ao11,*/ ao12,
+		ao20, ao21, ao22)
 	{
 		var tc, tx, ty, dt;
 		
-		tc = BlockTexCoords[block_id][dir];
-		tx = tc[1] / 16.0;
-		ty = tc[0] / 16.0;
-		dt = 1.0 / 16.0 - 1.0/256.0;
-	
-		vertices.push(v[0][0] - 0.5);
-		vertices.push(v[0][1] - 0.5);
-		vertices.push(v[0][2] - 0.5);
-		vertices.push(1);
-		vertices.push(tx);
-		vertices.push(ty+dt);
-		vertices.push(light);
-		vertices.push(0);
-		
-		vertices.push(v[1][0] - 0.5);
-		vertices.push(v[1][1] - 0.5);
-		vertices.push(v[1][2] - 0.5);
-		vertices.push(1);
-		vertices.push(tx);
-		vertices.push(ty);
-		vertices.push(light);
-		vertices.push(0);
-
-
-		vertices.push(v[2][0] - 0.5);
-		vertices.push(v[2][1] - 0.5);
-		vertices.push(v[2][2] - 0.5);
-		vertices.push(1);
-		vertices.push(tx+dt);
-		vertices.push(ty);
-		vertices.push(light);
-		vertices.push(0);
-
-
-		vertices.push(v[3][0] - 0.5);
-		vertices.push(v[3][1] - 0.5);
-		vertices.push(v[3][2] - 0.5);
-		vertices.push(1);
-		vertices.push(tx+dt);
-		vertices.push(ty+dt);	
-		vertices.push(light);
-		vertices.push(0);
-				
-		nv += 4;
-	}
-	
-	var add_face = function(b)
-	{
-		if(Transparent[b])
+		if(Transparent[block_id])
 		{
 			tindices.push(nv);
 			tindices.push(nv+1);
@@ -178,204 +180,279 @@ ChunkVB.prototype.gen_vb = function(gl)
 			indices.push(nv+2);
 			indices.push(nv+3);
 		}
-	}
+		
+		tc = BlockTexCoords[block_id][dir];
+		tx = tc[1] / 16.0;
+		ty = tc[0] / 16.0;
+		dt = 1.0 / 16.0 - 1.0/256.0;
 	
-	var data = p.data;
-	
-	var c_height	= Map.get_height_cell(p.x, p.z);
-	
-	var left	= Map.lookup_chunk(p.x-1, p.y, p.z),
-		right	= Map.lookup_chunk(p.x+1, p.y, p.z),
-		bottom	= Map.lookup_chunk(p.x, p.y-1, p.z),
-		top 	= Map.lookup_chunk(p.x, p.y+1, p.z),
-		front	= Map.lookup_chunk(p.x, p.y, p.z-1),
-		back	= Map.lookup_chunk(p.x, p.y, p.z+1);
+		vertices.push(x + nx - ux - vx - 0.5);
+		vertices.push(y + ny - uy - vy - 0.5);
+		vertices.push(z + nz - uz - vz - 0.5);
+		vertices.push(1);
+		vertices.push(tx);
+		vertices.push(ty+dt);
+		vertices.push(ao_value(ao01, ao10, ao00));
+		vertices.push(0);
 		
-	var d_lx = null, d_ux = null,
-		d_ly = null, d_uy = null,
-		d_lz = null, d_uz = null;
-		
-	if(left		&& !left.pending)	d_lx = left.data;
-	if(right	&& !right.pending)	d_ux = right.data;
-	if(bottom	&& !bottom.pending)	d_ly = bottom.data;
-	if(top		&& !top.pending)	d_uy = top.data;
-	if(front	&& !front.pending)	d_lz = front.data;
-	if(back		&& !back.pending)	d_uz = back.data;
-	
-	for(var z=this.z_min; z<this.z_max; ++z)
-	for(var y=this.y_min; y<this.y_max; ++y)
-	for(var x=this.x_min; x<this.x_max; ++x)
-	{
-		var idx = x + (y<<CHUNK_X_S) + (z<<(CHUNK_XY_S));
-		var block_id = data[idx];
-		var ob;
-		
-		if(block_id == 0)
-			continue;
-			
-		var surf_h = c_height[x + (z<<CHUNK_X_S)];
-		var cell_h = y + (p.y<<CHUNK_Y_S);
-		
-		
-		//Add -x face
-		if(x > 0)
-		{
-			ob = data[idx - CHUNK_X_STEP];
-		}
-		else if(x == 0 && d_lx != null)
-		{
-			ob = d_lx[CHUNK_X_MASK + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
-		}
-		else
-		{
-			ob = -1;
-		}
-		
-		if(ob != -1 && Transparent[ob] && ob != block_id)
-		{
-			add_face(block_id);
-			
-			appendv( [
-				[x,y  ,z  ],
-				[x,y+1,z  ],
-				[x,y+1,z+1],
-				[x,y  ,z+1]				
-				], block_id, 1, 0);
-		}
-		
-		//Add +x face	
-		if(x < CHUNK_X - 1)
-		{
-			ob = data[idx+CHUNK_X_STEP]; 
-		}
-		else if(x == CHUNK_X-1 && d_ux != null)
-		{
-			ob = d_ux[(y<<CHUNK_X_S) + (z<<CHUNK_XY_S)];
-		}
-		else
-		{
-			ob = -1;
-		}
-		
-		if(ob != -1 && Transparent[ob] && ob != block_id)
-		{
-			add_face(block_id);
-			
-			appendv([
-				[x+1,y,  z+1],
-				[x+1,y+1,z+1],
-				[x+1,y+1,z  ],
-				[x+1,y,  z  ]
-				], block_id, 1, 0);
-		}
-		
-		//Add -y face
-		if(y > 0)
-		{
-			ob = data[idx-CHUNK_Y_STEP]; 
-		}
-		else if(y == 0 && d_ly != null)
-		{
-			ob = d_ly[x + (CHUNK_Y_MASK << CHUNK_X_S) + (z << CHUNK_XY_S)];
-		}
-		else
-		{
-			ob = -1;
-		}
-		
-		if(ob != -1 && Transparent[ob] && ob != block_id)
-		{
-			add_face(block_id);
-			
-			appendv([
-				[x,  y,  z  ],
-				[x,  y,  z+1],
-				[x+1,y,  z+1],
-				[x+1,y,  z  ]
-				], block_id, 2, 0);
-		}
-		
-		//Add +y face
-		if(y < CHUNK_Y-1)
-		{
-			ob = data[idx+CHUNK_Y_STEP];
-		}
-		else if(y == CHUNK_Y-1 && d_uy != null)
-		{
-			ob = d_uy[x + (z << CHUNK_XY_S)];
-		}
-		else
-		{
-			ob = -1;
-		}
-		
-		if(ob != -1 && Transparent[ob] && ob != block_id)
-		{
-			add_face(block_id);
-			
-			appendv([
-				[x,  y+1,  z  ],
-				[x+1,y+1,  z  ],
-				[x+1,y+1,  z+1],
-				[x,  y+1,  z+1]
-				], block_id, 0, ((cell_h >= surf_h) ? 1 : 0) );
-		}
-		
-		
-		//Add -z face
-		if(z > 0)
-		{
-			ob = data[idx-CHUNK_Z_STEP];
-		}		
-		else if(z == 0 && d_lz != null)
-		{
-			ob = d_lz[x + (y<<CHUNK_X_S) + (CHUNK_Z_MASK<<CHUNK_XY_S)];
-		}
-		else
-		{
-			ob = 0xff;
-		}
-		
-		
-		if(ob != 0xff && Transparent[ob] && ob != block_id)
-		{
-			add_face(block_id);
-			
-			appendv([
-				[x+1,y,  z],
-				[x+1,y+1,z],				
-				[x,  y+1,z],				
-				[x,  y,  z]
-				], block_id, 1, 0);
-		}
-		
-		//Add +z face
-		if(z < CHUNK_Z-1)
-		{
-			ob = data[idx+CHUNK_Z_STEP];
-		}
-		else if(z == CHUNK_Z-1 && d_uz != null)
-		{
-			ob = d_uz[x + (y<<CHUNK_X_S)];
-		}
-		else
-		{
-			ob = -1;
-		}
-		
-		if(ob != -1 && Transparent[ob] && ob != block_id)
-		{
-			add_face(block_id);
-			
-			appendv([
-				[x,  y,  z+1],
-				[x,  y+1,z+1],
-				[x+1,y+1,z+1],
-				[x+1,y,  z+1]
-				], block_id, 1, 0);
-		}
-	}
+		vertices.push(x + nx + ux - vx - 0.5);
+		vertices.push(y + ny + uy - vy - 0.5);
+		vertices.push(z + nz + uz - vz - 0.5);
+		vertices.push(1);
+		vertices.push(tx);
+		vertices.push(ty);
+		vertices.push(ao_value(ao01, ao12, ao02));
+		vertices.push(0);
 
+		vertices.push(x + nx + ux + vx - 0.5);
+		vertices.push(y + ny + uy + vy - 0.5);
+		vertices.push(z + nz + uz + vz - 0.5);
+		vertices.push(1);
+		vertices.push(tx+dt);
+		vertices.push(ty);
+		vertices.push(ao_value(ao12, ao21, ao22));
+		vertices.push(0);
+
+		vertices.push(x + nx - ux + vx - 0.5);
+		vertices.push(y + ny - uy + vy - 0.5);
+		vertices.push(z + nz - uz + vz - 0.5);
+		vertices.push(1);
+		vertices.push(tx+dt);
+		vertices.push(ty+dt);	
+		vertices.push(ao_value(ao10, ao21, ao20));
+		vertices.push(0);
+				
+		nv += 4;
+	}
+	
+	var get_left_block = function(dy, dz)
+	{
+		if( dy >= 0 && dy < CHUNK_Y && dz >= 0 && dz < CHUNK_Z )
+		{
+			if(left_buffer)	
+				return left_buffer[CHUNK_X - 1 + (dy<<CHUNK_X_S) + (dz<<(CHUNK_XY_S))];
+		}
+		else	
+		{
+			return Map.get_block(
+					(p.x<<CHUNK_X_S) - 1,
+					dy + (p.y<<CHUNK_Y_S),
+					dz + (p.z<<CHUNK_Z_S));
+		}
+		return 0xff;
+	}
+	
+	var get_right_block = function(dy, dz)
+	{
+		if( dy >= 0 && dy < CHUNK_Y && dz >= 0 && dz < CHUNK_Z )
+		{
+			if(right_buffer)	
+				return right_buffer[CHUNK_X - 1 + (dy<<CHUNK_X_S) + (dz<<(CHUNK_XY_S))];
+		}
+		else	
+		{
+			return Map.get_block(
+					(p.x<<CHUNK_X_S),
+					dy + (p.y<<CHUNK_Y_S),
+					dz + (p.z<<CHUNK_Z_S));
+		}
+		return 0xff;
+	}
+	
+	
+	var get_buf = function(dy, dz)
+	{
+		if( dy >= 0 && dy < CHUNK_Y &&
+			dz >= 0 && dz < CHUNK_Z )
+		{
+			return data.slice(
+					1 + 
+					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
+					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
+		}
+		else
+		{
+			var chunk = Map.lookup_chunk(p.x, p.y + (dy>>CHUNK_Y_S), p.z + (dz>>CHUNK_Z_S));
+			if(chunk && !chunk.pending)
+			{
+				return chunk.data.slice(1 + 
+					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
+					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
+			}
+		}
+		
+		return null;
+	}
+		
+	for(z=0; z<CHUNK_Z; ++z)
+	for(y=0; y<CHUNK_Y; ++y)
+	{
+		//Read in center part of neighborhood
+		n100 = get_left_block(y-1, z-1);
+		n101 = get_left_block(y-1, z);
+		n102 = get_left_block(y-1, z+1);
+		n110 = get_left_block(y,   z-1);
+		n111 = get_left_block(y,   z);
+		n112 = get_left_block(y,   z+1);
+		n120 = get_left_block(y+1, z-1);
+		n121 = get_left_block(y+1, z);
+		n122 = get_left_block(y+1, z+1);
+		
+		//Set up neighborhood buffers
+		buf00 = get_buf(y-1, z-1);
+		buf01 = get_buf(y-1, z);
+		buf02 = get_buf(y-1, z+1);
+		buf10 = get_buf(y,   z-1);
+		buf11 = get_buf(y,   z);
+		buf12 = get_buf(y,   z+1);
+		buf20 = get_buf(y+1, z-1);
+		buf21 = get_buf(y+1, z);
+		buf22 = get_buf(y+1, z+1);
+		
+		//Read in the right hand neighborhood
+		n200 = buf00 ? buf00[0] : 0xff;
+		n201 = buf01 ? buf01[0] : 0xff;
+		n202 = buf02 ? buf02[0] : 0xff;
+		n210 = buf10 ? buf10[0] : 0xff;
+		n211 = buf11 ? buf11[0] : 0xff;
+		n212 = buf12 ? buf12[0] : 0xff;
+		n220 = buf20 ? buf20[0] : 0xff;
+		n221 = buf21 ? buf21[0] : 0xff;
+		n222 = buf22 ? buf22[0] : 0xff;
+
+	
+		for(x=0; x<CHUNK_X; ++x)
+		{
+			//Shift old 1-neighborhood back by 1 x value
+			n000 = n100;
+			n001 = n101;
+			n002 = n102;
+			n010 = n110;
+			n011 = n111;
+			n012 = n112;
+			n020 = n120;
+			n021 = n121;
+			n022 = n122;
+			n100 = n200;
+			n101 = n201;
+			n102 = n202;
+			n110 = n210;
+			n111 = n211;
+			n112 = n212;
+			n120 = n220;
+			n121 = n221;
+			n122 = n222;
+			
+			//Fast case: In the middle of an x-scan
+			if(x < CHUNK_X - 1)
+			{
+				if(buf00) n200 = buf00[x];
+				if(buf01) n201 = buf01[x];
+				if(buf02) n202 = buf02[x];
+				if(buf10) n210 = buf10[x];
+				if(buf11) n211 = buf11[x];
+				if(buf12) n212 = buf12[x];
+				if(buf20) n220 = buf20[x];
+				if(buf21) n221 = buf21[x];
+				if(buf22) n222 = buf22[x];
+			}
+			else	//Bad case, end of x-scan
+			{
+				//Read in center part of neighborhood
+				n200 = get_right_block(y-1, z-1);
+				n201 = get_right_block(y-1, z);
+				n202 = get_right_block(y-1, z+1);
+				n210 = get_right_block(y,   z-1);
+				n211 = get_right_block(y,   z);
+				n212 = get_right_block(y,   z+1);
+				n220 = get_right_block(y+1, z-1);
+				n221 = get_right_block(y+1, z);
+				n222 = get_right_block(y+1, z+1);
+			}
+
+			if(n111 == 0)
+				continue;
+				
+				
+			if(n011 != 0xff && Transparent[n011] && n011 != n111)
+			{
+				appendv( 
+					 0,  1,  0,
+					 0,  0,  1,
+					-1,  0,  0,
+					n111, 1,
+					n000, n
+					
+				
+				[
+					[x,y  ,z  ],
+					[x,y+1,z  ],
+					[x,y+1,z+1],
+					[x,y  ,z+1]				
+					], n111, 1, 1);
+			}
+		
+			ob = n211;
+			if(ob != 0xff && Transparent[ob] && ob != n111)
+			{
+				appendv([
+					[x+1,y,  z+1],
+					[x+1,y+1,z+1],
+					[x+1,y+1,z  ],
+					[x+1,y,  z  ]
+					], n111, 1, 1);
+			}
+		
+			ob = n101;
+			if(ob != 0xff && Transparent[ob] && ob != n111)
+			{
+				add_face(n111);
+			
+				appendv([
+					[x,  y,  z  ],
+					[x,  y,  z+1],
+					[x+1,y,  z+1],
+					[x+1,y,  z  ]
+					], n111, 2, 0);
+			}
+		
+			ob = n121;
+			if(ob != 0xff && Transparent[ob] && ob != n111)
+			{
+				appendv([
+					[x,  y+1,  z  ],
+					[x+1,y+1,  z  ],
+					[x+1,y+1,  z+1],
+					[x,  y+1,  z+1]
+					], n111, 0, 0);
+			}
+		
+			ob = n110;		
+			if(ob != 0xff && Transparent[ob] && ob != n111)
+			{
+				appendv([
+					[x+1,y,  z],
+					[x+1,y+1,z],				
+					[x,  y+1,z],				
+					[x,  y,  z]
+					], n111, 1, 0);
+			}
+		
+		
+			ob = n112;
+			if(ob != 0xff && Transparent[ob] && ob != n111)
+			{
+				appendv([
+					[x,  y,  z+1],
+					[x,  y+1,z+1],
+					[x+1,y+1,z+1],
+					[x+1,y,  z+1]
+					], n111, 1, 0);
+			}
+		}
+	}
+	
+	
 	this.empty	= indices.length == 0;
 	this.tempty	= tindices.length == 0;
 
@@ -417,6 +494,9 @@ ChunkVB.prototype.gen_vb = function(gl)
 //Draws a chunk
 ChunkVB.prototype.draw = function(gl, chunk_shader, transp)
 {
+	if(this.pending)
+		return;
+
 	if(this.dirty)
 		this.gen_vb(gl);
 
@@ -476,6 +556,8 @@ function Chunk(x, y, z, data)
 	
 	//Set pending
 	this.pending = true;
+	
+	this.is_air = false;
 	
 	//Set position
 	this.x = x;
@@ -561,6 +643,8 @@ Chunk.prototype.set_block = function(x, y, z, b)
 	
 	if(pb == b)
 		return;
+		
+	this.is_air = false;
 
 	this.data[x + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)] = b;
 	this.vb.set_dirty();
@@ -664,7 +748,7 @@ Chunk.prototype.force_regen = function(gl)
 //Draws the chunk
 Chunk.prototype.draw = function(gl, chunk_shader, cam, transp)
 {
-	if(this.pending)
+	if(this.pending || this.is_air)
 		return;
 	if(!transp)
 	{
@@ -695,7 +779,7 @@ Chunk.prototype.draw = function(gl, chunk_shader, cam, transp)
 
 Chunk.prototype.draw_vis = function(gl, vis_shader, cam)
 {
-	if(this.vb.empty || !this.in_frustum(cam))
+	if(this.is_air || this.vb.empty || !this.in_frustum(cam))
 		return;
 
 	var c = Map.vis_base_chunk;
@@ -761,6 +845,12 @@ var Map =
 
 Map.init = function(gl)
 {
+	//Initialize empty chunk buffer
+	for(var i=0; i<CHUNK_SIZE; ++i)
+	{
+		ChunkVB.prototype.empty_data[i] = 0xff;
+	}
+
 	var res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs");
 	if(res[0] != "Ok")
 	{
@@ -1400,7 +1490,7 @@ Map.grab_chunks = function()
 			}
 			
 			//Update height field
-			Map.update_height(chunk);
+			//Map.update_height(chunk);
 			
 			//Update state flags
 			chunk.vb.set_dirty();
@@ -1411,28 +1501,39 @@ Map.grab_chunks = function()
 				chunk.set_block(block[0], block[1], block[2], block[3]);
 			}
 			delete chunk.pending_blocks;
+			
+			for(var k=0; k<CHUNK_SIZE; ++k)
+			{
+				if(chunk.data[k] != 0)
+				{
+					chunk.is_air = false;
+					break;
+				}
+			}
 
 			//Resize array
 			arr = arr.slice(res);
-			
-			//Regenerate vertex buffers for neighboring chunks
-			var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
-			if(c)	c.vb.set_dirty();
-			
-			c = Map.lookup_chunk(chunk.x+1, chunk.y, chunk.z);
-			if(c)	c.vb.set_dirty();
-			
-			c = Map.lookup_chunk(chunk.x, chunk.y-1, chunk.z);
-			if(c)	c.vb.set_dirty();
-			
-			c = Map.lookup_chunk(chunk.x, chunk.y+1, chunk.z);
-			if(c)	c.vb.set_dirty();
-			
-			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z-1);
-			if(c)	c.vb.set_dirty();
 
-			c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
-			if(c)	c.vb.set_dirty();
+			if(!chunk.is_air)
+			{
+				var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
+				if(c)	c.vb.set_dirty();
+			
+				c = Map.lookup_chunk(chunk.x+1, chunk.y, chunk.z);
+				if(c)	c.vb.set_dirty();
+			
+				c = Map.lookup_chunk(chunk.x, chunk.y-1, chunk.z);
+				if(c)	c.vb.set_dirty();
+
+				c = Map.lookup_chunk(chunk.x, chunk.y+1, chunk.z);
+				if(c)	c.vb.set_dirty();
+
+				c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z-1);
+				if(c)	c.vb.set_dirty();
+
+				c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
+				if(c)	c.vb.set_dirty();
+			}
 		}
 	}, 
 	function()
@@ -1502,7 +1603,7 @@ Map.set_block = function(x, y, z, b)
 		cz = (z >> CHUNK_Z_S);
 	var c = Map.lookup_chunk(cx, cy, cz);		
 	if(!c)
-		return;
+		return -1;
 		
 	//Need to update the height field	
 	var bx = (x & CHUNK_X_MASK), 
