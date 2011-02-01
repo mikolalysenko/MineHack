@@ -451,68 +451,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 					n002,  n012,  n022,
 					n012,/*n112,*/n122,
 					n022,  n122,  n222);
-			}			
-
-		
-		/*
-			ob = n211;
-			if(ob != 0xff && Transparent[ob] && ob != n111)
-			{
-				appendv([
-					[x+1,y,  z+1],
-					[x+1,y+1,z+1],
-					[x+1,y+1,z  ],
-					[x+1,y,  z  ]
-					], n111, 1, 1);
 			}
-		
-			ob = n101;
-			if(ob != 0xff && Transparent[ob] && ob != n111)
-			{
-				add_face(n111);
-			
-				appendv([
-					[x,  y,  z  ],
-					[x,  y,  z+1],
-					[x+1,y,  z+1],
-					[x+1,y,  z  ]
-					], n111, 2, 0);
-			}
-		
-			ob = n121;
-			if(ob != 0xff && Transparent[ob] && ob != n111)
-			{
-				appendv([
-					[x,  y+1,  z  ],
-					[x+1,y+1,  z  ],
-					[x+1,y+1,  z+1],
-					[x,  y+1,  z+1]
-					], n111, 0, 0);
-			}
-		
-			ob = n110;		
-			if(ob != 0xff && Transparent[ob] && ob != n111)
-			{
-				appendv([
-					[x+1,y,  z],
-					[x+1,y+1,z],				
-					[x,  y+1,z],				
-					[x,  y,  z]
-					], n111, 1, 0);
-			}
-		
-		
-			ob = n112;
-			if(ob != 0xff && Transparent[ob] && ob != n111)
-			{
-				appendv([
-					[x,  y,  z+1],
-					[x,  y+1,z+1],
-					[x+1,y+1,z+1],
-					[x+1,y,  z+1]
-					], n111, 1, 0);
-			}
-		*/
 		}
 	}
 	
@@ -882,7 +821,7 @@ var Map =
 	
 	max_chunks		: 80000,	//Maximum number of chunks to load (not used yet)
 	chunk_count 	: 0,		//Number of loaded chunks
-	chunk_radius	: 1,		//These chunks are always fetched.
+	chunk_radius	: 3,		//These chunks are always fetched.
 	
 	show_debug		: false,
 	
@@ -1361,7 +1300,6 @@ Map.update_cache = function()
 		Map.visibility_query(Game.gl);
 	}
 	*/
-	
 	
 	//If we are over the chunk count, remove old chunks
 	if(Map.chunk_count > Map.max_chunks)
