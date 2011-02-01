@@ -104,9 +104,9 @@ ChunkVB.prototype.empty_data = new Uint8Array(CHUNK_SIZE);
 // This code makes me want to barf - Mik
 ChunkVB.prototype.gen_vb = function(gl)
 {
-	var vertices = new Array(),
-		indices  = new Array(),
-		tindices = new Array(),
+	var vertices = [],
+		indices  = [],
+		tindices = [],
 		nv = 0, x, y, z, p = this.p,
 	
 	//var neighborhood = new Uint32Array(27); (too slow goddammit.  variant arrays even worse)
@@ -279,7 +279,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		else	
 		{
 			return Map.get_block(
-					((p.x + 1)<<CHUNK_X_S),
+					((p.x + 1)      <<CHUNK_X_S),
 					dy + (p.y<<CHUNK_Y_S),
 					dz + (p.z<<CHUNK_Z_S));
 		}
@@ -489,12 +489,13 @@ ChunkVB.prototype.gen_vb = function(gl)
 
 	if(this.empty && this.tempty)
 	{
+	/*
 		//Clean up temporary data
 		delete vertices;
 		delete indices;
 		delete tindices;
 		delete tex_coords;
-	
+	*/
 		return;
 	}
 
@@ -516,10 +517,12 @@ ChunkVB.prototype.gen_vb = function(gl)
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tindices), gl.DYNAMIC_DRAW);
 	
+	/*
 	//Clean up temporary data
 	delete vertices;
 	delete indices;
 	delete tindices;
+	*/
 }
 
 //Draws a chunk

@@ -484,12 +484,10 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	/*
 	if(!Map.wait_chunks && Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
-	*/
 	
 	//If we are over the chunk count, remove old chunks
 	if(Map.chunk_count > Map.max_chunks)
@@ -697,6 +695,7 @@ Map.grab_chunks = function()
 			}
 			delete chunk.pending_blocks;
 			
+			chunk.is_air = true;
 			for(var k=0; k<CHUNK_SIZE; ++k)
 			{
 				if(chunk.data[k] != 0)
@@ -758,8 +757,7 @@ Map.add_chunk = function(chunk)
 //Hash look up in map
 Map.lookup_chunk = function(x, y, z)
 {
-	var str = Map.index2str(x, y, z);
-	return Map.index[str];
+	return Map.index[x + ":" + y + ":" + z];
 }
 
 //Just removes the chunk from the list
