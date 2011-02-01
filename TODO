@@ -1,3 +1,22 @@
+
+
+Need to split up map.js
+
+	Need 3 separate modules
+	
+	1. Common data structures (shared between render and remote worker)
+		Code for maintaining a map database
+			
+	2. Render data structures
+		Code for rendering map
+		Determining visible chunks
+
+	3. Worker data structures
+		Worker tasks:
+			Fetch chunks from remote server
+			Generate vertex buffers
+			
+
 Lighting - How to do it?
 	Need to have a mixture of global/local illumination
 	Local stuff will be handled on client
