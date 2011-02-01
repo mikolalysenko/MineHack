@@ -128,29 +128,23 @@ ChunkVB.prototype.gen_vb = function(gl)
 	//Buffers
 		data 			= p.data,
 		left_buffer		= Map.lookup_chunk(p.x-1, p.y, p.z),
-		right_buffer	= Map.lookup_chunk(p.x+1, p.y, p.z);
-	
-	if(left_buffer)		left_buffer = left_buffer.data;
-	if(right_buffer)	right_buffer = right_buffer.data;
-	
-	//Turn off dirty flag
-	this.dirty = false;
-	
-	var ao_value = function(s1, s2, c)
+		right_buffer	= Map.lookup_chunk(p.x+1, p.y, p.z),
+		
+	//Calculates ambient occlusion value
+	ao_value = function(s1, s2, c)
 	{
 		s1 = !Transparent[s1];
 		s2 = !Transparent[s2];
 		c  = !Transparent[c];
-	
+
 		return 1.0 
 			- (s1 ? 0.25 : 0) 
 			- (s2 ? 0.25 : 0)
 			- (c ? 0.125 : 0)
 			+ (s1 && s2 && c ? 0.125 : 0);
-	}
+	},
 	
-
-	var appendv = function(
+	appendv = function(
 		ux, uy, uz,
 		vx, vy, vz,
 		nx, ny, nz,
@@ -161,7 +155,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		ao20, ao21, ao22)
 	{
 		var tc, tx, ty, dt, ox, oy, oz;
-		
+	
 		if(Transparent[block_id])
 		{
 			tindices.push(nv);
@@ -180,16 +174,16 @@ ChunkVB.prototype.gen_vb = function(gl)
 			indices.push(nv+2);
 			indices.push(nv+3);
 		}
-		
+	
 		tc = BlockTexCoords[block_id][dir];
 		tx = tc[1] / 16.0;
 		ty = tc[0] / 16.0;
 		dt = 1.0 / 16.0 - 1.0/256.0;
-	
-		ox = x + 0.5 * (nx - 1);
-		oy = y + 0.5 * (ny - 1);
-		oz = z + 0.5 * (nz - 1);
-	
+
+		ox = x - 0.5 + (nx > 0 ? 1 : 0);
+		oy = y - 0.5 + (ny > 0 ? 1 : 0);
+		oz = z - 0.5 + (nz > 0 ? 1 : 0);
+
 		vertices.push(ox);
 		vertices.push(oy);
 		vertices.push(oz);
@@ -198,7 +192,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		vertices.push(ty+dt);
 		vertices.push(ao_value(ao01, ao10, ao00));
 		vertices.push(0);
-		
+	
 		vertices.push(ox + ux);
 		vertices.push(oy + uy);
 		vertices.push(oz + uz);
@@ -225,11 +219,11 @@ ChunkVB.prototype.gen_vb = function(gl)
 		vertices.push(ty+dt);	
 		vertices.push(ao_value(ao10, ao21, ao20));
 		vertices.push(0);
-				
+			
 		nv += 4;
-	}
-	
-	var get_left_block = function(dy, dz)
+	},
+
+	get_left_block = function(dy, dz)
 	{
 		if( dy >= 0 && dy < CHUNK_Y && dz >= 0 && dz < CHUNK_Z )
 		{
@@ -244,9 +238,9 @@ ChunkVB.prototype.gen_vb = function(gl)
 					dz + (p.z<<CHUNK_Z_S));
 		}
 		return 0xff;
-	}
+	},
 	
-	var get_right_block = function(dy, dz)
+	get_right_block = function(dy, dz)
 	{
 		if( dy >= 0 && dy < CHUNK_Y && dz >= 0 && dz < CHUNK_Z )
 		{
@@ -261,10 +255,9 @@ ChunkVB.prototype.gen_vb = function(gl)
 					dz + (p.z<<CHUNK_Z_S));
 		}
 		return 0xff;
-	}
+	},
 	
-	
-	var get_buf = function(dy, dz)
+	get_buf = function(dy, dz)
 	{
 		if( dy >= 0 && dy < CHUNK_Y &&
 			dz >= 0 && dz < CHUNK_Z )
@@ -286,7 +279,15 @@ ChunkVB.prototype.gen_vb = function(gl)
 		}
 		
 		return null;
-	}
+	};
+	
+	
+	if(left_buffer)		left_buffer = left_buffer.data;
+	if(right_buffer)	right_buffer = right_buffer.data;
+	
+	//Turn off dirty flag
+	this.dirty = false;
+		
 		
 	for(z=0; z<CHUNK_Z; ++z)
 	for(y=0; y<CHUNK_Y; ++y)
@@ -389,6 +390,69 @@ ChunkVB.prototype.gen_vb = function(gl)
 					n010,/*n011,*/n012,
 					n020,  n021,  n022);
 			}
+			
+			if(n211 != 0xff && Transparent[n211] && n211 != n111)
+			{
+				appendv( 
+					 0,  0,  1,
+					 0,  1,  0,
+					 1,  0,  0,
+					n111, 1,
+					n200,  n201,  n202,
+					n210,/*n211,*/n212,
+					n220,  n221,  n222);
+			}
+			
+			if(n101 != 0xff && Transparent[n101] && n101 != n111)
+			{
+				appendv( 
+					 0,  0,  1,
+					 1,  0,  0,
+					 0, -1,  0,
+					n111, 2,
+					n000,  n100,  n200,
+					n001,/*n101,*/n201,
+					n002,  n102,  n202);
+			}
+			
+			
+			if(n121 != 0xff && Transparent[n121] && n121 != n111)
+			{
+				appendv( 
+					 1,  0,  0,
+					 0,  0,  1,
+					 0, 1,  0,
+					n111, 0,
+					n020,  n120,  n220,
+					n021,/*n121,*/n221,
+					n022,  n122,  n222);
+			}
+			
+
+			if(n110 != 0xff && Transparent[n110] && n110 != n111)
+			{
+				appendv( 
+					 1,  0,  0,
+					 0, 1,  0,
+					 0,  0, -1,
+					n111, 1,
+					n000,  n010,  n020,
+					n010,/*n110,*/n120,
+					n020,  n120,  n220);
+			}
+
+			if(n112 != 0xff && Transparent[n112] && n112 != n111)
+			{
+				appendv( 
+					 0, 1,  0,
+					 1,  0,  0,
+					 0,  0, 1,
+					n111, 1,
+					n002,  n012,  n022,
+					n012,/*n112,*/n122,
+					n022,  n122,  n222);
+			}			
+
 		
 		/*
 			ob = n211;
@@ -1291,10 +1355,13 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
+	/*
 	if(!Map.wait_chunks && Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
+	*/
+	
 	
 	//If we are over the chunk count, remove old chunks
 	if(Map.chunk_count > Map.max_chunks)
