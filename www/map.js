@@ -136,12 +136,13 @@ ChunkVB.prototype.gen_vb = function(gl)
 		s1 = !Transparent[s1];
 		s2 = !Transparent[s2];
 		c  = !Transparent[c];
-
-		return 1.0 
-			- (s1 ? 0.25 : 0) 
-			- (s2 ? 0.25 : 0)
-			- (c ? 0.125 : 0)
-			+ (s1 && s2 && c ? 0.125 : 0);
+		
+		if(s1 && s2)
+		{
+			return 0.25;
+		}
+		
+		return 1.0 - 0.25 * (s1 + s2 + c);
 	},
 	
 	appendv = function(
@@ -154,32 +155,60 @@ ChunkVB.prototype.gen_vb = function(gl)
 		ao10, /*ao11,*/ ao12,
 		ao20, ao21, ao22)
 	{
-		var tc, tx, ty, dt, ox, oy, oz;
+		var tc, tx, ty, dt,
+			ox, oy, oz,
+			orient = nx * (uy * vz - uz * vy) +
+					 ny * (uz * vx - ux * vz) +
+					 nz * (ux * vy - uy * vx);
 	
 		if(Transparent[block_id])
 		{
-			tindices.push(nv);
-			tindices.push(nv+1);
-			tindices.push(nv+2);
-			tindices.push(nv);
-			tindices.push(nv+2);
-			tindices.push(nv+3);
+			if(orient < 0)
+			{
+				tindices.push(nv);
+				tindices.push(nv+1);
+				tindices.push(nv+2);
+				tindices.push(nv);
+				tindices.push(nv+2);
+				tindices.push(nv+3);
+			}
+			else
+			{
+				tindices.push(nv);
+				tindices.push(nv+2);
+				tindices.push(nv+1);
+				tindices.push(nv);
+				tindices.push(nv+3);
+				tindices.push(nv+2);				
+			}
 		}
 		else
 		{
-			indices.push(nv);
-			indices.push(nv+1);
-			indices.push(nv+2);
-			indices.push(nv);
-			indices.push(nv+2);
-			indices.push(nv+3);
+			if(orient < 0)
+			{
+				indices.push(nv);
+				indices.push(nv+1);
+				indices.push(nv+2);
+				indices.push(nv);
+				indices.push(nv+2);
+				indices.push(nv+3);
+			}
+			else
+			{
+				indices.push(nv);
+				indices.push(nv+2);
+				indices.push(nv+1);
+				indices.push(nv);
+				indices.push(nv+3);
+				indices.push(nv+2);			
+			}
 		}
 	
 		tc = BlockTexCoords[block_id][dir];
 		tx = tc[1] / 16.0;
 		ty = tc[0] / 16.0;
 		dt = 1.0 / 16.0 - 1.0/256.0;
-
+		
 		ox = x - 0.5 + (nx > 0 ? 1 : 0);
 		oy = y - 0.5 + (ny > 0 ? 1 : 0);
 		oz = z - 0.5 + (nz > 0 ? 1 : 0);
@@ -216,7 +245,7 @@ ChunkVB.prototype.gen_vb = function(gl)
 		vertices.push(oz + vz);
 		vertices.push(1);
 		vertices.push(tx+dt);
-		vertices.push(ty+dt);	
+		vertices.push(ty+dt);
 		vertices.push(ao_value(ao10, ao21, ao20));
 		vertices.push(0);
 			
@@ -386,21 +415,21 @@ ChunkVB.prototype.gen_vb = function(gl)
 					 0,  0,  1,
 					-1,  0,  0,
 					n111, 1,
-					n000,  n001,  n002,
-					n010,/*n011,*/n012,
-					n020,  n021,  n022);
+					n000,  n010,  n020,
+					n001,/*n011,*/n021,
+					n002,  n012,  n022);
 			}
 			
 			if(n211 != 0xff && Transparent[n211] && n211 != n111)
 			{
 				appendv( 
-					 0,  0,  1,
 					 0,  1,  0,
+					 0,  0,  1,
 					 1,  0,  0,
 					n111, 1,
-					n200,  n201,  n202,
-					n210,/*n211,*/n212,
-					n220,  n221,  n222);
+					n200,  n210,  n220,
+					n201,/*n211,*/n221,
+					n202,  n212,  n222);
 			}
 			
 			if(n101 != 0xff && Transparent[n101] && n101 != n111)
@@ -410,35 +439,35 @@ ChunkVB.prototype.gen_vb = function(gl)
 					 1,  0,  0,
 					 0, -1,  0,
 					n111, 2,
-					n000,  n100,  n200,
-					n001,/*n101,*/n201,
-					n002,  n102,  n202);
+					n000,  n001,  n002,
+					n100,/*n101,*/n102,
+					n200,  n201,  n202);
 			}
 			
 			
 			if(n121 != 0xff && Transparent[n121] && n121 != n111)
 			{
 				appendv( 
-					 1,  0,  0,
 					 0,  0,  1,
-					 0, 1,  0,
+ 					 1,  0,  0,
+					 0,  1,  0,
 					n111, 0,
-					n020,  n120,  n220,
-					n021,/*n121,*/n221,
-					n022,  n122,  n222);
+					n020,  n021,  n022,
+					n120,/*n121,*/n122,
+					n220,  n221,  n222);
 			}
 			
 
 			if(n110 != 0xff && Transparent[n110] && n110 != n111)
 			{
 				appendv( 
-					 1,  0,  0,
 					 0, 1,  0,
+					 1,  0,  0,
 					 0,  0, -1,
 					n111, 1,
 					n000,  n010,  n020,
-					n010,/*n110,*/n120,
-					n020,  n120,  n220);
+					n100,/*n110,*/n120,
+					n200,  n210,  n220);
 			}
 
 			if(n112 != 0xff && Transparent[n112] && n112 != n111)
@@ -449,8 +478,8 @@ ChunkVB.prototype.gen_vb = function(gl)
 					 0,  0, 1,
 					n111, 1,
 					n002,  n012,  n022,
-					n012,/*n112,*/n122,
-					n022,  n122,  n222);
+					n102,/*n112,*/n122,
+					n202,  n212,  n222);
 			}
 		}
 	}
