@@ -59,12 +59,11 @@ function Chunk(x, y, z)
 }
 
 //Returns true of the chunk is in the frustum
-Chunk.prototype.in_frustum = function(m)
+Chunk.prototype.in_frustum = function(m, c)
 {
-	var c = Player.chunk();
-	var vx = (this.x-c[0])*CHUNK_X,
-		vy = (this.y-c[1])*CHUNK_Y,
-		vz = (this.z-c[2])*CHUNK_Z,
+	var vx = (this.x-c[0])<<CHUNK_X_S,
+		vy = (this.y-c[1])<<CHUNK_Y_S,
+		vz = (this.z-c[2])<<CHUNK_Z_S,
 		qx, qy, qz, in_p = 0, w, x, y, z;
 	
 	
@@ -116,7 +115,7 @@ var Map =
 	chunk_radius	: 3,		//These chunks are always fetched.
 	
 	//If set, then we draw the debug info for the chunk
-	show_debug		: false, 
+	show_debug		: true, 
 	
 	//Visibility stuff
 	vis_width		: 64,

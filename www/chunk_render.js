@@ -1,26 +1,27 @@
 
 //Draws a chunk
-Chunk.prototype.draw = function(gl, cam, shader, transp)
+Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 {
-	//TODO: Check if we have a vertex buffer
-	if(this.pending || !this.in_frustum(cam))
+	if(	this.pending || 
+		(transp && this.num_transparent_elements == 0) ||
+		(!transp && this.num_elements == 0) ||
+		!this.in_frustum(cam, base_chunk) )
 		return;
 		
-	var c = Player.chunk();
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
-								(this.x-c[0])*CHUNK_X, 
-								(this.y-c[1])*CHUNK_Y, 
-								(this.z-c[2])*CHUNK_Z, 1]);
+								(this.x-base_chunk[0])<<CHUNK_X_S, 
+								(this.y-base_chunk[1])<<CHUNK_Y_S, 
+								(this.z-base_chunk[2])<<CHUNK_Z_S, 1]);
 	
 	gl.uniformMatrix4fv(shader.view_mat, false, pos);
 	
 	//Bind buffers
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
-	if(shader.pos_attr)
+	if('pos_attr' in shader)
 		gl.vertexAttribPointer(shader.pos_attr,	4, gl.FLOAT, false, 32, 0);	
-	if(shader.tc_attr)
+	if('tc_attr' in shader)
 		gl.vertexAttribPointer(shader.tc_attr, 	4, gl.FLOAT, false, 32, 16);
 
 	if(transp)
@@ -384,7 +385,7 @@ Map.visibility_query = function()
 //  camera - the current camera matrix
 Map.draw = function(gl, camera)
 {
-	var c, chunk;
+	var c, chunk, base_chunk = Player.chunk();
 	gl.useProgram(Map.chunk_shader);
 		
 	//Enable attributes
@@ -404,7 +405,7 @@ Map.draw = function(gl, camera)
 	{
 		chunk = Map.index[c];
 		if(chunk instanceof Chunk)
-			chunk.draw(gl, Map.chunk_shader, camera, false);
+			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
 	}
 
 	//Draw transparent chunks
@@ -415,7 +416,7 @@ Map.draw = function(gl, camera)
 	{
 		chunk = Map.index[c];
 		if(chunk instanceof Chunk)
-			chunk.draw(gl, Map.chunk_shader, camera, true);
+			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
 	}
 	gl.depthMask(1);
 	
@@ -513,10 +514,10 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	var chunk = Map.lookup_chunk(x, y, z),
 		gl = Game.gl;
 	
+	//Check if chunk vertex buffer is pending
 	if(chunk.pending)
 	{
 		chunk.pending = false;
-	
 		chunk.vb	= gl.createBuffer();
 		chunk.ib	= gl.createBuffer();
 		chunk.tib	= gl.createBuffer();
@@ -527,11 +528,11 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 
 	//Set buffer data
 	gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
-	gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ind, gl.DYNAMIC_DRAW);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ind), gl.DYNAMIC_DRAW);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, tind, gl.DYNAMIC_DRAW);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tind), gl.DYNAMIC_DRAW);
 }
 
 //Updates the chunk data
@@ -547,7 +548,7 @@ Map.init_worker = function()
 	Map.vb_worker = new Worker('chunk_worker.js');
 	
 	//Set event handlers
-	Map.vb_worker.addEventListener('message', function(ev)
+	Map.vb_worker.onmessage = function(ev)
 	{
 		switch(ev.data.type)
 		{
@@ -564,8 +565,12 @@ Map.init_worker = function()
 					ev.data.x, ev.data.y, ev.data.z, 
 					ev.data.data);
 			break;
+			
+			case EV_PRINT:
+				console.log(ev.data.str);				
+			break;
 		}
-	}, false);
+	};
 
 	//Start the worker	
 	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });

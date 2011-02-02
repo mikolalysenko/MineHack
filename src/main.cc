@@ -879,9 +879,13 @@ void server_loop()
 //Server initialization
 void init_app()
 {
+	cout << "Initializing login database" << endl;
 	init_login();
+	
+	cout << "Initializing session manager" << endl;
 	init_sessions();
 	
+	cout << "Creating world instance" << endl;
 	game_instance = new World();
 }
 
@@ -897,13 +901,19 @@ void shutdown_app()
 //Program start point
 int main(int argc, char** argv)
 {
+	cout << "Starting program" << endl;
+
 	assert(sizeof(long long int) == sizeof(int64_t));
 	
 	srand(time(NULL));
 
+
+	cout << "Initializing application" << endl;
 	init_app();
+	cout << "App initialized" << endl;
 	
 	//Start web server
+	cout << "Starting server" << endl;
 	mg_context *context = mg_start(&event_handler, options);
 	assert(context != NULL);
 	cout << "Server started" << endl;
@@ -912,10 +922,13 @@ int main(int argc, char** argv)
 	server_loop();
 	
 	//Stop web server
+	cout << "Stopping server" << endl;
 	mg_stop(context);
 	cout << "Server stopped" << endl;
 	
+	cout << "Stopping application" << endl;
 	shutdown_app();
+	cout << "Application stopped" << endl;
 
 	return 0;
 }

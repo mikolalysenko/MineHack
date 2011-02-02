@@ -163,7 +163,7 @@ Game.draw = function()
 	gl.enable(gl.CULL_FACE);
 
 	//Draw map
-	//Map.draw(gl, cam);
+	Map.draw(gl, cam);
 	
 	//Draw entities
 	EntityDB.draw(gl, cam);
@@ -228,7 +228,7 @@ Game.tick = function()
 	Player.tick();
 
 	//Update cache
-	//Map.update_cache();
+	Map.update_cache();
 	
 	//Redraw
 	Game.draw();

@@ -2,13 +2,15 @@
 importScripts(
 	'constants.js', 
 	'misc.js', 
-	'chunk_data.js');
+	'chunk_common.js');
 
 var net_pending_chunks = [],				 //Chunks we are waiting for on the network
-	vb_pending_chunks = {},					 //Chunks which are waiting for a vertex buffer update
+	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	empty_data = new Uint8Array(CHUNK_SIZE), //Allocate an empty buffer for unloaded chunks
-	session_key;
+	session_id = new Uint8Array(8),		 	 //Session ID key
+	vb_interval = null,						 //Interval timer for vertex buffer generation
+	fetch_interval = null;					 //Interval timer for chunk fetch events
 	
 	
 
@@ -396,58 +398,6 @@ function gen_vb(p)
 	return [vertices, indices, tindices];
 }
 
-//Marks a chunk as dirty
-function set_dirty(x, y, z)
-{
-	var chunk = Map.lookup_chunk(x, y, z);
-	if(chunk)
-	{
-		vb_pending_chunks[x+":"+y+":"+z] = chunk;
-	}
-}
-
-
-//Generates all vertex buffers
-function generate_vbs()
-{
-	var c, chunk, vbs;
-	for(c in vb_pending_chunks)
-	{
-		chunk = vb_pending_chunks[c];
-		if(chunk instanceof Chunk)
-		{
-			send_vb(chunk.x, chunk.y, chunk.z, gen_vb(chunk));
-		}
-	}
-	vb_pending_chunks = {};
-}
-
-//Sets a block
-function set_block(x, y, z, b)
-{
-	var cx = (x >> CHUNK_X_S), 
-		cy = (y >> CHUNK_Y_S), 
-		cz = (z >> CHUNK_Z_S),
-		bx = (x & CHUNK_X_MASK), 
-		by = (y & CHUNK_Y_MASK), 
-		bz = (z & CHUNK_Z_MASK),
-		c = Map.lookup_chunk(cx, cy, cz);		
-	if(!c)
-		return -1;
-		
-	//Set dirty flag
-	set_dirty(cx, cy, cz);
-	
-	if(c.pending)
-	{
-		c.pending_blocks.push([bx,by,bz,b]);
-	}
-	else
-	{
-		c.set_block(bx, by, bz, b);
-	}
-}
-
 //Decodes a run-length encoded chunk
 function decompress_chunk(arr, data)
 {
@@ -489,62 +439,68 @@ function decompress_chunk(arr, data)
 //Retrieves chunks from the network
 function grab_chunks()
 {
-	if(net_pending_chunks.length == 0)
+	if(wait_chunks || net_pending_chunks.length == 0)
 		return;
-
-	var chunks = net_pending_chunks;
+	
+	var i, j, k = 0,
+		chunks = net_pending_chunks,
+		base_chunk = chunks[0], 
+		base_chunk_id = [base_chunk.x, base_chunk.y, base_chunk.z];
+		bb = new BlobBuilder(),
+		arr = new Uint8Array(12),
+		delta = new Uint8Array(3);	
+		
+	print("Grabbing chunks");
+		
+	wait_chunks = true;
 	net_pending_chunks = [];
 	
-	var base_chunk = net_pending_chunks[0]
-	
-	var bb = new BlobBuilder();
-	bb.append(session_id.buffer);
 
-	var arr = new Uint8Array(12);
-	var k = 0;	
-	for(var i=0; i<3; ++i)
+	bb.append(session_id.buffer);
+	
+	for(i=0; i<3; ++i)
 	{
-		arr[k++] = (base_chunk[i])			& 0xff;
-		arr[k++] = (base_chunk[i] >> 8)		& 0xff;
-		arr[k++] = (base_chunk[i] >> 16)	& 0xff;
-		arr[k++] = (base_chunk[i] >> 24)	& 0xff;
+		arr[k++] = (base_chunk_id[i])		& 0xff;
+		arr[k++] = (base_chunk_id[i] >> 8)	& 0xff;
+		arr[k++] = (base_chunk_id[i] >> 16)	& 0xff;
+		arr[k++] = (base_chunk_id[i] >> 24)	& 0xff;
 		
 	}
 	bb.append(arr.buffer);
 	
-	
 	//Encode chunk offsets
 	for(i=0; i<chunks.length; ++i)
 	{
-		var delta = new Uint8Array(3);
 		
-		delta[0] = chunks[i].x - pchunk[0];
-		delta[1] = chunks[i].y - pchunk[1];
-		delta[2] = chunks[i].z - pchunk[2];
+		delta[0] = chunks[i].x - base_chunk.x;
+		delta[1] = chunks[i].y - base_chunk.y;
+		delta[2] = chunks[i].z - base_chunk.z;
 		
 		bb.append(delta.buffer);
 	}
 	
-	
-	//Genereate XML Http Request
-	
-	var XHR = new XMLHttpRequest(
-
 	asyncGetBinary("g", 
 	function(arr)
 	{
-		Map.wait_chunks = false;
+		var i, j, chunk, block, res;
+		
+		print("Got response: " + arr.length);
+	
+		wait_chunks = false;
 		arr = arr.slice(1);
 	
-		for(var i=0; i<chunks.length; i++)
+		for(i=0; i<chunks.length; i++)
 		{
-			var chunk = chunks[i], res = -1, flags;
+			chunk = chunks[i];
 			
-			if(arr.length >= 1)
-			{
-				flags = arr[0];	
+			print("Decompressing chunk: " + chunk.x + "," + chunk.y + "," + chunk.z);
+			
+			//Decompress chunk
+			res = -1;			
+			if(arr.length > 0)
 				res = decompress_chunk(arr, chunk.data);
-			}
+				
+			print("Res = " + res);
 			
 			//EOF, clear out remaining chunks
 			if(res < 0)
@@ -555,23 +511,13 @@ function grab_chunks()
 			
 			//Handle any pending writes
 			chunk.pending = false;
-			for(var j=0; j<chunk.pending_blocks.length; ++j)
+			for(j=0; j<chunk.pending_blocks.length; ++j)
 			{
-				var block = chunk.pending_blocks[j];
+				block = chunk.pending_blocks[j];
 				chunk.set_block(block[0], block[1], block[2], block[3]);
 			}
 			delete chunk.pending_blocks;
 			
-			chunk.is_air = true;
-			for(var k=0; k<CHUNK_SIZE; ++k)
-			{
-				if(chunk.data[k] != 0)
-				{
-					chunk.is_air = false;
-					break;
-				}
-			}
-
 			//Resize array
 			arr = arr.slice(res);
 
@@ -583,42 +529,122 @@ function grab_chunks()
 			set_dirty(chunk.x, chunk.y+1, chunk.z);
 			set_dirty(chunk.x, chunk.y, chunk.z-1);
 			set_dirty(chunk.x, chunk.y, chunk.z+1);
+			
+			//Send result to main thread
+			send_chunk(chunk);
 		}
 	}, 
 	function()
 	{
 		net_pending_chunks = net_pending_chunks.concat(chunks);
 	},
-	bb.getBlob("application/octet-stream"));
+	bb.getBlob("application/octet-stream") );
 }
 
 //Fetches a chunk
 function fetch_chunk(x, y, z)
 {
 	var str = x + ":" + y + ":" + z, chunk;
+	print("fetching chunk: " + str);
 	if(str in Map.index)
 		return;
 		
 	//Create temporary chunk
 	chunk = new Chunk(x, y, z);
 	chunk.pending = true;
+	chunk.dirty = false;
 	chunk.pending_blocks = [];
 	
 	//Add to index
 	Map.index[str] = chunk;
-	Map.net_pending_chunks.push(chunk);
+	net_pending_chunks.push(chunk);
+}
+
+
+//Marks a chunk as dirty
+function set_dirty(x, y, z)
+{
+	var chunk = Map.lookup_chunk(x, y, z);
+	
+	if(chunk && !chunk.dirty)
+	{
+		chunk.dirty = true;
+		vb_pending_chunks.push(chunk);
+	}
+}
+
+
+//Generates all vertex buffers
+function generate_vbs()
+{
+	var i, chunk, vbs;
+	for(i=0; i<vb_pending_chunks.length; ++i)
+	{
+	
+		chunk = vb_pending_chunks[i];
+		print("generating vb: " + chunk.x + "," + chunk.y + "," + chunk.z);
+		send_vb(chunk.x, chunk.y, chunk.z, gen_vb(chunk));
+		chunk.dirty = false;
+	}
+	vb_pending_chunks = [];
+}
+
+//Sets a block
+function set_block(x, y, z, b)
+{
+	print("setting block: " + x + "," + y + "," + z + " <- " + b);
+
+	var cx = (x >> CHUNK_X_S), 
+		cy = (y >> CHUNK_Y_S), 
+		cz = (z >> CHUNK_Z_S),
+		bx = (x & CHUNK_X_MASK), 
+		by = (y & CHUNK_Y_MASK), 
+		bz = (z & CHUNK_Z_MASK),
+		c = Map.lookup_chunk(cx, cy, cz);		
+	if(!c)
+		return -1;
+		
+		
+	if(c.pending)
+	{
+		c.pending_blocks.push([bx,by,bz,b]);
+	}
+	else
+	{
+		c.set_block(bx, by, bz, b);
+		
+		//FIXME: Check if we actually need to check the dirty flag
+		set_dirty(cx, cy, cz);
+	}
 }
 
 //Starts the worker
 function worker_start(key)
 {
-	session_id = key;
+	print("starting worker");
+
+	session_id.set(key);
+	
+	print("key = " 
+		+ session_id[0] + "," 
+		+ session_id[1] + "," 
+		+ session_id[2] + "," 
+		+ session_id[3] + "," 
+		+ session_id[4] + "," 
+		+ session_id[5] + "," 
+		+ session_id[6] + "," 
+		+ session_id[7]);
+	
+	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
+	fetch_interval = setInterval(grab_chunks, FETCH_RATE);
 }
 
 
 //Handles a block update
-self.addEventListener('message', function(ev)
+onmessage = function(ev)
 {
+	print("got event: " + ev.data + "," + ev.data.type);
+
 	switch(ev.data.type)
 	{
 		case EV_START:
@@ -634,7 +660,7 @@ self.addEventListener('message', function(ev)
 		break;
 	}
 
-}, false);
+};
 
 //Sends an updated set of vertex buffers to the client
 function send_vb(x, y, z, vbs)
@@ -642,17 +668,29 @@ function send_vb(x, y, z, vbs)
 	postMessage({ 
 		type: EV_VB_UPDATE, 
 		'x': x, 'y': y, 'z': z, 
-		verts: new Float32Array(vbs[0]),
-		ind: new Uint16Array(vbs[1]),
-		tind: new Uint16Array(vbs[2])});
+		verts: vbs[0],
+		ind: vbs[1],
+		tind: vbs[2]});
 }
 
 //Sends a new chunk to the client
 function send_chunk(chunk)
 {
+	//Convert data to an array (bleh)
+	var tmp_data = new Array(CHUNK_SIZE), i;
+	for(i=0; i<CHUNK_SIZE; ++i)
+		tmp_data[i] = chunk.data[i];
+
 	postMessage({
 		type: EV_CHUNK_UPDATE,
-		x:chunk.x, y:chunk.y, z:chunk.z
-		data:chunk.data });
+		x:chunk.x, y:chunk.y, z:chunk.z,
+		data: tmp_data });
+}
+
+function print(str)
+{
+	postMessage({
+		type: EV_PRINT,
+		'str': str});
 }
 

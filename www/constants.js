@@ -54,12 +54,13 @@ const TARGET_HAS_ITEM		= (1<<7);
 
 const DIG_RADIUS			= 5;
 
-const VB_GEN_RATE		 	= 1.0;
-const NET_UPDATE_RATE		= 1.0;
+const VB_GEN_RATE		 	= 100;
+const FETCH_RATE			= 100;
 
 const EV_START				= 0;
 const EV_SET_BLOCK			= 1;
 const EV_FETCH_CHUNK		= 2;
 const EV_VB_UPDATE			= 3;
 const EV_CHUNK_UPDATE		= 4;
+const EV_PRINT				= 5;
 
