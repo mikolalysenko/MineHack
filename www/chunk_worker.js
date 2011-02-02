@@ -20,7 +20,10 @@ var net_pending_chunks = [],				 //Chunks we are waiting for on the network
 function gen_vb(p)
 {
 	if(p.is_air)
-		return [ [], [], [] ];
+	{
+		print("THIS SHOULD NOT HAPPEN");
+		return [[], [], []];
+	}
 
 	var vertices = [],
 		indices  = [],
@@ -602,7 +605,15 @@ function set_dirty(x, y, z, priority)
 	
 	if(chunk)
 	{
-		if(priority)
+		if(chunk.pending)
+		{
+			return;
+		}
+		else if(chunk.is_air)
+		{
+			send_vb(chunk.x, chunk.y, chunk.z, [[], [], []]);
+		}
+		else if(priority)
 		{
 			if(chunk.dirty)
 			{
@@ -651,6 +662,7 @@ function set_block(x, y, z, b)
 		bx = (x & CHUNK_X_MASK), 
 		by = (y & CHUNK_Y_MASK), 
 		bz = (z & CHUNK_Z_MASK),
+		flags, i, j, k, idx,
 		c = Map.lookup_chunk(cx, cy, cz);		
 	if(!c)
 		return -1;
@@ -662,11 +674,29 @@ function set_block(x, y, z, b)
 	}
 	else
 	{
+		idx = bx + (by<<CHUNK_X_S) + (bz<<CHUNK_XY_S);
+		if(c.data[idx] == b)
+			return;
+
+		c.data[idx] = b;
 		c.is_air = false;
 		c.set_block(bx, by, bz, b);
 		
-		//FIXME: Check if we actually need to check the dirty flag
 		set_dirty(cx, cy, cz, true);
+		
+		flags = [ [ bx==0, true, bx==(CHUNK_X-1)],
+				  [ by==0, true, by==(CHUNK_Y-1)],
+				  [ bz==0, true, bz==(CHUNK_Z-1)] ];
+				  
+		for(i=0; i<3; ++i)
+		for(j=0; j<3; ++j)
+		for(k=0; k<3; ++k)
+		{
+			if(flags[0][i] && flags[1][j] && flags[2][k])
+			{
+				set_dirty(cx + i-1, cy + j-1, cz + k-1, true);
+			}
+		}
 	}
 }
 
