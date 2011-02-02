@@ -4,7 +4,7 @@ importScripts(
 	'misc.js', 
 	'chunk_data.js');
 
-var net_pending_chunks = {},				 //Chunks we are waiting for on the network
+var net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = {},					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	empty_data = new Uint8Array(CHUNK_SIZE), //Allocate an empty buffer for unloaded chunks
@@ -12,22 +12,6 @@ var net_pending_chunks = {},				 //Chunks we are waiting for on the network
 	
 	
 
-//Sets a block in the map to the given type
-Map.set_block = function(x, y, z, b)
-{
-	var cx = (x >> CHUNK_X_S), 
-		cy = (y >> CHUNK_Y_S), 
-		cz = (z >> CHUNK_Z_S);
-	var c = Map.lookup_chunk(cx, cy, cz);		
-	if(!c)
-		return -1;
-		
-	//Need to update the height field	
-	var bx = (x & CHUNK_X_MASK), 
-		by = (y & CHUNK_Y_MASK), 
-		bz = (z & CHUNK_Z_MASK);
-	return c.set_block(bx, by, bz, b);
-}
 
 //Construct vertex buffer for this chunk
 // This code makes me want to barf - Mik
@@ -441,6 +425,27 @@ function generate_vbs()
 //Sets a block
 function set_block(x, y, z, b)
 {
+	var cx = (x >> CHUNK_X_S), 
+		cy = (y >> CHUNK_Y_S), 
+		cz = (z >> CHUNK_Z_S),
+		bx = (x & CHUNK_X_MASK), 
+		by = (y & CHUNK_Y_MASK), 
+		bz = (z & CHUNK_Z_MASK),
+		c = Map.lookup_chunk(cx, cy, cz);		
+	if(!c)
+		return -1;
+		
+	//Set dirty flag
+	set_dirty(cx, cy, cz);
+	
+	if(c.pending)
+	{
+		c.pending_blocks.push([bx,by,bz,b]);
+	}
+	else
+	{
+		c.set_block(bx, by, bz, b);
+	}
 }
 
 //Decodes a run-length encoded chunk
@@ -590,6 +595,18 @@ function grab_chunks()
 //Fetches a chunk
 function fetch_chunk(x, y, z)
 {
+	var str = x + ":" + y + ":" + z, chunk;
+	if(str in Map.index)
+		return;
+		
+	//Create temporary chunk
+	chunk = new Chunk(x, y, z);
+	chunk.pending = true;
+	chunk.pending_blocks = [];
+	
+	//Add to index
+	Map.index[str] = chunk;
+	Map.net_pending_chunks.push(chunk);
 }
 
 //Starts the worker
@@ -624,7 +641,7 @@ function send_vb(x, y, z, vbs)
 {
 	postMessage({ 
 		type: EV_VB_UPDATE, 
-		x: x, y: y, z: z, 
+		'x': x, 'y': y, 'z': z, 
 		verts: new Float32Array(vbs[0]),
 		ind: new Uint16Array(vbs[1]),
 		tind: new Uint16Array(vbs[2])});
@@ -635,6 +652,7 @@ function send_chunk(chunk)
 {
 	postMessage({
 		type: EV_CHUNK_UPDATE,
-		chunk: chunk });
+		x:chunk.x, y:chunk.y, z:chunk.z
+		data:chunk.data });
 }
 

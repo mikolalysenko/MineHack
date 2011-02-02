@@ -253,6 +253,8 @@ Map.init = function(gl)
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, debug_ind, gl.STATIC_DRAW);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     
+	//Start worker
+	Map.init_worker();
 	
 	return "Ok";
 }
@@ -508,37 +510,41 @@ Map.set_block = function(x, y, z, b)
 //Updates the vertex buffer for a chunk
 Map.update_vb = function(x, y, z, verts, ind, tind)
 {
-	var chunk = Map.lookup_chunk(x, y, z);
+	var chunk = Map.lookup_chunk(x, y, z),
+		gl = Game.gl;
 	
-	if(!chunk)
-	{
-		alert("Updating vertex buffer for unloaded chunk?");
-		return;
-	}
-
 	if(chunk.pending)
 	{
 		chunk.pending = false;
 	
-		//Create buffers
-	}
-	else
-	{
-		//Update in place
+		chunk.vb	= gl.createBuffer();
+		chunk.ib	= gl.createBuffer();
+		chunk.tib	= gl.createBuffer();
 	}
 
+	chunk.num_elements = ind.length;
+	chunk.num_transparanet_elements = tind.length;
+
+	//Set buffer data
+	gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
+	gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ind, gl.DYNAMIC_DRAW);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, tind, gl.DYNAMIC_DRAW);
 }
 
 //Updates the chunk data
 Map.update_chunk = function(x, y, z, data)
 {
+	var chunk = Map.lookup_chunk(x, y, z);
+	chunk.data.set(data);
 }
 
 //Initialize the web worker
 Map.init_worker = function()
 {
 	Map.vb_worker = new Worker('chunk_worker.js');
-
 	
 	//Set event handlers
 	Map.vb_worker.addEventListener('message', function(ev)
@@ -564,3 +570,4 @@ Map.init_worker = function()
 	//Start the worker	
 	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
 }
+

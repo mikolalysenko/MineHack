@@ -54,6 +54,8 @@ function Chunk(x, y, z)
 	this.x = x;
 	this.y = y;
 	this.z = z;
+	
+	this.pending = true;
 }
 
 //Returns true of the chunk is in the frustum
