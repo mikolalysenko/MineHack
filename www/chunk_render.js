@@ -344,7 +344,7 @@ Map.visibility_query = function()
 			else
 			{
 				Map.vis_just_drew_box = false;
-				c.draw_vis(gl, Map.vis_shader, Map.vis_camera);
+				c.draw(gl, Map.vis_camera, Map.vis_base_chunk, Map.vis_shader, false);
 			}
 		}
 
@@ -464,7 +464,7 @@ Map.update_cache = function()
 	}
 	
 	/*
-	if(!Map.wait_chunks && Game.local_ticks % 2 == 1)
+	if(Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
@@ -524,7 +524,7 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	}
 
 	chunk.num_elements = ind.length;
-	chunk.num_transparanet_elements = tind.length;
+	chunk.num_transparent_elements = tind.length;
 
 	//Set buffer data
 	gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	

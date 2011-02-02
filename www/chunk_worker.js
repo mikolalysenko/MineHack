@@ -505,6 +505,7 @@ function grab_chunks()
 			//EOF, clear out remaining chunks
 			if(res < 0)
 			{
+				print("WARNING: FAILED TO DECODE CHUNK");
 				Map.pending_chunks = chunks.slice(i).concat(Map.pending_chunks);
 				return;
 			}
@@ -536,7 +537,9 @@ function grab_chunks()
 	}, 
 	function()
 	{
+		print("ERROR IN XMLHTTPREQUEST!  COULD NOT GET CHUNKS!");
 		net_pending_chunks = net_pending_chunks.concat(chunks);
+		wait_chunks = false;
 	},
 	bb.getBlob("application/octet-stream") );
 }
