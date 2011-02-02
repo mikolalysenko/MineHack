@@ -1,12 +1,36 @@
+function print(str)
+{
+	if(typeof(console) == 'undefined')
+	{
+		postMessage({type:EV_PRINT, 'str':str});
+	}
+	else
+	{
+		//console.log(str);
+	}
+}
+
+
 asyncGetBinary = function(url, handler, err_handler, body)
 {
-	var XHR = new XMLHttpRequest();
+	var XHR = new XMLHttpRequest(),
+		timer = setTimeout(function()
+		{
+			if(XHR.readyState != 4)
+			{
+				XHR.abort();
+				err_handler();
+			}
+		}, 5000);
+	
 	XHR.open("POST", url, true);
 	XHR.onreadystatechange = function()
 	{
+		print("XHR State changed: " + XHR.readyState);
+	
 		if(XHR.readyState == 4)
 		{
-			if(XHR.status == 200 || XHR.status == 304)
+			if(XHR.status == 200)
 			{
 				var str = XHR.responseText;
 				var arr = new Uint8Array(str.length);
@@ -20,11 +44,15 @@ asyncGetBinary = function(url, handler, err_handler, body)
 			}
 			else
 			{
-				handler(new Uint8Array(0));
+				err_handler();
 			}
 		}
 	}
+	
+	print("Sending XHR");
 	XHR.send(body);
+	
+	print("XHR sent: " + XHR.readyState);
 }
 
 arr2str = function(arr)

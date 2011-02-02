@@ -9,7 +9,7 @@ var Player =
 	entity : null,
 
 	//Units / tick walk speed
-	speed : 0.1,
+	speed : 0.4,
 
 	//Default keycodes (these can be reconfigured)
 	keys : {

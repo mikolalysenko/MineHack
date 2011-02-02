@@ -455,7 +455,6 @@ function grab_chunks()
 	wait_chunks = true;
 	net_pending_chunks = [];
 	
-
 	bb.append(session_id.buffer);
 	
 	for(i=0; i<3; ++i)
@@ -478,6 +477,8 @@ function grab_chunks()
 		
 		bb.append(delta.buffer);
 	}
+	
+	print("Executing XHR");
 	
 	asyncGetBinary("g", 
 	function(arr)
@@ -548,7 +549,7 @@ function grab_chunks()
 function fetch_chunk(x, y, z)
 {
 	var str = x + ":" + y + ":" + z, chunk;
-	print("fetching chunk: " + str);
+	print("fetching chunk: " + str + ", waiting = " + wait_chunks);
 	if(str in Map.index)
 		return;
 		
@@ -688,12 +689,5 @@ function send_chunk(chunk)
 		type: EV_CHUNK_UPDATE,
 		x:chunk.x, y:chunk.y, z:chunk.z,
 		data: tmp_data });
-}
-
-function print(str)
-{
-	postMessage({
-		type: EV_PRINT,
-		'str': str});
 }
 

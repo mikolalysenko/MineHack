@@ -687,6 +687,7 @@ void World::tick_players()
 		{
 			World* world = (World*)data;
 			
+			/*
 			//Check for timed out players
 			if(world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
 			{
@@ -695,6 +696,7 @@ void World::tick_players()
 				world->mailbox->del_player(entity.entity_id);
 				return EntityUpdateControl::Update;
 			}
+			*/
 			
 		
 			//Update network state
