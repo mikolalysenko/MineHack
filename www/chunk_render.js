@@ -339,7 +339,8 @@ Map.visibility_query = function()
 				Map.vis_base_chunk[1] + cy, 
 				Map.vis_base_chunk[2] + cz);
 	
-			if(!c || c.pending)
+			if(!c || c.pending || 
+				(c.num_elements == 0 && !Transparent[c.data[0]]) )
 			{
 				Map.draw_box(gl, cx, cy, cz);
 				Map.vis_just_drew_box = true;
