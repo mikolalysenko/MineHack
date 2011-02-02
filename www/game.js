@@ -1,5 +1,3 @@
-"use strict";
-
 Game = 
 {
 	crashed : false,
@@ -173,11 +171,9 @@ Game.draw = function()
 
 Game.shutdown = function()
 {
-	if(Game.running)
-	{
-		Game.running = false;
-		clearInterval(Game.interval);
-	}
+	Game.running = false;
+	clearInterval(Game.interval);
+	Map.shutdown();
 }
 
 //Polls the server for events
@@ -188,7 +184,7 @@ Game.heartbeat = function()
 	//Sends a binary message to the server
 	asyncGetBinary("/h?k="+Session.session_id, 
 		UpdateHandler.handle_update_packet, 
-		function() { alert("error"); },
+		function() { alert("heartbeat failed"); },
 		InputHandler.serialize());
 }
 

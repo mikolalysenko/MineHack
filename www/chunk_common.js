@@ -58,12 +58,11 @@ function Chunk(x, y, z)
 	this.pending = true;
 }
 
-//Returns true of the chunk is in the frustum
-Chunk.prototype.in_frustum = function(m, c)
+function frustum_test(m, cx, cy, cz)
 {
-	var vx = (this.x-c[0])<<CHUNK_X_S,
-		vy = (this.y-c[1])<<CHUNK_Y_S,
-		vz = (this.z-c[2])<<CHUNK_Z_S,
+	var vx = (cx)*CHUNK_X,
+		vy = (cy)*CHUNK_Y,
+		vz = (cz)*CHUNK_Z,
 		qx, qy, qz, in_p = 0, w, x, y, z;
 	
 	
@@ -97,6 +96,7 @@ Chunk.prototype.in_frustum = function(m, c)
 	}
 
 	return false;
+
 }
 
 //Sets the block type and updates vertex buffers as needed
@@ -115,23 +115,21 @@ var Map =
 	chunk_radius	: 3,		//These chunks are always fetched.
 	
 	//If set, then we draw the debug info for the chunk
-	show_debug		: true, 
+	show_debug		: false,
 	
 	//Visibility stuff
 	vis_width		: 64,
 	vis_height		: 64,
 	vis_fov			: Math.PI * 3.0 / 4.0,
 	vis_state		: 0,	
-	vis_bounds		: [ [1, 3],
+	vis_bounds		: [ [1, 1],
+						[2, 2],
+						[3, 3],
 						[4, 4],
 						[5, 5],
 						[6, 6],
 						[7, 7],
-						[8, 8],
-						[9, 9],
-						[10, 10],
-						[11, 11],
-						[12, 12] ]
+						[8, 8] ]
 	
 };
 

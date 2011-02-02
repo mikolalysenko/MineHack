@@ -19,6 +19,9 @@ var net_pending_chunks = [],				 //Chunks we are waiting for on the network
 // This code makes me want to barf - Mik
 function gen_vb(p)
 {
+	if(p.is_air)
+		return [ [], [], [] ];
+
 	var vertices = [],
 		indices  = [],
 		tindices = [],
@@ -494,20 +497,23 @@ function grab_chunks()
 		{
 			chunk = chunks[i];
 			
-			print("Decompressing chunk: " + chunk.x + "," + chunk.y + "," + chunk.z);
+			//print("Decompressing chunk: " + chunk.x + "," + chunk.y + "," + chunk.z);
 			
 			//Decompress chunk
 			res = -1;			
 			if(arr.length > 0)
 				res = decompress_chunk(arr, chunk.data);
 				
-			print("Res = " + res);
+			//print("Res = " + res);
 			
 			//EOF, clear out remaining chunks
 			if(res < 0)
 			{
 				print("WARNING: FAILED TO DECODE CHUNK");
-				Map.pending_chunks = chunks.slice(i).concat(Map.pending_chunks);
+				for(j=i; j<chunks.length; ++j)
+				{
+					forget_chunk(chunks[j]);
+				}
 				return;
 			}
 			
@@ -519,6 +525,17 @@ function grab_chunks()
 				chunk.set_block(block[0], block[1], block[2], block[3]);
 			}
 			delete chunk.pending_blocks;
+			
+			//Check if chunk is air
+			chunk.is_air = true;
+			for(j=0; j<CHUNK_SIZE; ++j)
+			{
+				if(chunk.data[j] != 0)
+				{
+					chunk.is_air = false;
+					break;
+				}
+			}
 			
 			//Resize array
 			arr = arr.slice(res);
@@ -535,11 +552,19 @@ function grab_chunks()
 			//Send result to main thread
 			send_chunk(chunk);
 		}
+		
+		print("Response done");
 	}, 
 	function()
 	{
+		var i;
+		
 		print("ERROR IN XMLHTTPREQUEST!  COULD NOT GET CHUNKS!");
-		net_pending_chunks = net_pending_chunks.concat(chunks);
+		for(i=0; i<chunks.length; ++i)
+		{
+			forget_chunk(chunks[i]);
+		}
+
 		wait_chunks = false;
 	},
 	bb.getBlob("application/octet-stream") );
@@ -549,7 +574,7 @@ function grab_chunks()
 function fetch_chunk(x, y, z)
 {
 	var str = x + ":" + y + ":" + z, chunk;
-	print("fetching chunk: " + str + ", waiting = " + wait_chunks);
+	//print("fetching chunk: " + str + ", waiting = " + wait_chunks);
 	if(str in Map.index)
 		return;
 		
@@ -562,18 +587,38 @@ function fetch_chunk(x, y, z)
 	//Add to index
 	Map.index[str] = chunk;
 	net_pending_chunks.push(chunk);
+	
+	if(net_pending_chunks.length >= MAX_PENDING_CHUNKS)
+	{
+		wait_chunks = false;
+	}
 }
 
 
 //Marks a chunk as dirty
-function set_dirty(x, y, z)
+function set_dirty(x, y, z, priority)
 {
-	var chunk = Map.lookup_chunk(x, y, z);
+	var chunk = Map.lookup_chunk(x, y, z), i;
 	
-	if(chunk && !chunk.dirty)
+	if(chunk)
 	{
-		chunk.dirty = true;
-		vb_pending_chunks.push(chunk);
+		if(priority)
+		{
+			if(chunk.dirty)
+			{
+				//Find chunk in list of pending chunks and move to front
+			}
+			else
+			{
+				chunk.dirty = true;
+				vb_pending_chunks.unshift(chunk);
+			}
+		}
+		else if(!chunk.dirty)
+		{
+			chunk.dirty = true;
+			vb_pending_chunks.push(chunk);
+		}
 	}
 }
 
@@ -581,16 +626,18 @@ function set_dirty(x, y, z)
 //Generates all vertex buffers
 function generate_vbs()
 {
+	print("Generating vbs");
+
 	var i, chunk, vbs;
-	for(i=0; i<vb_pending_chunks.length; ++i)
+	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
 	{
 	
 		chunk = vb_pending_chunks[i];
-		print("generating vb: " + chunk.x + "," + chunk.y + "," + chunk.z);
+		//print("generating vb: " + chunk.x + "," + chunk.y + "," + chunk.z);
 		send_vb(chunk.x, chunk.y, chunk.z, gen_vb(chunk));
 		chunk.dirty = false;
 	}
-	vb_pending_chunks = [];
+	vb_pending_chunks = vb_pending_chunks.slice(i);
 }
 
 //Sets a block
@@ -615,17 +662,18 @@ function set_block(x, y, z, b)
 	}
 	else
 	{
+		c.is_air = false;
 		c.set_block(bx, by, bz, b);
 		
 		//FIXME: Check if we actually need to check the dirty flag
-		set_dirty(cx, cy, cz);
+		set_dirty(cx, cy, cz, true);
 	}
 }
 
 //Starts the worker
 function worker_start(key)
 {
-	print("starting worker");
+	//print("starting worker");
 
 	session_id.set(key);
 	
@@ -647,7 +695,7 @@ function worker_start(key)
 //Handles a block update
 onmessage = function(ev)
 {
-	print("got event: " + ev.data + "," + ev.data.type);
+	//print("got event: " + ev.data + "," + ev.data.type);
 
 	switch(ev.data.type)
 	{
@@ -689,5 +737,22 @@ function send_chunk(chunk)
 		type: EV_CHUNK_UPDATE,
 		x:chunk.x, y:chunk.y, z:chunk.z,
 		data: tmp_data });
+}
+
+//Removes a chunk from the database
+function forget_chunk(chunk)
+{
+	var str = chunk.x + ":" + chunk.y + ":" + chunk.z;
+	if(str in Map.index)
+	{
+		print("Forgetting chunk: " + str);
+	
+		delete Map.index[str];
+	
+		postMessage({
+			type: EV_FORGET_CHUNK,
+			idx: str});
+			return;
+	}	
 }
 

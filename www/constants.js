@@ -63,4 +63,8 @@ const EV_FETCH_CHUNK		= 2;
 const EV_VB_UPDATE			= 3;
 const EV_CHUNK_UPDATE		= 4;
 const EV_PRINT				= 5;
+const EV_FORGET_CHUNK		= 6;
+
+const MAX_PENDING_CHUNKS	= 25;
+const MAX_VB_UPDATES		= 10;
 

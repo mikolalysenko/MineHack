@@ -26,10 +26,10 @@ asyncGetBinary = function(url, handler, err_handler, body)
 	XHR.open("POST", url, true);
 	XHR.onreadystatechange = function()
 	{
-		print("XHR State changed: " + XHR.readyState);
-	
 		if(XHR.readyState == 4)
 		{
+			clearTimeout(timer);
+		
 			if(XHR.status == 200)
 			{
 				var str = XHR.responseText;
@@ -48,11 +48,7 @@ asyncGetBinary = function(url, handler, err_handler, body)
 			}
 		}
 	}
-	
-	print("Sending XHR");
 	XHR.send(body);
-	
-	print("XHR sent: " + XHR.readyState);
 }
 
 arr2str = function(arr)

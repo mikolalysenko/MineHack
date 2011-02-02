@@ -516,9 +516,7 @@ void do_get_chunk(HttpEvent& ev)
 	
 	if(!ajax_send_binary(ev.conn, G.ptr, buf_len))
 	{
-		cout << "Send failed, killing connection" << endl;
-		game_instance->player_leave(session.player_id);
-		delete_session(session_id);
+		cout << "Send failed" << endl;
 	}
 }
 

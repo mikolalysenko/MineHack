@@ -5,7 +5,7 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 	if(	this.pending || 
 		(transp && this.num_transparent_elements == 0) ||
 		(!transp && this.num_elements == 0) ||
-		!this.in_frustum(cam, base_chunk) )
+		!frustum_test(cam, this.x - base_chunk[0], this.y - base_chunk[1], this.z - base_chunk[2]) )
 		return;
 		
 	var pos = new Float32Array([1, 0, 0, 0,
@@ -40,6 +40,9 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 //Used for visibility testing
 Map.draw_box = function(gl, cx, cy, cz)
 {
+	if(!frustum_test(Map.vis_camera, cx, cy, cz))
+		return;
+
 	var pos = new Float32Array([1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
@@ -343,6 +346,11 @@ Map.visibility_query = function()
 			}
 			else
 			{
+				if(!Map.vis_just_drew_box)
+				{
+					gl.uniform4f(Map.vis_shader.chunk_id, 1, 1, 1, 1);
+				}
+			
 				Map.vis_just_drew_box = false;
 				c.draw(gl, Map.vis_camera, Map.vis_base_chunk, Map.vis_shader, false);
 			}
@@ -463,12 +471,10 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
-	/*
 	if(Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
-	*/
 	
 	//TODO: Purge old chunks
 }
@@ -542,6 +548,20 @@ Map.update_chunk = function(x, y, z, data)
 	chunk.data.set(data);
 }
 
+//Kills off a chunk
+Map.forget_chunk = function(str)
+{
+	var chunk = Map.index[str], gl = Game.gl;
+	if(chunk)
+	{
+		if(chunk.vb)	gl.deleteBuffer(chunk.vb);
+		if(chunk.ib)	gl.deleteBuffer(chunk.ib);
+		if(chunk.tib)	gl.deleteBuffer(chunk.tib);
+	
+		delete Map.index[str];
+	}
+}
+
 //Initialize the web worker
 Map.init_worker = function()
 {
@@ -569,6 +589,10 @@ Map.init_worker = function()
 			case EV_PRINT:
 				console.log(ev.data.str);				
 			break;
+			
+			case EV_FORGET_CHUNK:
+				Map.forget_chunk(ev.data.idx);
+			break;
 		}
 	};
 
@@ -576,3 +600,8 @@ Map.init_worker = function()
 	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
 }
 
+
+Map.shutdown = function()
+{
+	Map.vb_worker.close();
+}
