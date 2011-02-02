@@ -1,13 +1,33 @@
 //The chunk worker thread
+importScripts(
+	'constants.js', 
+	'misc.js', 
+	'chunk_data.js');
 
-importScripts('constants.js', 'misc.js', 'chunk_data.js');
-
-var net_pending_chunks = {},	//Chunks we are waiting for on the network
-	vb_pending_chunks = {},		//Chunks which are waiting for a vertex buffer update
-	output_vbs = {},			//Resulting vertex buffers
-	recieved_chunks = {},		//Recieved chunks
+var net_pending_chunks = {},				 //Chunks we are waiting for on the network
+	vb_pending_chunks = {},					 //Chunks which are waiting for a vertex buffer update
+	wait_chunks = false,					 //If set, we are waiting for more chunks
 	empty_data = new Uint8Array(CHUNK_SIZE), //Allocate an empty buffer for unloaded chunks
 	session_key;
+	
+	
+
+//Sets a block in the map to the given type
+Map.set_block = function(x, y, z, b)
+{
+	var cx = (x >> CHUNK_X_S), 
+		cy = (y >> CHUNK_Y_S), 
+		cz = (z >> CHUNK_Z_S);
+	var c = Map.lookup_chunk(cx, cy, cz);		
+	if(!c)
+		return -1;
+		
+	//Need to update the height field	
+	var bx = (x & CHUNK_X_MASK), 
+		by = (y & CHUNK_Y_MASK), 
+		bz = (z & CHUNK_Z_MASK);
+	return c.set_block(bx, by, bz, b);
+}
 
 //Construct vertex buffer for this chunk
 // This code makes me want to barf - Mik
@@ -392,16 +412,36 @@ function gen_vb(p)
 	return [vertices, indices, tindices];
 }
 
+//Marks a chunk as dirty
+function set_dirty(x, y, z)
+{
+	var chunk = Map.lookup_chunk(x, y, z);
+	if(chunk)
+	{
+		vb_pending_chunks[x+":"+y+":"+z] = chunk;
+	}
+}
+
+
 //Generates all vertex buffers
 function generate_vbs()
 {
+	var c, chunk, vbs;
+	for(c in vb_pending_chunks)
+	{
+		chunk = vb_pending_chunks[c];
+		if(chunk instanceof Chunk)
+		{
+			send_vb(chunk.x, chunk.y, chunk.z, gen_vb(chunk));
+		}
+	}
+	vb_pending_chunks = {};
 }
 
-//Handles an update block event
-function update_block(x, y, z, b)
+//Sets a block
+function set_block(x, y, z, b)
 {
 }
-
 
 //Decodes a run-length encoded chunk
 function decompress_chunk(arr, data)
@@ -498,9 +538,8 @@ function grab_chunks()
 			if(arr.length >= 1)
 			{
 				flags = arr[0];	
-				res = Map.decompress_chunk(arr, chunk.data);
+				res = decompress_chunk(arr, chunk.data);
 			}
-			
 			
 			//EOF, clear out remaining chunks
 			if(res < 0)
@@ -509,11 +548,7 @@ function grab_chunks()
 				return;
 			}
 			
-			//Update height field
-			//Map.update_height(chunk);
-			
-			//Update state flags
-			chunk.vb.set_dirty();
+			//Handle any pending writes
 			chunk.pending = false;
 			for(var j=0; j<chunk.pending_blocks.length; ++j)
 			{
@@ -535,54 +570,71 @@ function grab_chunks()
 			//Resize array
 			arr = arr.slice(res);
 
-			if(!chunk.is_air)
-			{
-				var c = Map.lookup_chunk(chunk.x-1, chunk.y, chunk.z);
-				if(c)	c.vb.set_dirty();
-			
-				c = Map.lookup_chunk(chunk.x+1, chunk.y, chunk.z);
-				if(c)	c.vb.set_dirty();
-			
-				c = Map.lookup_chunk(chunk.x, chunk.y-1, chunk.z);
-				if(c)	c.vb.set_dirty();
-
-				c = Map.lookup_chunk(chunk.x, chunk.y+1, chunk.z);
-				if(c)	c.vb.set_dirty();
-
-				c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z-1);
-				if(c)	c.vb.set_dirty();
-
-				c = Map.lookup_chunk(chunk.x, chunk.y, chunk.z+1);
-				if(c)	c.vb.set_dirty();
-			}
+			//Set dirty flags on neighboring chunks
+			set_dirty(chunk.x, chunk.y, chunk.z);
+			set_dirty(chunk.x-1, chunk.y, chunk.z);
+			set_dirty(chunk.x+1, chunk.y, chunk.z);
+			set_dirty(chunk.x, chunk.y-1, chunk.z);
+			set_dirty(chunk.x, chunk.y+1, chunk.z);
+			set_dirty(chunk.x, chunk.y, chunk.z-1);
+			set_dirty(chunk.x, chunk.y, chunk.z+1);
 		}
 	}, 
 	function()
 	{
-		for(var j=0; j<chunks.length; j++)
-		{
-			Map.remove_chunk(chunks[j]);
-		}
+		net_pending_chunks = net_pending_chunks.concat(chunks);
 	},
 	bb.getBlob("application/octet-stream"));
 }
 
-
-
-//Called when recieving an event
-onmessage = function(event)
-{
-	dump(event.data);
-}
-
-//Handles updates that are passed to the worker
-function worker_update()
+//Fetches a chunk
+function fetch_chunk(x, y, z)
 {
 }
 
-//Starts the worker thread
-function worker_start()
+//Starts the worker
+function worker_start(key)
 {
+	session_id = key;
 }
 
+
+//Handles a block update
+self.addEventListener('message', function(ev)
+{
+	switch(ev.data.type)
+	{
+		case EV_START:
+			worker_start(ev.data.key);
+		break;
+		
+		case EV_SET_BLOCK:
+			set_block(ev.data.x, ev.data.y, ev.data.z, ev.data.b);
+		break;
+		
+		case EV_FETCH_CHUNK:
+			fetch_chunk(ev.data.x, ev.data.y, ev.data.z);
+		break;
+	}
+
+}, false);
+
+//Sends an updated set of vertex buffers to the client
+function send_vb(x, y, z, vbs)
+{
+	postMessage({ 
+		type: EV_VB_UPDATE, 
+		x: x, y: y, z: z, 
+		verts: new Float32Array(vbs[0]),
+		ind: new Uint16Array(vbs[1]),
+		tind: new Uint16Array(vbs[2])});
+}
+
+//Sends a new chunk to the client
+function send_chunk(chunk)
+{
+	postMessage({
+		type: EV_CHUNK_UPDATE,
+		chunk: chunk });
+}
 

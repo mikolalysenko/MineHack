@@ -1,23 +1,10 @@
 
 //Draws a chunk
-Chunk.prototype.draw = function(gl, cam, chunk_shader, transp)
+Chunk.prototype.draw = function(gl, cam, shader, transp)
 {
-	//Check if we have a vertex buffer
-	if(this.pending || this.is_air)
+	//TODO: Check if we have a vertex buffer
+	if(this.pending || !this.in_frustum(cam))
 		return;
-	if(!transp)
-	{
-		if(this.vb.empty)
-			return;
-	}
-	else if(this.vb.tempty)
-	{
-		return;
-	}
-	else if(!this.in_frustum(cam))
-	{
-		return;
-	}
 		
 	var c = Player.chunk();
 	var pos = new Float32Array([1, 0, 0, 0,
@@ -27,14 +14,14 @@ Chunk.prototype.draw = function(gl, cam, chunk_shader, transp)
 								(this.y-c[1])*CHUNK_Y, 
 								(this.z-c[2])*CHUNK_Z, 1]);
 	
-	gl.uniformMatrix4fv(chunk_shader.view_mat, false, pos);
+	gl.uniformMatrix4fv(shader.view_mat, false, pos);
 	
-	this.vb.draw(gl, chunk_shader, transp);
-
-
+	//Bind buffers
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
-	gl.vertexAttribPointer(chunk_shader.pos_attr,	4, gl.FLOAT, false, 32, 0);
-	gl.vertexAttribPointer(chunk_shader.tc_attr, 	4, gl.FLOAT, false, 32, 16);
+	if(shader.pos_attr)
+		gl.vertexAttribPointer(shader.pos_attr,	4, gl.FLOAT, false, 32, 0);	
+	if(shader.tc_attr)
+		gl.vertexAttribPointer(shader.tc_attr, 	4, gl.FLOAT, false, 32, 16);
 
 	if(transp)
 	{
@@ -48,53 +35,48 @@ Chunk.prototype.draw = function(gl, cam, chunk_shader, transp)
 	}
 }
 
+
+//Used for visibility testing
+Map.draw_box = function(gl, cx, cy, cz)
+{
+	var pos = new Float32Array([1, 0, 0, 0,
+								0, 1, 0, 0,
+								0, 0, 1, 0,
+								(cx+0.5)*CHUNK_X, 
+								(cy+0.5)*CHUNK_Y, 
+								(cz+0.5)*CHUNK_Z, 1]);
+	
+	//Set uniform
+	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
+	gl.uniform4f(Map.vis_shader.chunk_id, (cx&0xff)/255.0, (cy&0xff)/255.0, (cz&0xff)/255.0, 1.0);
+	
+	//FIXME: Do a frustum test here maybe?
+	
+	//Draw the cube
+	if(!Map.just_drew_box)
+	{
+		gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
+		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
+	}
+	gl.drawElements(gl.TRIANGLES, Map.box_elements, gl.UNSIGNED_SHORT, 0);
+}
+
+
+//Initialize the map
 Map.init = function(gl)
 {
-
-	terrain_tex		: null,
-	
-	max_chunks		: 80000,	//Maximum number of chunks to load (not used yet)
-	chunk_count 	: 0,		//Number of loaded chunks
-	chunk_radius	: 3,		//These chunks are always fetched.
-	
-	show_debug		: false,
-	
-	vis_width		: 64,
-	vis_height		: 64,
-	vis_fov			: Math.PI * 3.0 / 4.0,
-	vis_state		: 0,	
-	vis_bounds		: [ [1, 3],
-						[4, 4],
-						[5, 5],
-						[6, 6],
-						[7, 7],
-						[8, 8],
-						[9, 9],
-						[10, 10],
-						[11, 11],
-						[12, 12] ],
-				
-	pending_chunks	: [],	//Chunks waiting to be fetched						
-	wait_chunks		: false	//Chunks are waiting
-
-	//Initialize empty chunk buffer
-	for(var i=0; i<CHUNK_SIZE; ++i)
-	{
-		ChunkVB.prototype.empty_data[i] = 0xff;
-	}
-
+	//Initialize chunk shader
 	var res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs");
 	if(res[0] != "Ok")
 	{
 		return res[1];
 	}
 	
-	//Read in return variables
 	Map.chunk_fs 	 = res[1];
 	Map.chunk_vs 	 = res[2];
 	Map.chunk_shader = res[3];
 	
-	//Get attributes
 	Map.chunk_shader.pos_attr = gl.getAttribLocation(Map.chunk_shader, "pos");
 	if(Map.chunk_shader.pos_attr == null)
 		return "Could not locate position attribute";
@@ -115,7 +97,7 @@ Map.init = function(gl)
 	if(Map.chunk_shader.tex_samp == null)
 		return "Could not locate sampler uniform";
 		
-	//Create texture
+	//Create terrain texture
 	res = getTexture(gl, "img/terrain.png");
 	if(res[0] != "Ok")
 	{
@@ -123,7 +105,7 @@ Map.init = function(gl)
 	}
 	Map.terrain_tex = res[1];
 	
-	//Create visibility prog
+	//Initialize visibility shader
 	res = getProgram(gl, "shaders/vis.fs", "shaders/vis.vs");
 	if(res[0] != "Ok")
 	{
@@ -134,7 +116,6 @@ Map.init = function(gl)
 	Map.vis_vs = res[2];
 	Map.vis_shader = res[3];
 	
-	//Get attributes
 	Map.vis_shader.pos_attr = gl.getAttribLocation(Map.vis_shader, "pos");
 	if(Map.vis_shader.pos_attr == null)
 		return "Could not locate position attribute";
@@ -150,7 +131,6 @@ Map.init = function(gl)
 	Map.vis_shader.chunk_id = gl.getUniformLocation(Map.vis_shader, "chunk_id");
 	if(Map.vis_shader.chunk_id == null)
 		return "Could not locate chunk_id uniform";
-	
 	
 	//Create chunk visibility frame buffer
 	Map.vis_tex = gl.createTexture();
@@ -177,7 +157,6 @@ Map.init = function(gl)
 		return "Could not create visibility frame buffer";
 	}
 	
-	//Clear out FBO
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	gl.clearColor(0, 0, 0, 1);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -228,12 +207,10 @@ Map.init = function(gl)
 		return res[1];
 	}
 	
-	//Read in return variables
 	Map.simple_fs 	 = res[1];
 	Map.simple_vs 	 = res[2];
 	Map.simple_shader = res[3];
 	
-	//Get attributes
 	Map.simple_shader.pos_attr = gl.getAttribLocation(Map.simple_shader, "pos");
 	if(Map.simple_shader.pos_attr == null)
 		return "Could not locate position attribute";
@@ -246,7 +223,7 @@ Map.init = function(gl)
 	if(Map.simple_shader.tex_samp == null)
 		return "Could not locate sampler uniform";
 		
-	
+	//Create debug buffers
 	var debug_verts = new Float32Array([
 		0, 0, 0,
 		0, 1, 0,
@@ -280,33 +257,11 @@ Map.init = function(gl)
 	return "Ok";
 }
 
-//Used for visibility testing
-Map.draw_box = function(gl, cx, cy, cz)
+//Does a pass of the visibility query
+Map.visibility_query = function()
 {
-	var pos = new Float32Array([1, 0, 0, 0,
-								0, 1, 0, 0,
-								0, 0, 1, 0,
-								(cx+0.5)*CHUNK_X, 
-								(cy+0.5)*CHUNK_Y, 
-								(cz+0.5)*CHUNK_Z, 1]);
+	var gl = Game.gl;
 	
-	//Set uniform
-	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
-	gl.uniform4f(Map.vis_shader.chunk_id, (cx&0xff)/255.0, (cy&0xff)/255.0, (cz&0xff)/255.0, 1.0);
-	
-	//Draw the cube
-	if(!Map.just_drew_box)
-	{
-		gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
-		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
-	}
-	gl.drawElements(gl.TRIANGLES, Map.box_elements, gl.UNSIGNED_SHORT, 0);
-}
-
-
-Map.visibility_query = function(gl, camera)
-{
 	if(Map.vis_state == Map.vis_bounds.length+2)
 	{
 		//Process data to find visible chunks
@@ -442,37 +397,37 @@ Map.draw = function(gl, camera)
 	gl.bindTexture(gl.TEXTURE_2D, Map.terrain_tex);
 	gl.uniform1i(Map.chunk_shader.tex_samp, 0);
 	
-	//Draw all the chunks
+	//Draw regular chunks
 	for(c in Map.index)
 	{
-		var chunk = Map.index[c];
+		chunk = Map.index[c];
 		if(chunk instanceof Chunk)
 			chunk.draw(gl, Map.chunk_shader, camera, false);
 	}
 
+	//Draw transparent chunks
 	gl.enable(gl.BLEND);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.depthMask(0);
 	for(c in Map.index)
 	{
-		var chunk = Map.index[c];
+		chunk = Map.index[c];
 		if(chunk instanceof Chunk)
 			chunk.draw(gl, Map.chunk_shader, camera, true);
 	}
 	gl.depthMask(1);
 	
+	//Optional: draw debug information for visibility query
 	if(Map.show_debug)
 	{
 		gl.disable(gl.BLEND);
 		gl.disable(gl.DEPTH_TEST);
 		gl.enable(gl.TEXTURE_2D);
 		
-		//Enable attributes
 		gl.useProgram(Map.simple_shader);
 		gl.enableVertexAttribArray(Map.simple_shader.pos_attr);
 		gl.enableVertexAttribArray(Map.simple_shader.tc_attr);
 
-		//Set texture index
 		gl.activeTexture(gl.TEXTURE0);
 		gl.bindTexture(gl.TEXTURE_2D, Map.vis_tex);
 		gl.generateMipmap(gl.TEXTURE_2D);
@@ -495,6 +450,8 @@ Map.update_cache = function()
 {
 	//Need to grab all the chunks in the viewable cube around the player
 	var c = Player.chunk();
+
+	//TODO: Post an update event to the chunk worker
 	
 	for(var i=c[0] - Map.chunk_radius; i<=c[0] + Map.chunk_radius; i++)
 	for(var j=c[1] - Map.chunk_radius; j<=c[1] + Map.chunk_radius; j++)
@@ -503,19 +460,14 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
+	/*
 	if(!Map.wait_chunks && Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
+	*/
 	
-	//If we are over the chunk count, remove old chunks
-	if(Map.chunk_count > Map.max_chunks)
-	{
-		//TODO: Purge old chunks
-	}
-
-	//Grab all pending chunks
-	Map.grab_chunks();	
+	//TODO: Purge old chunks
 }
 
 
@@ -526,13 +478,89 @@ Map.fetch_chunk = function(x, y, z)
 	if(Map.lookup_chunk(x,y,z))
 		return;
 
-	Map.wait_chunks = true;
-
-	//Add new chunk, though leave it empty
-	var chunk = new Chunk(x, y, z, new Uint8Array(CHUNK_SIZE));
-	Map.add_chunk(chunk);
-	Map.pending_chunks.push(chunk);
+	var chunk = Map.add_chunk(x, y, z);
+	chunk.pending = true;
+	
+	Map.vb_worker.postMessage({type: EV_FETCH_CHUNK,
+		'x':x, 'y':y, 'z':z});
 }
 
+//Sets a block in the map to the given type
+Map.set_block = function(x, y, z, b)
+{
+	var cx = (x >> CHUNK_X_S), 
+		cy = (y >> CHUNK_Y_S), 
+		cz = (z >> CHUNK_Z_S);
+	var c = Map.lookup_chunk(cx, cy, cz);		
+	if(!c)
+		return -1;
+		
+	//Post message to worker
+	Map.vb_worker.postMessage({type: EV_SET_BLOCK,
+		'x':x, 'y':y, 'z':z, 'b':b});
+		
+	var bx = (x & CHUNK_X_MASK), 
+		by = (y & CHUNK_Y_MASK), 
+		bz = (z & CHUNK_Z_MASK);
+	return c.set_block(bx, by, bz, b);
+}
 
+//Updates the vertex buffer for a chunk
+Map.update_vb = function(x, y, z, verts, ind, tind)
+{
+	var chunk = Map.lookup_chunk(x, y, z);
+	
+	if(!chunk)
+	{
+		alert("Updating vertex buffer for unloaded chunk?");
+		return;
+	}
 
+	if(chunk.pending)
+	{
+		chunk.pending = false;
+	
+		//Create buffers
+	}
+	else
+	{
+		//Update in place
+	}
+
+}
+
+//Updates the chunk data
+Map.update_chunk = function(x, y, z, data)
+{
+}
+
+//Initialize the web worker
+Map.init_worker = function()
+{
+	Map.vb_worker = new Worker('chunk_worker.js');
+
+	
+	//Set event handlers
+	Map.vb_worker.addEventListener('message', function(ev)
+	{
+		switch(ev.data.type)
+		{
+			case EV_VB_UPDATE:
+				Map.update_vb(
+					ev.data.x, ev.data.y, ev.data.z, 
+					ev.data.verts, 
+					ev.data.ind, 
+					ev.data.tind);
+			break;
+			
+			case EV_CHUNK_UPDATE:
+				Map.update_chunk(
+					ev.data.x, ev.data.y, ev.data.z, 
+					ev.data.data);
+			break;
+		}
+	}, false);
+
+	//Start the worker	
+	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
+}

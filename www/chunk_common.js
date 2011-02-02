@@ -45,10 +45,10 @@ const Transparent =
 
 
 //The chunk data type
-function Chunk(x, y, z, data)
+function Chunk(x, y, z)
 {
 	//Set chunk data
-	this.data = data;
+	this.data = new Uint8Array(CHUNK_SIZE);
 	
 	//Set position
 	this.x = x;
@@ -108,13 +108,52 @@ Chunk.prototype.set_block = function(x, y, z, b)
 var Map =
 {
 	index			: {},	//The chunk index
-	n_chunks		: 0		//Number of loaded chunks
+	
+	max_chunks		: 80000,	//Maximum number of chunks to load (not used yet)
+	chunk_count 	: 0,		//Number of loaded chunks
+	chunk_radius	: 3,		//These chunks are always fetched.
+	
+	//If set, then we draw the debug info for the chunk
+	show_debug		: false, 
+	
+	//Visibility stuff
+	vis_width		: 64,
+	vis_height		: 64,
+	vis_fov			: Math.PI * 3.0 / 4.0,
+	vis_state		: 0,	
+	vis_bounds		: [ [1, 3],
+						[4, 4],
+						[5, 5],
+						[6, 6],
+						[7, 7],
+						[8, 8],
+						[9, 9],
+						[10, 10],
+						[11, 11],
+						[12, 12] ]
+	
 };
 
 //Hash look up in map
 Map.lookup_chunk = function(x, y, z)
 {
 	return Map.index[x + ":" + y + ":" + z];
+}
+
+//Adds a new chunk
+Map.add_chunk = function(x, y, z)
+{
+	var str = x + ":" + y + ":" + z,
+		chunk = Map.index[str];
+
+	if(chunk)
+	{
+		return chunk;
+	}
+	
+	chunk = new Chunk(x, y, z);
+	Map.index[str] = chunk
+	return chunk;
 }
 
 //Returns the block type for the give position
@@ -131,23 +170,6 @@ Map.get_block = function(x, y, z)
 		by = (y & CHUNK_Y_MASK), 
 		bz = (z & CHUNK_Z_MASK);
 	return c.data[bx + (by << CHUNK_X_S) + (bz << CHUNK_XY_S)];
-}
-
-//Sets a block in the map to the given type
-Map.set_block = function(x, y, z, b)
-{
-	var cx = (x >> CHUNK_X_S), 
-		cy = (y >> CHUNK_Y_S), 
-		cz = (z >> CHUNK_Z_S);
-	var c = Map.lookup_chunk(cx, cy, cz);		
-	if(!c)
-		return -1;
-		
-	//Need to update the height field	
-	var bx = (x & CHUNK_X_MASK), 
-		by = (y & CHUNK_Y_MASK), 
-		bz = (z & CHUNK_Z_MASK);
-	return c.set_block(bx, by, bz, b);
 }
 
 //Traces a ray into the map, returns the index of the block hit, its type and the hit normal
