@@ -47,27 +47,14 @@ int Chunk::compress(void* buffer, int len)
 		for(l=1; 
 			i+l<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z) && 
 			(data_ptr[l] == cur || 
-			data_ptr[l] == Block::Nonsense); ++l)
+			(data_ptr[l] == Block::Nonsense && !BLOCK_TRANSPARENCY[(int)cur])); ++l)
 		{
 		}
 		
-		//Nonsense blocks get sucked up into neighboring runs greedily
+		//Special case: first block is nonsense
 		if(cur == Block::Nonsense)
 		{
-			if(i+l < (CHUNK_X)*(CHUNK_Y)*(CHUNK_Z))
-			{
-				cur = data_ptr[l++];
-				for(;
-					i+l<(CHUNK_X)*(CHUNK_Y)*(CHUNK_Z) && 
-					(data_ptr[l] == cur || 
-					data_ptr[l] == Block::Nonsense); ++l)
-				{
-				}
-			}
-			else
-			{
-				cur = Block::Stone;
-			}
+			cur = Block::Stone;
 		}
 
 		i += l;

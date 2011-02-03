@@ -52,7 +52,6 @@ Map.draw_box = function(gl, cx, cy, cz)
 	
 	//Set uniform
 	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
-	gl.uniform4f(Map.vis_shader.chunk_id, (cx&0xff)/255.0, (cy&0xff)/255.0, (cz&0xff)/255.0, 1.0);
 	
 	//FIXME: Do a frustum test here maybe?
 	
@@ -338,6 +337,18 @@ Map.visibility_query = function()
 				Map.vis_base_chunk[0] + cx, 
 				Map.vis_base_chunk[1] + cy, 
 				Map.vis_base_chunk[2] + cz);
+			
+			if(c)
+			{
+				gl.uniform4f(Map.vis_shader.chunk_id, 1, 1, 1, 1);
+			}
+			else
+			{
+				gl.uniform4f(Map.vis_shader.chunk_id, 
+					(cx&0xff)/255.0, 
+					(cy&0xff)/255.0, 
+					(cz&0xff)/255.0, 1.0);
+			}
 	
 			if(!c || c.pending || 
 				(c.num_elements == 0 && !Transparent[c.data[0]]) )
@@ -347,11 +358,6 @@ Map.visibility_query = function()
 			}
 			else
 			{
-				if(!Map.vis_just_drew_box)
-				{
-					gl.uniform4f(Map.vis_shader.chunk_id, 1, 1, 1, 1);
-				}
-			
 				Map.vis_just_drew_box = false;
 				c.draw(gl, Map.vis_camera, Map.vis_base_chunk, Map.vis_shader, false);
 			}
