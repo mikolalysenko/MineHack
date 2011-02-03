@@ -231,8 +231,23 @@ function gen_vb(p)
 	};
 	
 	
-	if(left_buffer)		left_buffer = left_buffer.data;
-	if(right_buffer)	right_buffer = right_buffer.data;		
+	if(left_buffer && !left_buffer.pending)
+	{
+		left_buffer = left_buffer.data;
+	}
+	else
+	{
+		left_buffer = null;
+	}
+	
+	if(right_buffer && !right_buffer.pending)
+	{
+		right_buffer = right_buffer.data;		
+	}
+	else
+	{
+		right_buffer = null;
+	}
 		
 	for(z=0; z<CHUNK_Z; ++z)
 	for(y=0; y<CHUNK_Y; ++y)
