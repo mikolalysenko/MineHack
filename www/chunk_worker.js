@@ -719,6 +719,11 @@ function worker_start(key)
 	
 	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
 	fetch_interval = setInterval(grab_chunks, FETCH_RATE);
+	
+	for(var i=0; i<CHUNK_SIZE; ++i)
+	{
+		empty_data[i] = 0xff;
+	}
 }
 
 
