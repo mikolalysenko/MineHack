@@ -146,10 +146,24 @@ Game.camera_matrix = function(width, height, fov)
 	return mmult(Game.proj_matrix(width, height, fov), Player.entity.pose_matrix());
 }
 
+Game.update_shadows = function()
+{
+	var gl = Game.gl,
+		cam = Game.camera_matrix(),
+		shadow_map;
+		
+	shadow_map.begin(gl);
+	
+	//Draw shadow
+	Map.draw_shadow(gl);
+	
+	shadow_map.end(gl);
+}
+
 Game.draw = function()
 {
-	var gl = Game.gl;
-	var cam = Game.camera_matrix();
+	var gl = Game.gl,
+		cam = Game.camera_matrix();
 	
 	gl.viewport(0, 0, Game.width, Game.height);
 	gl.clearColor(0.4, 0.64, 0.9, 1.0);

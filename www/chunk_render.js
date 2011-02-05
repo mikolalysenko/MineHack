@@ -1,4 +1,3 @@
-
 //Draws a chunk
 Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 {
@@ -56,8 +55,6 @@ Map.draw_box = function(gl, cx, cy, cz)
 	
 	//Set uniform
 	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
-	
-	//FIXME: Do a frustum test here maybe?
 	
 	//Draw the cube
 	if(!Map.just_drew_box)
@@ -223,59 +220,6 @@ Map.init = function(gl)
     
     Map.box_elements = indices.length;
     
-    //Create debug shader
-	var res = getProgram(gl, "shaders/simple.fs", "shaders/simple.vs");
-	if(res[0] != "Ok")
-	{
-		return res[1];
-	}
-	
-	Map.simple_fs 	 = res[1];
-	Map.simple_vs 	 = res[2];
-	Map.simple_shader = res[3];
-	
-	Map.simple_shader.pos_attr = gl.getAttribLocation(Map.simple_shader, "pos");
-	if(Map.simple_shader.pos_attr == null)
-		return "Could not locate position attribute";
-
-	Map.simple_shader.tc_attr = gl.getAttribLocation(Map.simple_shader, "texCoord");
-	if(Map.simple_shader.tc_attr == null)
-		return "Could not locate tex coord attribute";
-
-	Map.simple_shader.tex_samp = gl.getUniformLocation(Map.simple_shader, "tex");
-	if(Map.simple_shader.tex_samp == null)
-		return "Could not locate sampler uniform";
-		
-	//Create debug buffers
-	var debug_verts = new Float32Array([
-		0, 0, 0,
-		0, 1, 0,
-		1, 1, 0,
-		1, 0, 0]);
-
-	var debug_tc = new Float32Array([
-		0, 0,
-		0, 1,
-		1, 1,
-		1, 0] );
-		
-	var debug_ind = new Uint16Array([0, 1, 2, 0, 2, 3]);
-	
-	Map.debug_vb = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_vb);
-	gl.bufferData(gl.ARRAY_BUFFER, debug_verts, gl.STATIC_DRAW);
-	
-	Map.debug_tb = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_tb);
-	gl.bufferData(gl.ARRAY_BUFFER, debug_tc, gl.STATIC_DRAW);
-	
-	gl.bindBuffer(gl.ARRAY_BUFFER, null);
-	
-	Map.debug_ib = gl.createBuffer();
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.debug_ib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, debug_ind, gl.STATIC_DRAW);
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-    
 	//Start worker
 	Map.init_worker();
 	
@@ -305,7 +249,7 @@ Map.visibility_query = function()
 				by = Map.vis_base_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
 				bz = Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24);	
 			for(var dx=bx-1; dx<=bx+1; ++dx)
-			for(var dy=by; dy<=by+1; ++dy)
+			for(var dy=by;   dy<=by+1; ++dy)
 			for(var dz=bz-1; dz<=bz+1; ++dz)
 			{
 				Map.fetch_chunk(dx, dy, dz);
@@ -427,7 +371,38 @@ Map.draw = function(gl, camera)
 		
 	//Enable attributes
 	gl.enableVertexAttribArray(Map.chunk_shader.pos_attr);
+	gl.enableVertexAttribArray(Map.chunk_shader.tc_attr);	var c, chunk, base_chunk = Player.chunk(), 
+		sun_dir = Sky.get_sun_dir(), 
+		sun_color = Sky.get_sun_color();
+	gl.useProgram(Map.chunk_shader);
+		
+	//Enable attributes
+	gl.enableVertexAttribArray(Map.chunk_shader.pos_attr);
 	gl.enableVertexAttribArray(Map.chunk_shader.tc_attr);
+	gl.enableVertexAttribArray(Map.chunk_shader.norm_attr);
+	gl.enableVertexAttribArray(Map.chunk_shader.light_attr);
+	
+	//Load matrix uniforms
+	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);
+	
+	//Set sunlight uniforms
+	
+	gl.uniform3f(Map.chunk_shader.sun_dir, sun_dir[0], sun_dir[1], sun_dir[2] );
+	gl.uniform3f(Map.chunk_shader.sun_color, sun_color[0], sun_color[1], sun_color[2] );
+
+	//Set texture index
+	gl.activeTexture(gl.TEXTURE0);
+	gl.bindTexture(gl.TEXTURE_2D, Map.terrain_tex);
+	gl.uniform1i(Map.chunk_shader.tex_samp, 0);
+	
+	//Draw regular chunks
+	for(c in Map.index)
+	{
+		chunk = Map.index[c];
+		if(chunk instanceof Chunk)
+			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
+	}
+
 	gl.enableVertexAttribArray(Map.chunk_shader.norm_attr);
 	gl.enableVertexAttribArray(Map.chunk_shader.light_attr);
 	
@@ -467,28 +442,22 @@ Map.draw = function(gl, camera)
 	//Optional: draw debug information for visibility query
 	if(Map.show_debug)
 	{
-		gl.disable(gl.BLEND);
-		gl.disable(gl.DEPTH_TEST);
-		gl.enable(gl.TEXTURE_2D);
-		
-		gl.useProgram(Map.simple_shader);
-		gl.enableVertexAttribArray(Map.simple_shader.pos_attr);
-		gl.enableVertexAttribArray(Map.simple_shader.tc_attr);
-
-		gl.activeTexture(gl.TEXTURE0);
-		gl.bindTexture(gl.TEXTURE_2D, Map.vis_tex);
-		gl.generateMipmap(gl.TEXTURE_2D);
-		gl.uniform1i(Map.simple_shader.tex_samp, 0);
-		
-		gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_vb);
-		gl.vertexAttribPointer(Map.simple_shader.pos_attr, 3, gl.FLOAT, false, 0, 0);
-	
-		gl.bindBuffer(gl.ARRAY_BUFFER, Map.debug_tb);
-		gl.vertexAttribPointer(Map.simple_shader.tc_attr, 2, gl.FLOAT, false, 0, 0);
-		
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.debug_ib);
-		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+		Debug.draw_tex(Map.vis_tex);
 	}	
+}
+
+//Draws the map for a shadow shader
+Map.draw_shadows = function(gl, camera, shadow_map)
+{
+	var c, chunk, base_chunk = Player.chunk();
+		
+	//Draw regular chunks
+	for(c in Map.index)
+	{
+		chunk = Map.index[c];
+		if(chunk instanceof Chunk)
+			chunk.draw(gl, camera, base_chunk, Shadows.shadow_shader, false);
+	}
 }
 
 

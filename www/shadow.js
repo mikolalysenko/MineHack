@@ -16,14 +16,14 @@ Shadows.init = function(gl)
 	if(Shadow.shadow_shader.pos_attr == null)
 		return "Could not locate position attribute";
 
-	Shadow.shadow_shader.proj_mat = gl.getUniformLocation(Shadow.shadow_shader, "proj");
-	if(Shadow.shadow_shader.proj_mat == null)
+	Shadow.shadow_shader.light_matrix = gl.getUniformLocation(Shadow.shadow_shader, "light");
+	if(Shadow.shadow_shader.light_matrix == null)
 		return "Could not locate projection matrix uniform";
 	
-	Shadow.shadow_shader.view_mat = gl.getUniformLocation(Shadow.shadow_shader, "view");
-	if(Shadow.shadow_shader.view_mat == null)
+	Shadow.shadow_shader.view = gl.getUniformLocation(Shadow.shadow_shader, "view");
+	if(Shadow.shadow_shader.view == null)
 		return "Could not locate view matrix uniform";
-	
+
 	
 	return "Ok";
 }
@@ -34,6 +34,10 @@ var ShadowMap = function(gl, width, height)
 {
 	this.width		= width;
 	this.height		= height;
+	this.matrix		= new Float32Array([ 1, 0, 0, 0,
+										 0, 1, 0, 0,
+										 0, 0, 1, 0,
+										 0, 0, 0, 1 ]);
 
 	this.shadow_tex = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
@@ -63,21 +67,27 @@ var ShadowMap = function(gl, width, height)
 }
 
 
-ShadowMap.prototype.begin = function(gl, camera, light_camera)
+ShadowMap.prototype.begin = function(gl, pose)
 {
+	var light_matrix = mmult(this.matrix, pose);
+
 	gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
 	gl.viewport(0, 0, this.width, this.height);
 	
 	gl.useProgram(Shadows.shadow_shader);
 	
-	//Set shader param
-	
+	gl.uniformMatrix4fv(Shadows.shadow_shader.light_matrix, false, light_matrix);
+
 	gl.clearColor(0, 0, 0, 0);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
-	gl.disable(gl.CULL_FACE);
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
+	
+	gl.frontFace(gl.CCW);
+	gl.enable(gl.CULL_FACE);
+	
+	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
 }
 
 ShadowMap.prototype.end = function(gl)
@@ -85,8 +95,12 @@ ShadowMap.prototype.end = function(gl)
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 	
 	//Generate mipmap
-	gl.bindTexture(gl.TEXTURE_2D, this.shadow_text);
+	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
 	gl.generateMipmap(gl.TEXTURE_2D);
 	gl.bindTexture(gl.TEXTURE_2D, null);
 }
 
+ShadowMap.prototype.draw_debug = function(gl)
+{
+	Debug.draw_tex(this.shadow_tex);
+}
