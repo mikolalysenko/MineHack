@@ -20,9 +20,13 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 	//Bind buffers
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	if('pos_attr' in shader)
-		gl.vertexAttribPointer(shader.pos_attr,	4, gl.FLOAT, false, 32, 0);	
+		gl.vertexAttribPointer(shader.pos_attr,	3, gl.FLOAT, false, 48, 0);	
 	if('tc_attr' in shader)
-		gl.vertexAttribPointer(shader.tc_attr, 	4, gl.FLOAT, false, 32, 16);
+		gl.vertexAttribPointer(shader.tc_attr, 	2, gl.FLOAT, false, 48, 12);
+	if('norm_attr' in shader)
+		gl.vertexAttribPointer(shader.norm_attr, 3, gl.FLOAT, false, 48, 20);
+	if('light_attr' in shader)
+		gl.vertexAttribPointer(shader.light_attr, 3, gl.FLOAT, false, 48, 32);
 
 	if(transp)
 	{
@@ -87,6 +91,14 @@ Map.init = function(gl)
 	Map.chunk_shader.tc_attr = gl.getAttribLocation(Map.chunk_shader, "texCoord");
 	if(Map.chunk_shader.tc_attr == null)
 		return "Could not locate tex coord attribute";
+		
+	Map.chunk_shader.norm_attr = gl.getAttribLocation(Map.chunk_shader, "normal");
+	if(Map.chunk_shader.norm_attr == null)
+		return "Could not locate normal pointer";
+
+	Map.chunk_shader.light_attr = gl.getAttribLocation(Map.chunk_shader, "lightColor");
+	if(Map.chunk_shader.light_attr == null)
+		return "Could not locate light color attribute";	
 
 	Map.chunk_shader.proj_mat = gl.getUniformLocation(Map.chunk_shader, "proj");
 	if(Map.chunk_shader.proj_mat == null)
@@ -99,6 +111,14 @@ Map.init = function(gl)
 	Map.chunk_shader.tex_samp = gl.getUniformLocation(Map.chunk_shader, "tex");
 	if(Map.chunk_shader.tex_samp == null)
 		return "Could not locate sampler uniform";
+		
+	Map.chunk_shader.sun_dir = gl.getUniformLocation(Map.chunk_shader, "sun_dir");
+	if(Map.chunk_shader.sun_dir == null)
+		return "Could not locate sunlight direction uniform";
+
+	Map.chunk_shader.sun_color = gl.getUniformLocation(Map.chunk_shader, "sun_color");
+	if(Map.chunk_shader.sun_color == null)
+		return "Could not locate sunlight color uniform";
 		
 	//Create terrain texture
 	res = getTexture(gl, "img/terrain.png");
@@ -400,15 +420,24 @@ Map.visibility_query = function()
 //  camera - the current camera matrix
 Map.draw = function(gl, camera)
 {
-	var c, chunk, base_chunk = Player.chunk();
+	var c, chunk, base_chunk = Player.chunk(), 
+		sun_dir = Sky.get_sun_dir(), 
+		sun_color = Sky.get_sun_color();
 	gl.useProgram(Map.chunk_shader);
 		
 	//Enable attributes
 	gl.enableVertexAttribArray(Map.chunk_shader.pos_attr);
 	gl.enableVertexAttribArray(Map.chunk_shader.tc_attr);
+	gl.enableVertexAttribArray(Map.chunk_shader.norm_attr);
+	gl.enableVertexAttribArray(Map.chunk_shader.light_attr);
 	
 	//Load matrix uniforms
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);
+	
+	//Set sunlight uniforms
+	
+	gl.uniform3f(Map.chunk_shader.sun_dir, sun_dir[0], sun_dir[1], sun_dir[2] );
+	gl.uniform3f(Map.chunk_shader.sun_color, sun_color[0], sun_color[1], sun_color[2] );
 
 	//Set texture index
 	gl.activeTexture(gl.TEXTURE0);
@@ -610,5 +639,6 @@ Map.init_worker = function()
 
 Map.shutdown = function()
 {
-	Map.vb_worker.close();
+	if(Map.vb_worker)
+		Map.vb_worker.close();
 }

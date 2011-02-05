@@ -45,7 +45,7 @@ function gen_vb(p)
 		b00, b01, b02,
 		b10, b11, b12,
 		b20, b21, b22,
-	
+		
 	//Buffers
 		data 			= p.data,
 		left_buffer		= Map.lookup_chunk(p.x-1, p.y, p.z),
@@ -66,6 +66,18 @@ function gen_vb(p)
 		return 1.0 - 0.25 * (s1 + s2 + c);
 	},
 	
+	calc_light = function(
+		ox, oy, oz,
+		nx, ny, nz,
+		s1, s2, c)
+	{
+		var ao;
+		
+		ao = ao_value(s1, s2, c);
+		
+		return [ao, ao, ao];
+	},
+	
 	appendv = function(
 		ux, uy, uz,
 		vx, vy, vz,
@@ -78,6 +90,7 @@ function gen_vb(p)
 	{
 		var tc, tx, ty, dt,
 			ox, oy, oz,
+			light,
 			orient = nx * (uy * vz - uz * vy) +
 					 ny * (uz * vx - ux * vz) +
 					 nz * (ux * vy - uy * vx);
@@ -134,40 +147,74 @@ function gen_vb(p)
 		oy = y - 0.5 + (ny > 0 ? 1 : 0);
 		oz = z - 0.5 + (nz > 0 ? 1 : 0);
 
+		
+		light = calc_light(
+			ox, oy, oz,
+			nx, ny, nz, 
+			ao01, ao10, ao00);
 		vertices.push(ox);
 		vertices.push(oy);
 		vertices.push(oz);
-		vertices.push(1);
 		vertices.push(tx);
 		vertices.push(ty+dt);
-		vertices.push(ao_value(ao01, ao10, ao00));
+		vertices.push(nx);
+		vertices.push(ny);
+		vertices.push(nz);
+		vertices.push(light[0]);
+		vertices.push(light[1]);
+		vertices.push(light[2]);
 		vertices.push(0);
+		
 	
+		light = calc_light(
+			ox+ux, oy+uy, oz+uz,
+			nx, ny, nz, 
+			ao01, ao12, ao02);
 		vertices.push(ox + ux);
 		vertices.push(oy + uy);
 		vertices.push(oz + uz);
-		vertices.push(1);
 		vertices.push(tx);
 		vertices.push(ty);
-		vertices.push(ao_value(ao01, ao12, ao02));
+		vertices.push(nx);
+		vertices.push(ny);
+		vertices.push(nz);
+		vertices.push(light[0]);
+		vertices.push(light[1]);
+		vertices.push(light[2]);
 		vertices.push(0);
 
+		light = calc_light(
+			ox+ux+vx, oy+uy+vz, oz+uz+vz,
+			nx, ny, nz, 
+			ao12, ao21, ao22);
 		vertices.push(ox + ux + vx);
 		vertices.push(oy + uy + vy);
 		vertices.push(oz + uz + vz);
-		vertices.push(1);
 		vertices.push(tx+dt);
 		vertices.push(ty);
-		vertices.push(ao_value(ao12, ao21, ao22));
+		vertices.push(nx);
+		vertices.push(ny);
+		vertices.push(nz);
+		vertices.push(light[0]);
+		vertices.push(light[1]);
+		vertices.push(light[2]);
 		vertices.push(0);
 
+		light = calc_light(
+			ox+vx, oy+vy, oz+vz,
+			nx, ny, nz, 
+			ao10, ao21, ao20);
 		vertices.push(ox + vx);
 		vertices.push(oy + vy);
 		vertices.push(oz + vz);
-		vertices.push(1);
 		vertices.push(tx+dt);
 		vertices.push(ty+dt);
-		vertices.push(ao_value(ao10, ao21, ao20));
+		vertices.push(nx);
+		vertices.push(ny);
+		vertices.push(nz);
+		vertices.push(light[0]);
+		vertices.push(light[1]);
+		vertices.push(light[2]);
 		vertices.push(0);
 			
 		nv += 4;
