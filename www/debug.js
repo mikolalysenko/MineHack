@@ -7,7 +7,9 @@ Debug = {}
 Debug.init = function()
 {
     //Create debug shader
-	var res = getProgram(gl, "shaders/simple.fs", "shaders/simple.vs");
+	var gl = Game.gl,
+		res = getProgram(gl, "shaders/simple.fs", "shaders/simple.vs");
+		
 	if(res[0] != "Ok")
 	{
 		return res[1];
@@ -59,7 +61,7 @@ Debug.init = function()
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, debug_ind, gl.STATIC_DRAW);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     
-
+	return "Ok";
 }
 
 Debug.shutdown = function()
@@ -76,6 +78,8 @@ Debug.hide = function()
 
 Debug.draw_tex = function(texname)
 {
+	var gl = Game.gl;
+
 	gl.disable(gl.BLEND);
 	gl.disable(gl.DEPTH_TEST);
 	gl.enable(gl.TEXTURE_2D);
@@ -85,7 +89,7 @@ Debug.draw_tex = function(texname)
 	gl.enableVertexAttribArray(Debug.simple_shader.tc_attr);
 
 	gl.activeTexture(gl.TEXTURE0);
-	gl.bindTexture(gl.TEXTURE_2D, Debug.vis_tex);
+	gl.bindTexture(gl.TEXTURE_2D, texname);
 	gl.generateMipmap(gl.TEXTURE_2D);
 	gl.uniform1i(Debug.simple_shader.tex_samp, 0);
 	

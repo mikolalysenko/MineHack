@@ -447,7 +447,7 @@ Map.draw = function(gl, camera)
 }
 
 //Draws the map for a shadow shader
-Map.draw_shadows = function(gl, camera, shadow_map)
+Map.draw_shadows = function(gl, shadow_map)
 {
 	var c, chunk, base_chunk = Player.chunk();
 		
@@ -456,7 +456,7 @@ Map.draw_shadows = function(gl, camera, shadow_map)
 	{
 		chunk = Map.index[c];
 		if(chunk instanceof Chunk)
-			chunk.draw(gl, camera, base_chunk, Shadows.shadow_shader, false);
+			chunk.draw(gl, shadow_map.proj_matrix, base_chunk, Shadows.shadow_shader, false);
 	}
 }
 

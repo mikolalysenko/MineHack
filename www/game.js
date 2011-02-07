@@ -78,8 +78,14 @@ Game.init = function(canvas)
 	Game.width = canvas.width;
 	Game.height = canvas.height;
 	
+	var res = Debug.init();
+	if(res != "Ok")
+	{
+		return res;
+	}
+	
 	//Initialize the map
-	var res = Map.init(gl);
+	res = Map.init(gl);
 	if(res != "Ok")
 	{
 		return res;
@@ -90,6 +96,8 @@ Game.init = function(canvas)
 	{
 		return res;
 	}
+	
+	Shadows.init(Game.gl);
 	
 	//Initialize screen
 	window.onresize = function(event)
@@ -149,13 +157,12 @@ Game.camera_matrix = function(width, height, fov)
 Game.update_shadows = function()
 {
 	var gl = Game.gl,
-		cam = Game.camera_matrix(),
 		shadow_map;
 		
 	shadow_map.begin(gl);
 	
-	//Draw shadow
-	Map.draw_shadow(gl);
+	//Draw shadows for the game map
+	Map.draw_shadows(gl, shadow_map);
 	
 	shadow_map.end(gl);
 }

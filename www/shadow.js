@@ -25,16 +25,30 @@ Shadows.init = function(gl)
 		return "Could not locate view matrix uniform";
 
 	
+	Shadow.shadow_maps = [ new ShadowMap(gl, 256, 256, 1, 100) ];
+	
 	return "Ok";
+}
+
+//Retrieves a shadow map for a given level of detail
+Shadows.get_shadow_map = function()
+{
+
+	return Shadow.shadow_maps[0];
 }
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height)
+var ShadowMap = function(gl, width, height, z_near, z_far)
 {
 	this.width		= width;
 	this.height		= height;
-	this.matrix		= new Float32Array([ 1, 0, 0, 0,
+	this.z_near		= z_near;
+	this.z_far		= z_far;
+	
+	this.z_bias		= -0.01;
+										 
+	this.proj_matrix = new Float32Array([ 1, 0, 0, 0,
 										 0, 1, 0, 0,
 										 0, 0, 1, 0,
 										 0, 0, 0, 1 ]);
@@ -66,17 +80,38 @@ var ShadowMap = function(gl, width, height)
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
-
-ShadowMap.prototype.begin = function(gl, pose)
+ShadowMap.calc_light_matrix = function()
 {
-	var light_matrix = mmult(this.matrix, pose);
+	var camera = Game.camera_matrix(),
+		basis = Sky.get_basis(),
+		u_min = 1000, u_max = -1000,
+		v_min = 1000, v_max = -1000,
+		dx, dy, dz;
+	
+}
+
+
+ShadowMap.prototype.begin = function(gl)
+{
+
+	//Construct light matrix
+	
+
+	var light_matrix = Shadows.calc_light_matrix(),
+		bias = new Float32Array([
+		0.5, 0, 0, 0,
+		0, 0.5, 0, 0,
+		0, 0, 1, 0,
+		0.5, 0.5, -this.z_bias, 1]);
+
+	this.proj_matrix = mmult(bias, mmult(this.matrix, Player.entity.pose_matrix()));
 
 	gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
 	gl.viewport(0, 0, this.width, this.height);
 	
 	gl.useProgram(Shadows.shadow_shader);
 	
-	gl.uniformMatrix4fv(Shadows.shadow_shader.light_matrix, false, light_matrix);
+	gl.uniformMatrix4fv(Shadows.shadow_shader.light_matrix, false, this.proj_matrix);
 
 	gl.clearColor(0, 0, 0, 0);
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
