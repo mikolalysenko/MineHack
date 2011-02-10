@@ -403,9 +403,6 @@ Map.draw = function(gl, camera)
 			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
 	}
 
-	gl.enableVertexAttribArray(Map.chunk_shader.norm_attr);
-	gl.enableVertexAttribArray(Map.chunk_shader.light_attr);
-	
 	//Load matrix uniforms
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);
 	
@@ -438,6 +435,12 @@ Map.draw = function(gl, camera)
 			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
 	}
 	gl.depthMask(1);
+
+	gl.disableVertexAttribArray(Map.chunk_shader.pos_attr);
+	gl.disableVertexAttribArray(Map.chunk_shader.tc_attr);
+	gl.disableVertexAttribArray(Map.chunk_shader.norm_attr);
+	gl.disableVertexAttribArray(Map.chunk_shader.light_attr);
+
 	
 	//Optional: draw debug information for visibility query
 	if(Map.show_debug)
@@ -456,7 +459,7 @@ Map.draw_shadows = function(gl, shadow_map)
 	{
 		chunk = Map.index[c];
 		if(chunk instanceof Chunk)
-			chunk.draw(gl, shadow_map.proj_matrix, base_chunk, Shadows.shadow_shader, false);
+			chunk.draw(gl, shadow_map.light_matrix, base_chunk, Shadows.shadow_shader, false);
 	}
 }
 

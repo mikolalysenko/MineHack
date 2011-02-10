@@ -1,8 +1,4 @@
-#ifdef GL_ES
-precision highp float;
-#endif
-
-
+precision mediump float;
 uniform vec4 chunk_id;
 
 void main(void)

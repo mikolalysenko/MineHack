@@ -10,7 +10,9 @@ Loader =
 		"shaders/vis.vs",
 		"shaders/vis.fs",
 		"shaders/simple.vs",
-		"shaders/simple.fs"
+		"shaders/simple.fs",
+		"shaders/shadow.fs",
+		"shaders/shadow.vs"
 	],
 	
 	images :

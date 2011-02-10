@@ -73,12 +73,24 @@ Game.init = function(canvas)
 		return 'Invalid WebGL object';
 	}
 	
+	if(!gl.getExtension("OES_texture_float"))
+	{
+		return "WebGL implementation does not support floating point textures";
+	}
+	
+	
 	Game.gl = gl;
 
 	Game.width = canvas.width;
 	Game.height = canvas.height;
 	
 	var res = Debug.init();
+	if(res != "Ok")
+	{
+		return res;
+	}
+	
+	res = Shadows.init(Game.gl);
 	if(res != "Ok")
 	{
 		return res;
@@ -97,7 +109,6 @@ Game.init = function(canvas)
 		return res;
 	}
 	
-	Shadows.init(Game.gl);
 	
 	//Initialize screen
 	window.onresize = function(event)
@@ -157,7 +168,7 @@ Game.camera_matrix = function(width, height, fov)
 Game.update_shadows = function()
 {
 	var gl = Game.gl,
-		shadow_map;
+		shadow_map = Shadows.get_shadow_map();
 		
 	shadow_map.begin(gl);
 	
@@ -171,6 +182,8 @@ Game.draw = function()
 {
 	var gl = Game.gl,
 		cam = Game.camera_matrix();
+		
+	Game.update_shadows();
 	
 	gl.viewport(0, 0, Game.width, Game.height);
 	gl.clearColor(0.4, 0.64, 0.9, 1.0);
@@ -186,6 +199,8 @@ Game.draw = function()
 	
 	//Draw entities
 	EntityDB.draw(gl, cam);
+	
+	Shadows.get_shadow_map().draw_debug();
 	
 	gl.flush();
 }

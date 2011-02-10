@@ -1,7 +1,4 @@
-#ifdef GL_ES
-precision highp float;
-#endif
-
+precision mediump float;
 uniform sampler2D tex;
 
 varying vec4 tc;

@@ -9,11 +9,14 @@ Sky.get_sun_dir = function()
 
 Sky.get_basis = function()
 {
-	var n = Sky.get_sun_dir,
-		u = [0, 0, 1];
-		v = cross(n, u);
+	var n = Sky.get_sun_dir(),
+		u = [0, 0, 1],
+		v = cross(n, u),
+		l = Math.sqrt(dot(v,v)),
+		i;
 		
-	v /= Math.sqrt(dot(v, v));
+	for(i=0; i<3; ++i)	
+		v[i] /= l;
 		
 	return [n, u, v];
 }

@@ -1,13 +1,9 @@
-#ifdef GL_ES
-precision highp float;
-#endif
+precision mediump float;
 
-varying vec4 depth;
-
-uniform float zmin, zmax;
+varying float depth;
 
 void main(void)
 {
-	gl_FragColor = vec4(
+	gl_FragColor = vec4(depth, depth*depth, 0, 1);
 }
 
