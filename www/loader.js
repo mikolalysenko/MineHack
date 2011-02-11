@@ -20,7 +20,7 @@ Loader =
 		"img/terrain.png"
 	],
 	
-	data : [],
+	data : {},
 	
 	num_loaded : 0,
 	max_loaded : 0,

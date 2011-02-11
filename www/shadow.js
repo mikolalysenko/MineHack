@@ -25,7 +25,7 @@ Shadows.init = function(gl)
 		return "Could not locate view matrix uniform";
 
 	
-	Shadows.shadow_maps = [ new ShadowMap(gl, 256, 256, 0.001) ];
+	Shadows.shadow_maps = [ new ShadowMap(gl, 512, 512, 0.001) ];
 	
 	return "Ok";
 }
@@ -43,7 +43,7 @@ var ShadowMap = function(gl, width, height, clip_near, clip_far, z_bias)
 {
 	this.width		= width;
 	this.height		= height;
-	this.clip_near	= -1;
+	this.clip_near	= 0;
 	this.clip_far	= 1;
 	
 	this.light_matrix = new Float32Array([ 1, 0, 0, 0,
@@ -53,8 +53,8 @@ var ShadowMap = function(gl, width, height, clip_near, clip_far, z_bias)
 
 	this.shadow_tex = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	gl.texParameteri(gl.TEXTURE_2D,	gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
@@ -113,6 +113,11 @@ ShadowMap.prototype.calc_light_matrix = function()
 		
 		P = hgmult(T, W);
 		
+		for(i=0;i<3; ++i)
+		{
+			W[i] /= W[3];
+		}
+		
 		pts.push(new Float32Array([dot(P, u), dot(P, v)]));
 		
 		z = dot(P, n);
@@ -162,29 +167,26 @@ ShadowMap.prototype.calc_light_matrix = function()
 		}
 	}
 	
+	//FIXME: Temporary stuff.  Need to debug box construction.
+	dx = 1;
+	dy = 0;
+	cx = 0;
+	cy = 0;
+	s = 64;
+	z_min = -256;
+	z_max = 256;
+	
 	//Time to build the light matrix!
-	dx /= 0.5 * s;
-	dy /= 0.5 * s;
+	dx /= 2 * s;
+	dy /= 2 * s;
 	
+	z_scale = -1.0 / (z_max - z_min);
 	
-	//FIXME: Need a better way to calculate this value...
-	z_min = 0;
-	
-	z_scale = 2.0 / (z_max - z_min);
-	
-	return m4transp(new Float32Array([
-		dx*u[0]+dy*v[0],	dx*u[1]+dy*v[1],	dx*u[2]+dy*v[2],	-cx/s,
-		dy*u[0]-dx*v[0],	dy*u[1]-dx*v[1],	dy*u[2]-dx*v[2],	-cy/s,
-		n[0]*z_scale,		n[1]*z_scale,		n[2]*z_scale,		-z_min*z_scale,
-		0,					0,					0,					1]));
-
-/*	
 	return new Float32Array([
-		0.01, 0, 0, 0,
-		0, 0.01, 0, 0,
-		0, 0, 0.01, 0,
-		0, 0, 0, 1]);
-*/
+		dx*u[0]+dy*v[0],	dy*u[0]-dx*v[0],	n[0]*z_scale,	0,
+		dx*u[1]+dy*v[1],	dy*u[1]-dx*v[1],	n[1]*z_scale,	0,
+		dx*u[2]+dy*v[2],	dy*u[2]-dx*v[2],	n[2]*z_scale,	0,
+		-cx/s,				-cy/s,				z_min*z_scale,	1]);
 }
 
 
@@ -207,14 +209,22 @@ ShadowMap.prototype.begin = function(gl)
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
 	
-	/*
 	//Only draw back faces for shadow map
 	gl.frontFace(gl.CCW);
 	gl.enable(gl.CULL_FACE);
-	*/
-	gl.disable(gl.CULL_FACE);
 	
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
+	
+	//Apply bias
+	var i;
+	for(i=0; i<4; ++i)
+	{
+		this.light_matrix[4*i]   *= 0.5;
+		this.light_matrix[4*i+1] *= 0.5;
+	}
+	this.light_matrix[12] += 0.5;
+	this.light_matrix[13] += 0.5;
+	this.light_matrix[14] += -0.0001;
 }
 
 ShadowMap.prototype.end = function(gl)
@@ -223,8 +233,8 @@ ShadowMap.prototype.end = function(gl)
 	
 	gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);
 	
-	/*
 	//Generate mipmap
+	/*
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
 	gl.generateMipmap(gl.TEXTURE_2D);
 	gl.bindTexture(gl.TEXTURE_2D, null);

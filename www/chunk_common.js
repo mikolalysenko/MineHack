@@ -91,7 +91,7 @@ function frustum_test(m, cx, cy, cz)
 		z = qx*m[2] + qy*m[6] + qz*m[10] + m[14];
 		if(z <=  w) in_p |= 16;
 		if(in_p == 63)	return true;
-		if(z >= -w) in_p |= 32;
+		if(z >=  0) in_p |= 32;
 		if(in_p == 63)	return true;
 	}
 
