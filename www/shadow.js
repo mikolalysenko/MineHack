@@ -27,7 +27,57 @@ Shadows.init = function(gl)
 	
 	Shadows.shadow_maps = [ new ShadowMap(gl, 512, 512, 0.001) ];
 	
+	
+	//Create quad stuff
+	var verts = new Float32Array([
+		-1, -1, 0, 1,
+		-1, 1, 0, 1,
+		1, 1, 0, 1,
+		1, -1, 0, 1]);
+	
+	var ind = new Uint16Array([0, 1, 2, 0, 2, 3]);
+	
+	Shadows.quad_vb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, Shadows.quad_vb);
+	gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+	gl.bindBuffer(gl.ARRAY_BUFFER, null);
+	
+	Shadows.quad_ib = gl.createBuffer();
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Shadows.quad_ib);
+	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ind, gl.STATIC_DRAW);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+	
+	res = getProgram(gl, "shaders/shadow_init.fs", "shaders/shadow_init.vs");
+	
+	if(res[0] != "Ok")
+		return res[1];
+	
+	Shadows.shadow_init_shader	= res[3];
+	
+	Shadows.shadow_init_shader.pos_attr = gl.getAttribLocation(Shadows.shadow_init_shader, "pos");
+	if(Shadows.shadow_init_shader.pos_attr == null)
+		return "Could not locate position attribute for shadow init shader";
+	
+	
 	return "Ok";
+}
+
+Shadows.init_map = function()
+{
+	var gl = Game.gl;
+
+	gl.useProgram(Shadows.shadow_init_shader);
+	gl.enableVertexAttribArray(Shadows.shadow_init_shader.pos_attr);
+	
+	gl.disable(gl.BLEND);
+	gl.disable(gl.DEPTH_TEST);
+	gl.disable(gl.TEXTURE_2D);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, Shadows.quad_vb);
+	gl.vertexAttribPointer(Shadows.shadow_init_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
+	
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Shadows.quad_ib);
+	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 }
 
 //Retrieves a shadow map for a given level of detail
@@ -199,18 +249,28 @@ ShadowMap.prototype.begin = function(gl)
 	gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
 	gl.viewport(0, 0, this.width, this.height);
 	
-	gl.useProgram(Shadows.shadow_shader);
-	
-	gl.uniformMatrix4fv(Shadows.shadow_shader.proj_mat, false, this.light_matrix);
 
-	gl.clearColor(0, 0, 1, 1);
-	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	gl.clear(gl.DEPTH_BUFFER_BIT);
+	
+	//Draw a full quad to the background
+	Shadows.init_map();
+	
+
+	gl.useProgram(Shadows.shadow_shader);
+	gl.uniformMatrix4fv(Shadows.shadow_shader.proj_mat, false, this.light_matrix);
+	
+	
 	
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
 	
-	//Don't use backface culling.  It gets too fucked up
-	gl.disable(gl.CULL_FACE);
+	gl.enable(gl.CULL_FACE);
+	gl.cullFace(gl.FRONT);
+	gl.frontFace(gl.CW);
+	
+	//Set offset
+	gl.polygonOffset(1.1, 4.0);
+	gl.enable(gl.POLYGON_OFFSET_FILL);
 	
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
 	
@@ -223,12 +283,15 @@ ShadowMap.prototype.begin = function(gl)
 	}
 	this.light_matrix[12] += 0.5;
 	this.light_matrix[13] += 0.5;
-	this.light_matrix[14] += -0.1;
 }
 
 ShadowMap.prototype.end = function(gl)
 {
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	
+	gl.disable(gl.POLYGON_OFFSET_FILL);
+	gl.polygonOffset(0.0, 0.0);
+
 	
 	gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);
 	

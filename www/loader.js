@@ -12,7 +12,9 @@ Loader =
 		"shaders/simple.vs",
 		"shaders/simple.fs",
 		"shaders/shadow.fs",
-		"shaders/shadow.vs"
+		"shaders/shadow.vs",
+		"shaders/shadow_init.fs",
+		"shaders/shadow_init.vs"
 	],
 	
 	images :

@@ -195,6 +195,7 @@ Game.draw = function()
 	gl.enable(gl.DEPTH_TEST);
 	
 	gl.frontFace(gl.CW);
+	gl.cullFace(gl.BACK);
 	gl.enable(gl.CULL_FACE);
 
 	//Draw map

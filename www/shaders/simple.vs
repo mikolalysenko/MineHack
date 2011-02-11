@@ -1,6 +1,4 @@
-#ifdef GL_ES
-precision highp float;
-#endif
+precision mediump float;
 
 attribute vec3 pos;
 attribute vec2 texCoord;

@@ -17,15 +17,13 @@ float linstep(float lo, float hi, float v)
 
 float shadow_weight()
 {
-	float t = frag_pos.z;
+	float t = frag_pos.z - 0.0005;
 	vec2 moments = texture2D(shadow_tex, frag_pos.xy).xy;
 	
-	float p = 1.0;
-	if(t > moments.x)
-		p = 0.0;
+	float p = 0.0;
+	if(t <= moments.x)
+		p = 1.0;
 		
-	return p;
-	
 	float variance = moments.y - moments.x * moments.x;
 	float d = t - moments.x;
 	float p_max = variance / (variance + d * d);
