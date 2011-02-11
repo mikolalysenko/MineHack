@@ -172,13 +172,13 @@ ShadowMap.prototype.calc_light_matrix = function()
 	dy = 0;
 	cx = 0;
 	cy = 0;
-	s = 64;
+	s = 128;
 	z_min = -256;
 	z_max = 256;
 	
 	//Time to build the light matrix!
-	dx /= 2 * s;
-	dy /= 2 * s;
+	dx /= s;
+	dy /= s;
 	
 	z_scale = -1.0 / (z_max - z_min);
 	
@@ -209,9 +209,8 @@ ShadowMap.prototype.begin = function(gl)
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
 	
-	//Only draw back faces for shadow map
-	gl.frontFace(gl.CCW);
-	gl.enable(gl.CULL_FACE);
+	//Don't use backface culling.  It gets too fucked up
+	gl.disable(gl.CULL_FACE);
 	
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
 	
@@ -224,7 +223,7 @@ ShadowMap.prototype.begin = function(gl)
 	}
 	this.light_matrix[12] += 0.5;
 	this.light_matrix[13] += 0.5;
-	this.light_matrix[14] += -0.0001;
+	this.light_matrix[14] += -0.1;
 }
 
 ShadowMap.prototype.end = function(gl)

@@ -2,6 +2,7 @@ precision mediump float;
 
 uniform sampler2D tex;
 uniform sampler2D shadow_tex;
+uniform float	shadow_fudge_factor;
 
 varying vec4 tc;
 varying vec4 frag_pos;
@@ -22,12 +23,14 @@ float shadow_weight()
 	float p = 1.0;
 	if(t > moments.x)
 		p = 0.0;
+		
+	return p;
 	
 	float variance = moments.y - moments.x * moments.x;
 	float d = t - moments.x;
 	float p_max = variance / (variance + d * d);
 		
-	return max(p, p_max);
+	return linstep(shadow_fudge_factor, 1.0, max(p, p_max));
 }
 
 

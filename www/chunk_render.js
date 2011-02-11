@@ -128,6 +128,13 @@ Map.init = function(gl)
 	if(Map.chunk_shader.shadow_tex == null)
 		return "Could not locate shadow texture uniform";
 
+
+	Map.chunk_shader.shadow_fudge_factor = gl.getUniformLocation(Map.chunk_shader, "shadow_fudge_factor");
+	
+	/*
+	if(Map.chunk_shader.shadow_fudge_factor == null)
+		return "Could not locate shadow fudge uniform";
+	*/
 		
 		
 	//Create terrain texture
@@ -398,6 +405,8 @@ Map.draw = function(gl, camera)
 	gl.uniform3f(Map.chunk_shader.sun_dir, sun_dir[0], sun_dir[1], sun_dir[2] );
 	gl.uniform3f(Map.chunk_shader.sun_color, sun_color[0], sun_color[1], sun_color[2] );
 	gl.uniformMatrix4fv(Map.chunk_shader.light_mat, false, shadow_map.light_matrix);
+	
+	gl.uniform1f(Map.chunk_shader.shadow_fudge_factor, Sky.get_shadow_fudge());
 	
 	gl.activeTexture(gl.TEXTURE0+1);
 	gl.bindTexture(gl.TEXTURE_2D, Shadows.get_shadow_map().shadow_tex);

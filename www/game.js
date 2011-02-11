@@ -186,8 +186,11 @@ Game.draw = function()
 	Game.update_shadows();
 	
 	gl.viewport(0, 0, Game.width, Game.height);
+	
 	gl.clearColor(0.4, 0.64, 0.9, 1.0);
 	gl.clear(gl.COLOR_BUFFER_BIT |gl.DEPTH_BUFFER_BIT);
+	
+	Sky.draw_bg();
 	
 	gl.enable(gl.DEPTH_TEST);
 	
