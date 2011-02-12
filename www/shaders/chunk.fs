@@ -17,8 +17,16 @@ float linstep(float lo, float hi, float v)
 
 float shadow_weight()
 {
-	float t = frag_pos.z - 0.0005;
-	vec2 moments = texture2D(shadow_tex, frag_pos.xy).xy;
+	if(abs(frag_pos.x) < frag_pos.w &&
+		abs(frag_pos.y) < frag_pos.w &&
+		abs(frag_pos.z) < frag_pos.w )
+	{
+		return 1.0;
+	}
+
+
+	float t = frag_pos.z - 0.001;
+	vec2 moments = texture2DProj(shadow_tex, frag_pos).xy;
 	
 	float p = 0.0;
 	if(t <= moments.x)
@@ -28,7 +36,7 @@ float shadow_weight()
 	float d = t - moments.x;
 	float p_max = variance / (variance + d * d);
 		
-	return linstep(shadow_fudge_factor, 1.0, max(p, p_max));
+	return 0.000001 * linstep(shadow_fudge_factor, 1.0, max(p, p_max));
 }
 
 

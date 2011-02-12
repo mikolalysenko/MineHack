@@ -25,7 +25,7 @@ Shadows.init = function(gl)
 		return "Could not locate view matrix uniform";
 
 	
-	Shadows.shadow_maps = [ new ShadowMap(gl, 512, 512, 0.001) ];
+	Shadows.shadow_maps = [ new ShadowMap(gl, 512, 512, 1, 32) ];
 	
 	
 	//Create quad stuff
@@ -89,12 +89,12 @@ Shadows.get_shadow_map = function()
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height, clip_near, clip_far, z_bias)
+var ShadowMap = function(gl, width, height, z_near, z_far)
 {
 	this.width		= width;
 	this.height		= height;
-	this.clip_near	= 0;
-	this.clip_far	= 1;
+	this.z_near		= z_near;
+	this.z_far		= z_far;
 	
 	this.light_matrix = new Float32Array([ 1, 0, 0, 0,
 										 0, 1, 0, 0,
@@ -133,7 +133,7 @@ ShadowMap.prototype.calc_light_matrix = function()
 	//First generate all bounding points on the frustum
 	var pts = [], 
 		dx, dy, dz,
-		camera = Game.camera_matrix(),
+		camera = Game.camera_matrix(Game.width, Game.height, Game.fov, this.z_near, this.z_far),
 		T = m4inv(camera),
 		W = new Float32Array(4), 
 		P,
@@ -142,7 +142,7 @@ ShadowMap.prototype.calc_light_matrix = function()
 		i, j, k, l, s, 
 
 		//Z-coordinate dimensions		
-		z, z_max = 0.0, z_min, z_scale,
+		z, z_max = -256.0, z_min = -256.0, z_scale,
 		
 		//Dimensions for bounding square in uv plane
 		side = 100000.0,
@@ -154,19 +154,14 @@ ShadowMap.prototype.calc_light_matrix = function()
 	//Construct the points for the frustum
 	for(dx=-1; dx<=1; dx+=2)
 	for(dy=-1; dy<=1; dy+=2)
-	for(dz=this.clip_near; dz<=this.clip_far+0.001; dz+=this.clip_far-this.clip_near)
+	for(dz=-1; dz<=1; dz+=2)
 	{	
-		W[0] = dx;
-		W[1] = dy;
-		W[2] = dz;
+		W[0] = 0.5 * dx;
+		W[1] = 0.5 * dy;
+		W[2] = 0.5 * dz;
 		W[3] = 1.0;
 		
 		P = hgmult(T, W);
-		
-		for(i=0;i<3; ++i)
-		{
-			W[i] /= W[3];
-		}
 		
 		pts.push(new Float32Array([dot(P, u), dot(P, v)]));
 		
@@ -178,9 +173,10 @@ ShadowMap.prototype.calc_light_matrix = function()
 	for(i=0; i<pts.length; ++i)
 	for(j=0; j<i; ++j)
 	{
+	
 		dx = pts[i][0] - pts[j][0];
 		dy = pts[i][1] - pts[j][1];
-		
+			
 		l = Math.sqrt(dx*dx + dy*dy);
 		
 		if(l < 0.0001)
@@ -205,7 +201,7 @@ ShadowMap.prototype.calc_light_matrix = function()
 			y_max = Math.max(y_max, py);
 		}
 		
-		s  = Math.max(x_max - x_min, y_max - y_min);
+		s  = 0.5 * Math.max(x_max - x_min, y_max - y_min);
 			
 		if(s < side)
 		{
@@ -217,18 +213,12 @@ ShadowMap.prototype.calc_light_matrix = function()
 		}
 	}
 	
-	//FIXME: Temporary stuff.  Need to debug box construction.
-	dx = 1;
-	dy = 0;
-	cx = 0;
-	cy = 0;
-	s = 128;
-	z_min = -256;
-	z_max = 256;
-	
+		
 	//Time to build the light matrix!
-	dx /= s;
-	dy /= s;
+	dx = ax / side;
+	dy = ay / side;
+	
+	z_max = 256.0;
 	
 	z_scale = -1.0 / (z_max - z_min);
 	
@@ -236,7 +226,7 @@ ShadowMap.prototype.calc_light_matrix = function()
 		dx*u[0]+dy*v[0],	dy*u[0]-dx*v[0],	n[0]*z_scale,	0,
 		dx*u[1]+dy*v[1],	dy*u[1]-dx*v[1],	n[1]*z_scale,	0,
 		dx*u[2]+dy*v[2],	dy*u[2]-dx*v[2],	n[2]*z_scale,	0,
-		-cx/s,				-cy/s,				z_min*z_scale,	1]);
+		-cx/side,			-cy/side,			z_min*z_scale,	1]);
 }
 
 
@@ -269,7 +259,7 @@ ShadowMap.prototype.begin = function(gl)
 	gl.frontFace(gl.CW);
 	
 	//Set offset
-	gl.polygonOffset(1.1, 4.0);
+	gl.polygonOffset(0, 0);
 	gl.enable(gl.POLYGON_OFFSET_FILL);
 	
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
