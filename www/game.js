@@ -171,15 +171,14 @@ Game.camera_matrix = function(width, height, fov, zfar, znear)
 
 Game.update_shadows = function()
 {
-	var gl = Game.gl,
-		shadow_map = Shadows.get_shadow_map();
-		
-	shadow_map.begin(gl);
+	var gl = Game.gl, i;
 	
-	//Draw shadows for the game map
-	Map.draw_shadows(gl, shadow_map);
-	
-	shadow_map.end(gl);
+	for(i=0; i<Shadows.shadow_maps.length; ++i)
+	{
+		Shadows.shadow_maps[i].begin(gl);
+		Map.draw_shadows(gl, Shadows.shadow_maps[i]);	
+		Shadows.shadow_maps[i].end(gl);
+	}
 }
 
 Game.draw = function()
@@ -203,12 +202,12 @@ Game.draw = function()
 	gl.enable(gl.CULL_FACE);
 
 	//Draw map
-	Map.draw(gl, cam);
+	Map.draw(gl);
 	
 	//Draw entities
 	EntityDB.draw(gl, cam);
 	
-	Shadows.get_shadow_map().draw_debug();
+	Shadows.shadow_maps[0].draw_debug();
 	
 	gl.flush();
 }

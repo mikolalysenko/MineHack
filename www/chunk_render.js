@@ -71,7 +71,7 @@ Map.draw_box = function(gl, cx, cy, cz)
 Map.init = function(gl)
 {
 	//Initialize chunk shader
-	var res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs");
+	var res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs"), i;
 	if(res[0] != "Ok")
 	{
 		return res[1];
@@ -118,16 +118,36 @@ Map.init = function(gl)
 		return "Could not locate sunlight color uniform";
 		
 		
+	var uni;
 		
-	Map.chunk_shader.light_mat = gl.getUniformLocation(Map.chunk_shader, "shadow");
-	if(Map.chunk_shader.light_mat == null)
-		return "Could not locate shadow matrix uniform";
+	Map.chunk_shader.light_mat = [];
+	Map.chunk_shader.shadow_tex = [];
+	Map.chunk_shader.cutoffs = [];
 		
-		
-	Map.chunk_shader.shadow_tex = gl.getUniformLocation(Map.chunk_shader, "shadow_tex");
-	if(Map.chunk_shader.shadow_tex == null)
-		return "Could not locate shadow texture uniform";
+	for(i=0; i<3; ++i)
+	{
+		if(i <2)
+		{
+			uni = gl.getUniformLocation(Map.chunk_shader, "shadow_cutoff" + i);
+			if(uni == null)
+				return "Could not locate shadow cutoff uniform no. " + i;
+			Map.chunk_shader.cutoffs.push(uni);		
+		}
+	
+		uni = gl.getUniformLocation(Map.chunk_shader, "shadow" + i);
+		if(uni == null)
+			return "Could not locate shadow matrix uniform no. " + i;
+		Map.chunk_shader.light_mat.push(uni);
 
+		uni = gl.getUniformLocation(Map.chunk_shader, "shadow_tex" + i);
+		if(uni == null)
+			return "Could not locate shadow texture uniform no. " + i;
+		Map.chunk_shader.shadow_tex.push(uni);
+	}
+	
+	Map.chunk_shader.model_mat = gl.getUniformLocation(Map.chunk_shader, "model");
+	if(Map.chunk_shader.model_mat == null)
+		return "Could not locate model uniform";
 
 	Map.chunk_shader.shadow_fudge_factor = gl.getUniformLocation(Map.chunk_shader, "shadow_fudge_factor");
 	
@@ -380,12 +400,12 @@ Map.visibility_query = function()
 // Input:
 //  gl - the open gl rendering context
 //  camera - the current camera matrix
-Map.draw = function(gl, camera)
+Map.draw = function(gl)
 {
 	var c, chunk, base_chunk = Player.chunk(), 
 		sun_dir = Sky.get_sun_dir(), 
 		sun_color = Sky.get_sun_color(),
-		shadow_map = Shadows.get_shadow_map();
+		i, camera;
 		
 	gl.useProgram(Map.chunk_shader);
 		
@@ -394,31 +414,38 @@ Map.draw = function(gl, camera)
 	gl.enableVertexAttribArray(Map.chunk_shader.tc_attr);
 	gl.enableVertexAttribArray(Map.chunk_shader.norm_attr);
 	gl.enableVertexAttribArray(Map.chunk_shader.light_attr);
-	
-	//Load matrix uniforms
-	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
 
 
 	//Set sunlight uniforms
 	gl.uniform3f(Map.chunk_shader.sun_dir, sun_dir[0], sun_dir[1], sun_dir[2] );
 	gl.uniform3f(Map.chunk_shader.sun_color, sun_color[0], sun_color[1], sun_color[2] );
-	gl.uniformMatrix4fv(Map.chunk_shader.light_mat, false, shadow_map.light_matrix);
-	
 	gl.uniform1f(Map.chunk_shader.shadow_fudge_factor, Sky.get_shadow_fudge());
 	
-	gl.activeTexture(gl.TEXTURE0+1);
-	gl.bindTexture(gl.TEXTURE_2D, Shadows.get_shadow_map().shadow_tex);
-	gl.uniform1i(Map.chunk_shader.shadow_tex, 1);
-	
-	
-
-	//Set texture index
+	//Bind terrain texture
 	gl.activeTexture(gl.TEXTURE0);
 	gl.bindTexture(gl.TEXTURE_2D, Map.terrain_tex);
 	gl.uniform1i(Map.chunk_shader.tex_samp, 0);
 	
 
-	//Draw regular chunks
+	//Set shadow map uniforms
+	for(i=0; i<3; ++i)
+	{
+		gl.activeTexture(gl.TEXTURE0+1+i);
+		gl.bindTexture(gl.TEXTURE_2D, Shadows.shadow_maps[i].shadow_tex);
+		gl.uniform1i(Map.chunk_shader.shadow_tex[i], 1+i);
+		gl.uniformMatrix4fv(Map.chunk_shader.light_mat[i], false, Shadows.shadow_maps[i].light_matrix);
+		if(i < 2)
+			gl.uniform1f(Map.chunk_shader.cutoffs[i], Shadows.shadow_maps[i].z_far);
+	}
+	
+	//Set camera
+	camera = Game.camera_matrix();
+	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
+	
+	//Set model matrix
+	gl.uniformMatrix4fv(Map.chunk_shader.model_mat, false, Player.entity.pose_matrix());
+	
+	//Draw chunks
 	for(c in Map.index)
 	{
 		chunk = Map.index[c];
@@ -426,44 +453,42 @@ Map.draw = function(gl, camera)
 			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
 	}
 
-	//Load matrix uniforms
-	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);
-	
-	//Set sunlight uniforms
-	
-	gl.uniform3f(Map.chunk_shader.sun_dir, sun_dir[0], sun_dir[1], sun_dir[2] );
-	gl.uniform3f(Map.chunk_shader.sun_color, sun_color[0], sun_color[1], sun_color[2] );
-
-	//Set texture index
-	gl.activeTexture(gl.TEXTURE0);
-	gl.bindTexture(gl.TEXTURE_2D, Map.terrain_tex);
-	gl.uniform1i(Map.chunk_shader.tex_samp, 0);
-	
-	//Draw regular chunks
-	for(c in Map.index)
-	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
-	}
-
-	//Draw transparent chunks
+/*
+	//Draw transparent chunks	
 	gl.enable(gl.BLEND);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.depthMask(0);
-	for(c in Map.index)
+	for(i=0; i<Shadows.shadow_maps.length; ++i)
 	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
+		//Set shadow map
+		gl.bindTexture(gl.TEXTURE_2D, Shadows.shadow_maps[i].shadow_tex);
+		gl.uniformMatrix4fv(Map.chunk_shader.light_mat, false, Shadows.shadow_maps[i].light_matrix);
+
+		clip_camera = Game.camera_matrix(Game.width, Game.height, Game.fov, Shadows.shadow_maps[i].z_far, Shadows.shadow_maps[i].z_near);
+
+		//Draw transparent chunks
+		for(c in Map.index)
+		{
+			chunk = Map.index[c];
+			if(chunk instanceof Chunk)
+				chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
+		}
 	}
 	gl.depthMask(1);
+*/
 
+	//Unbind textures
+	for(i=0; i<4; ++i)
+	{
+		gl.activeTexture(gl.TEXTURE0+i);
+		gl.bindTexture(gl.TEXTURE_2D, null);
+	}	
+
+	//Disable attributes
 	gl.disableVertexAttribArray(Map.chunk_shader.pos_attr);
 	gl.disableVertexAttribArray(Map.chunk_shader.tc_attr);
 	gl.disableVertexAttribArray(Map.chunk_shader.norm_attr);
 	gl.disableVertexAttribArray(Map.chunk_shader.light_attr);
-
 	
 	//Optional: draw debug information for visibility query
 	if(Map.show_debug)

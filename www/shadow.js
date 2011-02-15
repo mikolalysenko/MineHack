@@ -25,7 +25,11 @@ Shadows.init = function(gl)
 		return "Could not locate view matrix uniform";
 
 	
-	Shadows.shadow_maps = [ new ShadowMap(gl, 512, 512, 5, 10) ];
+	Shadows.shadow_maps = [ 
+		new ShadowMap(gl, 256, 256, 1, 16),
+		new ShadowMap(gl, 256, 256, 16, 64),
+		new ShadowMap(gl, 256, 256, 64, 256)
+		];
 	
 	
 	//Create quad stuff
@@ -80,13 +84,6 @@ Shadows.init_map = function()
 	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 }
 
-//Retrieves a shadow map for a given level of detail
-Shadows.get_shadow_map = function()
-{
-
-	return Shadows.shadow_maps[0];
-}
-
 
 //A shadow map
 var ShadowMap = function(gl, width, height, z_near, z_far)
@@ -132,9 +129,9 @@ ShadowMap.prototype.calc_light_matrix = function()
 {
 	//First generate all bounding points on the frustum
 	var pts = [], 
-		dx, dy, dz,
-		camera = Game.proj_matrix(Game.width, Game.height, Game.fov, this.z_far, this.z_near),
-		
+		camera = Game.proj_matrix(Game.width, Game.height, Game.fov, Game.zfar, Game.znear),
+		planes = get_frustum_planes(m4transp(camera)),
+
 		pose = Player.entity.pose_matrix(),
 		rot = [
 			pose[0], pose[1], pose[2],
@@ -144,26 +141,18 @@ ShadowMap.prototype.calc_light_matrix = function()
 		chunk = Player.chunk(),
 		orig = [ Player.entity.x - chunk[0]*CHUNK_X , Player.entity.y - chunk[1]*CHUNK_X, Player.entity.z - chunk[2]*CHUNK_X ],
 		
-		planes = get_frustum_planes(m4transp(camera)),
-		W = new Float32Array(3), 
-		P,
+		P, W = new Float32Array(3), 
 		basis = Sky.get_basis(),
 		n = basis[0], u = basis[1], v = basis[2],
-		i, j, k, l, s, 
+		
+		i, j, k,
 
 		//Z-coordinate dimensions		
-		z, z_max = -256.0, z_min = -256.0, z_scale,
-		
-		//Dimensions for bounding square in uv plane
-		side = 100000.0,
-		ax = 0,
-		ay = 1,
-		cx = 0,
-		cy = 0;
+		z_max = -256.0, z_min = -256.0;		
 	
 	var pl_x = [ planes[0], planes[1] ],
 		pl_y = [ planes[2], planes[3] ],
-		pl_z = [ planes[4], planes[5] ];
+		pl_z = [ [0, 0, 1, this.z_far],  [0, 0, 1, this.z_near] ];
 	
 	//Construct the points for the frustum
 	for(i=0; i<2; ++i)
@@ -191,56 +180,42 @@ ShadowMap.prototype.calc_light_matrix = function()
 		P[2] += orig[2];
 		
 		pts.push([dot(P, u), dot(P, v)]);
+		
+		z_max = Math.max(z_max, dot(P, n));
 	}
 	
-		dx = pts[3][0] - pts[7][0];
-		dy = pts[3][1] - pts[7][1];
-		
-		l = Math.sqrt(dx*dx + dy*dy);
-		
-		if(l < 1e-8)
-		{
-			continue;
-		}
-		
-		dx /= l;
-		dy /= l;
 
-		//Compute center of square and side length
-		var x_min = 10000.0, x_max = -10000.0,
-			y_min = 10000.0, y_max = -10000.0,
-			px, py, s;
+	//Compute center of square and side length
+	var dx = pts[3][0] - pts[7][0],
+		dy = pts[3][1] - pts[7][1],
+		l = Math.sqrt(dx*dx + dy*dy),
+		x_min = 10000.0, x_max = -10000.0,
+		y_min = 10000.0, y_max = -10000.0,
+		px, py;
+
+	dx /= l;
+	dy /= l;
+
+	for(k=0; k<pts.length; ++k)
+	{
+		px =  dx * pts[k][0] + dy * pts[k][1];
+		py = -dy * pts[k][0] + dx * pts[k][1];
 	
-		for(k=0; k<pts.length; ++k)
-		{
-			px =  dx * pts[k][0] + dy * pts[k][1];
-			py = -dy * pts[k][0] + dx * pts[k][1];
-		
-			x_min = Math.min(x_min, px);
-			x_max = Math.max(x_max, px);
-			y_min = Math.min(y_min, py);
-			y_max = Math.max(y_max, py);
-		}
-	
-		
-		s  = 0.5 * Math.max(x_max - x_min, y_max - y_min);
-		
-		if(s < side)
-		{
-			side = s;
-			ax = dx;
-			ay = dy;
-			cx = 0.5 * (x_max + x_min);
-			cy = 0.5 * (y_max + y_min);
-		}
-	//}
+		x_min = Math.min(x_min, px);
+		x_max = Math.max(x_max, px);
+		y_min = Math.min(y_min, py);
+		y_max = Math.max(y_max, py);
+	}
 
 	z_max = 256.0;
+	z_min = -256.0;
 	
-	ax /= side;
-	ay /= side;
-	
-	z_scale = -1.0 / (z_max - z_min);
+	var side = Math.max(x_max - x_min, y_max - y_min),
+		ax = dx / side;
+		ay = dy / side;
+		cx = 0.5 * (x_max + x_min),
+		cy = 0.5 * (y_max + y_min),
+		z_scale = -1.0 / (z_max - z_min);
 	
 	return new Float32Array([
 		ax*u[0]+ay*v[0],	-ay*u[0]+ax*v[0],	n[0]*z_scale,	0,
@@ -312,11 +287,9 @@ ShadowMap.prototype.end = function(gl)
 	gl.enable(gl.CULL_FACE);
 	
 	//Generate mipmap
-	/*
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
 	gl.generateMipmap(gl.TEXTURE_2D);
 	gl.bindTexture(gl.TEXTURE_2D, null);
-	*/
 }
 
 ShadowMap.prototype.draw_debug = function(gl)
