@@ -25,7 +25,7 @@ Shadows.init = function(gl)
 		return "Could not locate view matrix uniform";
 
 	
-	Shadows.shadow_maps = [ new ShadowMap(gl, 512, 512, 1, 32) ];
+	Shadows.shadow_maps = [ new ShadowMap(gl, 512, 512, 5, 10) ];
 	
 	
 	//Create quad stuff
@@ -133,9 +133,19 @@ ShadowMap.prototype.calc_light_matrix = function()
 	//First generate all bounding points on the frustum
 	var pts = [], 
 		dx, dy, dz,
-		camera = Game.camera_matrix(Game.width, Game.height, Game.fov, this.z_near, this.z_far),
-		T = m4inv(camera),
-		W = new Float32Array(4), 
+		camera = Game.proj_matrix(Game.width, Game.height, Game.fov, this.z_far, this.z_near),
+		
+		pose = Player.entity.pose_matrix(),
+		rot = [
+			pose[0], pose[1], pose[2],
+			pose[4], pose[5], pose[6],
+			pose[8], pose[9], pose[10] ],
+		
+		chunk = Player.chunk(),
+		orig = [ Player.entity.x - chunk[0]*CHUNK_X , Player.entity.y - chunk[1]*CHUNK_X, Player.entity.z - chunk[2]*CHUNK_X ],
+		
+		planes = get_frustum_planes(m4transp(camera)),
+		W = new Float32Array(3), 
 		P,
 		basis = Sky.get_basis(),
 		n = basis[0], u = basis[1], v = basis[2],
@@ -151,81 +161,91 @@ ShadowMap.prototype.calc_light_matrix = function()
 		cx = 0,
 		cy = 0;
 	
+	var pl_x = [ planes[0], planes[1] ],
+		pl_y = [ planes[2], planes[3] ],
+		pl_z = [ planes[4], planes[5] ];
+	
 	//Construct the points for the frustum
-	for(dx=-1; dx<=1; dx+=2)
-	for(dy=-1; dy<=1; dy+=2)
-	for(dz=-1; dz<=1; dz+=2)
-	{	
-		W[0] = 0.5 * dx;
-		W[1] = 0.5 * dy;
-		W[2] = 0.5 * dz;
-		W[3] = 1.0;
+	for(i=0; i<2; ++i)
+	for(j=0; j<2; ++j)
+	for(k=0; k<2; ++k)
+	{
+		var px = pl_x[i],
+			py = pl_y[j],
+			pz = pl_z[k];
+	
+		M = m3inv([
+			px[0], py[0], pz[0],
+			px[1], py[1], pz[1],
+			px[2], py[2], pz[2]			
+			]);
+			
+		W = [ -px[3], -py[3], -pz[3] ];
 		
-		P = hgmult(T, W);
+		P = m3xform(M, W);
 		
-		pts.push(new Float32Array([dot(P, u), dot(P, v)]));
+		P = m3xform(m3transp(rot), P);
+
+		P[0] += orig[0];
+		P[1] += orig[1];
+		P[2] += orig[2];
 		
-		z = dot(P, n);
-		z_max = Math.max(z_max, z);
+		pts.push([dot(P, u), dot(P, v)]);
 	}
 	
-	//Compute minimal bounding square in uv plane
-	for(i=0; i<pts.length; ++i)
-	for(j=0; j<i; ++j)
-	{
-	
-		dx = pts[i][0] - pts[j][0];
-		dy = pts[i][1] - pts[j][1];
-			
+		dx = pts[3][0] - pts[7][0];
+		dy = pts[3][1] - pts[7][1];
+		
 		l = Math.sqrt(dx*dx + dy*dy);
 		
-		if(l < 0.0001)
+		if(l < 1e-8)
+		{
 			continue;
+		}
 		
 		dx /= l;
 		dy /= l;
-		
+
 		//Compute center of square and side length
 		var x_min = 10000.0, x_max = -10000.0,
 			y_min = 10000.0, y_max = -10000.0,
-			px, py;
-		
+			px, py, s;
+	
 		for(k=0; k<pts.length; ++k)
 		{
-			px = dx * pts[k][0] + dy * pts[k][1];
-			py = dy * pts[k][0] - dx * pts[k][1];
-			
+			px =  dx * pts[k][0] + dy * pts[k][1];
+			py = -dy * pts[k][0] + dx * pts[k][1];
+		
 			x_min = Math.min(x_min, px);
 			x_max = Math.max(x_max, px);
 			y_min = Math.min(y_min, py);
 			y_max = Math.max(y_max, py);
 		}
+	
 		
 		s  = 0.5 * Math.max(x_max - x_min, y_max - y_min);
-			
+		
 		if(s < side)
 		{
 			side = s;
-			ax	 = dx;
-			ay	 = dy;
-			cx	 = (x_min + x_max) / 2.0;
-			cy	 = (y_min + y_max) / 2.0;
+			ax = dx;
+			ay = dy;
+			cx = 0.5 * (x_max + x_min);
+			cy = 0.5 * (y_max + y_min);
 		}
-	}
-	
-		
-	//Time to build the light matrix!
-	dx = ax / side;
-	dy = ay / side;
-	
+	//}
+
 	z_max = 256.0;
+	
+	ax /= side;
+	ay /= side;
 	
 	z_scale = -1.0 / (z_max - z_min);
 	
 	return new Float32Array([
-		dx*u[0]+dy*v[0],	dy*u[0]-dx*v[0],	n[0]*z_scale,	0,
-		dx*u[1]+dy*v[1],	dy*u[1]-dx*v[1],	n[1]*z_scale,	0,
-		dx*u[2]+dy*v[2],	dy*u[2]-dx*v[2],	n[2]*z_scale,	0,
+		ax*u[0]+ay*v[0],	-ay*u[0]+ax*v[0],	n[0]*z_scale,	0,
+		ax*u[1]+ay*v[1],	-ay*u[1]+ax*v[1],	n[1]*z_scale,	0,
+		ax*u[2]+ay*v[2],	-ay*u[2]+ax*v[2],	n[2]*z_scale,	0,
 		-cx/side,			-cy/side,			z_min*z_scale,	1]);
 }
 
@@ -254,12 +274,16 @@ ShadowMap.prototype.begin = function(gl)
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
 	
+	/*
 	gl.enable(gl.CULL_FACE);
 	gl.cullFace(gl.FRONT);
 	gl.frontFace(gl.CW);
+	*/
+	
+	gl.disable(gl.CULL_FACE);
 	
 	//Set offset
-	gl.polygonOffset(0, 0);
+	gl.polygonOffset(1.1, 4.0);
 	gl.enable(gl.POLYGON_OFFSET_FILL);
 	
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
@@ -284,6 +308,8 @@ ShadowMap.prototype.end = function(gl)
 
 	
 	gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);
+	
+	gl.enable(gl.CULL_FACE);
 	
 	//Generate mipmap
 	/*

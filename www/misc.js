@@ -61,7 +61,7 @@ arr2str = function(arr)
 	return str;
 }
 
-mmult = function(A, B)
+function mmult(A, B)
 {
 	var C = new Float32Array(16);
 	
@@ -80,9 +80,9 @@ mmult = function(A, B)
 	return C;
 }
 
-hgmult = function(M, V)
+function hgmult(M, X)
 {
-	var R = new Float32Array([0, 0, 0, 0]), i, j;
+	var R = new Float32Array([0, 0, 0, 0]), V = [X[0], X[1], X[2], 1.0], i, j;
 	
 	for(j=0; j<4; ++j)
 	{
@@ -101,7 +101,7 @@ hgmult = function(M, V)
 }
 
 
-function minv3(mat)
+function m3inv(mat)
 {
 	var k,
 	
@@ -239,5 +239,37 @@ function cross(u, v)
 function dot(u, v)
 {
 	return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+}
+
+function get_frustum_planes(M)
+{
+	var res = [], pl, i, j, k;
+	
+	for(i=0; i<3; ++i)
+	for(j=-1; j<=1; j+=2)
+	{
+		pl = [];
+		for(k=0; k<4; ++k)
+		{
+			if(i == 2 && j == 1)
+			{
+				pl.push( M[4*k+2] );
+			}
+			else
+			{
+				pl.push( M[4*k+3] + j * M[4*k+i] );
+			}
+		}
+		
+		mag = Math.sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+		
+		for(k=0; k<4; ++k)
+		{
+			pl[k] /= mag;
+		}
+		
+		res.push(pl);
+	}
+	return res;
 }
 

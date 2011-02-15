@@ -131,10 +131,8 @@ Map.init = function(gl)
 
 	Map.chunk_shader.shadow_fudge_factor = gl.getUniformLocation(Map.chunk_shader, "shadow_fudge_factor");
 	
-	/*
 	if(Map.chunk_shader.shadow_fudge_factor == null)
 		return "Could not locate shadow fudge uniform";
-	*/
 		
 		
 	//Create terrain texture
@@ -296,7 +294,7 @@ Map.visibility_query = function()
 		gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
 	
 		//Get camera
-		Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov);
+		Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1, 256);
 		Map.vis_base_chunk = Player.chunk();
 	}
 	else

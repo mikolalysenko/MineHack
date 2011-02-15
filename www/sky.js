@@ -7,12 +7,13 @@ Sky.get_shadow_fudge = function()
 	var dir = Sky.get_sun_dir(),
 		angle = dot(dir, [1, 0, 0]);
 		
-	return 0.2;
+	return 0.25;
 }
 
 //Retrieves the light direction
 Sky.get_sun_dir = function()
 {
+/*
 	var time_of_day = (Game.game_ticks % 1000),
 		angle = time_of_day * Math.PI / 500.0;
 	
@@ -22,6 +23,9 @@ Sky.get_sun_dir = function()
 	}
 
 	return [Math.cos(angle), Math.sin(angle), 0];
+*/
+
+	return [0, 1, 0];
 }
 
 Sky.get_basis = function()

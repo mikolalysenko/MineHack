@@ -17,11 +17,14 @@ float linstep(float lo, float hi, float v)
 
 float shadow_weight()
 {
-	if(abs(frag_pos.x) < frag_pos.w &&
-		abs(frag_pos.y) < frag_pos.w &&
-		abs(frag_pos.z) < frag_pos.w )
+	if( frag_pos.x < 0.0 ||
+		frag_pos.x > frag_pos.w ||
+		frag_pos.y < 0.0 ||
+		frag_pos.y > frag_pos.w ||
+		frag_pos.z > frag_pos.w ||
+		frag_pos.z < 0.0)
 	{
-		return 1.0;
+		return 0.0;
 	}
 
 
@@ -36,7 +39,7 @@ float shadow_weight()
 	float d = t - moments.x;
 	float p_max = variance / (variance + d * d);
 		
-	return 0.000001 * linstep(shadow_fudge_factor, 1.0, max(p, p_max));
+	return 0.5 + linstep(shadow_fudge_factor, 1.0, max(p, p_max));
 }
 
 
