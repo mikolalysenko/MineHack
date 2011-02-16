@@ -4,10 +4,7 @@ var Sky =
 
 Sky.get_shadow_fudge = function()
 {
-	var dir = Sky.get_sun_dir(),
-		angle = dot(dir, [0, 1, 0]);
-		
-	return (1.0 - angle*angle)*0.5 + 0.25;
+	return 0.75;
 }
 
 //Retrieves the light direction

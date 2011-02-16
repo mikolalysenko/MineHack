@@ -234,7 +234,7 @@ function gen_vb(p)
 					dy + (p.y<<CHUNK_Y_S),
 					dz + (p.z<<CHUNK_Z_S));
 		}
-		return 0xff;
+		return 0;
 	},
 	
 	get_right_block = function(dy, dz)
@@ -251,7 +251,7 @@ function gen_vb(p)
 					dy + (p.y<<CHUNK_Y_S),
 					dz + (p.z<<CHUNK_Z_S));
 		}
-		return 0xff;
+		return 0;
 	},
 	
 	get_buf = function(dy, dz)
@@ -784,7 +784,7 @@ function worker_start(key)
 	
 	for(var i=0; i<CHUNK_SIZE; ++i)
 	{
-		empty_data[i] = 0xff;
+		empty_data[i] = 0;
 	}
 }
 

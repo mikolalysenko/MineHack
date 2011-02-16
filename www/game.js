@@ -207,8 +207,6 @@ Game.draw = function()
 	//Draw entities
 	EntityDB.draw(gl, cam);
 	
-	Shadows.shadow_maps[0].draw_debug();
-	
 	gl.flush();
 }
 

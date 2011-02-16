@@ -62,14 +62,14 @@ float get_shadow()
 			get_moments(frag_pos0.xy, shadow_tex0), 
 			get_moments(frag_pos1.xy, shadow_tex1), s);
 	}
-	else if(depth <= shadow_cutoff1 - 4.0)
+	else if(depth <= shadow_cutoff1 - 1.0)
 	{
 		t 		= frag_pos1.z;
 		moments = get_moments(frag_pos1.xy, shadow_tex1);
 	}
 	else if(depth <= shadow_cutoff1)
 	{
-		s = fract(0.25 * depth);
+		s = fract(depth);
 		t = mix(frag_pos1.z, frag_pos2.z, s);
 		moments = mix(
 			get_moments(frag_pos1.xy, shadow_tex1), 

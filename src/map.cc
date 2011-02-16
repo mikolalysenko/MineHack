@@ -182,7 +182,7 @@ void Map::get_surface_chunk(ChunkID const& c, Chunk* chunk)
 			continue;
 		}
 		
-		chunk->data[idx] = Block::Nonsense;
+		chunk->data[idx] = Block::Stone;
 	}
 }
 

@@ -26,9 +26,9 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 256, 256, 1, 16),
-		new ShadowMap(gl, 256, 256, 16, 64),
-		new ShadowMap(gl, 256, 256, 64, 256)
+		new ShadowMap(gl, 512, 512, 1, 16),
+		new ShadowMap(gl, 512, 512, 16, 64),
+		new ShadowMap(gl, 512, 512, 64, 256)
 		];
 	
 	
@@ -204,9 +204,9 @@ ShadowMap.prototype.calc_light_matrix = function()
 	z_max = 256.0;
 	z_min = -256.0;
 	
-	var side = 1.25 * (this.z_far - this.z_near),
-		ax = dx / side;
-		ay = dy / side;
+	var side = (this.z_far - this.z_near) * Math.sqrt(2.0) + 1.0 / 128.0,
+		ax = dx / side,
+		ay = dy / side,
 		cx = Math.floor( 0.5 * (x_max + x_min) / side * 64.0) / 64.0,
 		cy = Math.floor( 0.5 * (y_max + y_min) / side * 64.0) / 64.0,
 		z_scale = -1.0 / (z_max - z_min);
@@ -242,10 +242,11 @@ ShadowMap.prototype.begin = function(gl)
 	
 	gl.disable(gl.CULL_FACE);
 	
+	/*
 	//Set offset
-	gl.polygonOffset(1.1, 4.0);
+	gl.polygonOffset(0.5, 4.0);
 	gl.enable(gl.POLYGON_OFFSET_FILL);
-	
+	*/       
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
 	
 	//Apply bias
