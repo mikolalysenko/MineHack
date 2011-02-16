@@ -39,18 +39,49 @@ float shadow_weight(float t, vec2 moments)
 	return linstep(shadow_fudge_factor, 1.0, max(p, p_max));
 }
 
-vec2 get_moments(vec4 frag_pos, sampler2D shadow_tex)
+vec2 get_moments(vec2 frag_pos, sampler2D shadow_tex)
 {
-	return texture2D(shadow_tex, frag_pos.xy).xy;
+	return texture2D(shadow_tex, frag_pos).xy;
 }
 
 float get_shadow()
 {
-	if(depth <= shadow_cutoff0)
-		return shadow_weight(frag_pos0.z, get_moments(frag_pos0, shadow_tex0));
+	float t, s;
+	vec2 moments;
+
+	if(depth <= shadow_cutoff0 - 1.0)
+	{
+		t 		= frag_pos0.z;
+		moments = get_moments(frag_pos0.xy, shadow_tex0);
+	}
+	else if(depth <= shadow_cutoff0)
+	{
+		s = fract(depth);
+		t = mix(frag_pos0.z, frag_pos1.z, s);
+		moments = mix(
+			get_moments(frag_pos0.xy, shadow_tex0), 
+			get_moments(frag_pos1.xy, shadow_tex1), s);
+	}
+	else if(depth <= shadow_cutoff1 - 4.0)
+	{
+		t 		= frag_pos1.z;
+		moments = get_moments(frag_pos1.xy, shadow_tex1);
+	}
 	else if(depth <= shadow_cutoff1)
-		return shadow_weight(frag_pos1.z, get_moments(frag_pos1, shadow_tex1));
-	return shadow_weight(frag_pos2.z, get_moments(frag_pos2, shadow_tex2));
+	{
+		s = fract(0.25 * depth);
+		t = mix(frag_pos1.z, frag_pos2.z, s);
+		moments = mix(
+			get_moments(frag_pos1.xy, shadow_tex1), 
+			get_moments(frag_pos2.xy, shadow_tex2), s);
+	}
+	else
+	{
+		t 		= frag_pos2.z;
+		moments = get_moments(frag_pos2.xy, shadow_tex2);
+	}
+	
+	return shadow_weight(t, moments);
 }
 
 

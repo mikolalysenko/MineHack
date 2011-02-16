@@ -100,8 +100,6 @@ var ShadowMap = function(gl, width, height, z_near, z_far)
 
 	this.shadow_tex = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	gl.texParameteri(gl.TEXTURE_2D,	gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
@@ -186,15 +184,11 @@ ShadowMap.prototype.calc_light_matrix = function()
 	
 
 	//Compute center of square and side length
-	var dx = pts[3][0] - pts[7][0],
-		dy = pts[3][1] - pts[7][1],
-		l = Math.sqrt(dx*dx + dy*dy),
+	var dx = 1,
+		dy = 0,
 		x_min = 10000.0, x_max = -10000.0,
 		y_min = 10000.0, y_max = -10000.0,
 		px, py;
-
-	dx /= l;
-	dy /= l;
 
 	for(k=0; k<pts.length; ++k)
 	{
@@ -210,18 +204,18 @@ ShadowMap.prototype.calc_light_matrix = function()
 	z_max = 256.0;
 	z_min = -256.0;
 	
-	var side = Math.max(x_max - x_min, y_max - y_min),
+	var side = 1.25 * (this.z_far - this.z_near),
 		ax = dx / side;
 		ay = dy / side;
-		cx = 0.5 * (x_max + x_min),
-		cy = 0.5 * (y_max + y_min),
+		cx = Math.floor( 0.5 * (x_max + x_min) / side * 64.0) / 64.0,
+		cy = Math.floor( 0.5 * (y_max + y_min) / side * 64.0) / 64.0,
 		z_scale = -1.0 / (z_max - z_min);
 	
 	return new Float32Array([
 		ax*u[0]+ay*v[0],	-ay*u[0]+ax*v[0],	n[0]*z_scale,	0,
 		ax*u[1]+ay*v[1],	-ay*u[1]+ax*v[1],	n[1]*z_scale,	0,
 		ax*u[2]+ay*v[2],	-ay*u[2]+ax*v[2],	n[2]*z_scale,	0,
-		-cx/side,			-cy/side,			z_min*z_scale,	1]);
+		-cx,				-cy,				z_min*z_scale,	1]);
 }
 
 
@@ -240,20 +234,11 @@ ShadowMap.prototype.begin = function(gl)
 	//Draw a full quad to the background
 	Shadows.init_map();
 	
-
 	gl.useProgram(Shadows.shadow_shader);
 	gl.uniformMatrix4fv(Shadows.shadow_shader.proj_mat, false, this.light_matrix);
 	
-	
-	
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
-	
-	/*
-	gl.enable(gl.CULL_FACE);
-	gl.cullFace(gl.FRONT);
-	gl.frontFace(gl.CW);
-	*/
 	
 	gl.disable(gl.CULL_FACE);
 	
@@ -286,9 +271,10 @@ ShadowMap.prototype.end = function(gl)
 	
 	gl.enable(gl.CULL_FACE);
 	
-	//Generate mipmap
+	//Need to reset texture parameters since these get cleared when we render (stupid)
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
-	gl.generateMipmap(gl.TEXTURE_2D);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	gl.bindTexture(gl.TEXTURE_2D, null);
 }
 
