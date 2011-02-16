@@ -91,16 +91,7 @@ void main(void)
 	
 	vec3 sunColor = get_shadow() * sun_light_color;
 	
-	vec3 rgbColor = clamp(texColor.xyz * (light_color * 0.1 + sunColor) * texColor.w, 0.0, 1.0);
-	
-	/*
-	if(depth <= shadow_cutoff0)
-		rgbColor.r += 0.8;
-	else if(depth <= shadow_cutoff1)
-		rgbColor.g += 0.8;
-	else
-		rgbColor.b += 0.8;
-	*/
+	vec3 rgbColor = clamp(texColor.xyz * (light_color * 0.2 + sunColor) * texColor.w, 0.0, 1.0);
 	
 	gl_FragColor = vec4(rgbColor, texColor.w);
 }

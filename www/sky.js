@@ -45,4 +45,8 @@ Sky.get_sun_color = function()
 //Draws the sky background
 Sky.draw_bg = function()
 {
+	var gl = Game.gl;
+
+	gl.clearColor(0.4, 0.64, 0.9, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT);
 }
