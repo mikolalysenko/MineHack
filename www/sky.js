@@ -4,7 +4,7 @@ var Sky =
 
 Sky.get_shadow_fudge = function()
 {
-	return 0.75;
+	return 0.1;
 }
 
 //Retrieves the light direction

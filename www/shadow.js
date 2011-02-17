@@ -26,9 +26,9 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 256, 256, 1, 16),
-		new ShadowMap(gl, 256, 256, 16, 64),
-		new ShadowMap(gl, 256, 256, 64, 256)
+		new ShadowMap(gl, 256, 256, 1, 16,   4),
+		new ShadowMap(gl, 256, 256, 16, 64,  3),
+		new ShadowMap(gl, 256, 256, 64, 256, 1)
 		];
 	
 	
@@ -63,6 +63,19 @@ Shadows.init = function(gl)
 		return "Could not locate position attribute for shadow init shader";
 	
 	
+	
+	
+	Shadows.blur_tex = gl.createTexture();
+	gl.bindTexture(gl.TEXTURE_2D, Shadows.blur_tex);
+	gl.texParameteri(gl.TEXTURE_2D,	gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 256, 0, gl.RGBA, gl.FLOAT, null);
+	gl.bindTexture(gl.TEXTURE_2D, null);	
+	
+	Shadows.blur_fbo = gl.createFramebuffer();
+	gl.bindFramebuffer(gl.FRAMEBUFFER, Shadows.blur_fbo);
+	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, Shadows.blur_tex, 0);
+	
 	return "Ok";
 }
 
@@ -86,7 +99,7 @@ Shadows.init_map = function()
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height, z_near, z_far)
+var ShadowMap = function(gl, width, height, z_near, z_far, radius)
 {
 	this.width		= width;
 	this.height		= height;
@@ -121,6 +134,37 @@ var ShadowMap = function(gl, width, height, z_near, z_far)
 	}
 
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	
+	
+	//Create shadow map shader
+	
+	var vs_source = 
+'attribute vec4 pos; \
+varying vec2 tc; \
+void main(void) \
+{ \
+	tc = 0.5 * pos.xy + vec2(0.5, 0.5); \
+	gl_Position = pos; \
+}',
+
+		fs_source =
+'precision mediump float; \n\
+uniform sampler2D tex;  \n\
+varying vec2 tc; \n\
+void main(void) \n\
+{ \n\
+	vec4 result = vec4(0.0,0.0,100.0,0.0); \n\
+	for(int i=-'+radius+'; i<='+radius+'; ++i) \n\
+	for(int j=-'+radius+'; j<='+radius+'; ++j) \n\
+	{  \n\
+		result += texture2D(tex, tc + vec2(2.0*float(i)+0.5, 2.0*float(j)+0.5)/256.0); \n \
+	} \n\
+	gl_FragColor = result / '+((2*radius+1)*(2*radius+1))+'.0; \n\
+}';
+	
+	this.blur_shader	= getProgramFromSource(gl, fs_source, vs_source);
+	this.blur_shader.pos_attr = gl.getAttribLocation(this.blur_shader, "pos");
+	this.blur_shader.tex = gl.getUniformLocation(this.blur_shader, "tex");
 }
 
 ShadowMap.prototype.calc_light_matrix = function()
@@ -207,8 +251,8 @@ ShadowMap.prototype.calc_light_matrix = function()
 	var side = (this.z_far - this.z_near) * Math.sqrt(2.0) + 1.0 / 128.0,
 		ax = dx / side,
 		ay = dy / side,
-		cx = Math.floor( 0.5 * (x_max + x_min) / side * 64.0) / 64.0,
-		cy = Math.floor( 0.5 * (y_max + y_min) / side * 64.0) / 64.0,
+		cx = Math.floor( 0.5 * (x_max + x_min) / side * 128.0) / 128.0,
+		cy = Math.floor( 0.5 * (y_max + y_min) / side * 128.0) / 128.0,
 		z_scale = -1.0 / (z_max - z_min);
 	
 	return new Float32Array([
@@ -240,14 +284,15 @@ ShadowMap.prototype.begin = function(gl)
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
 	
-	gl.disable(gl.CULL_FACE);
+	gl.frontFace(gl.CW);
+	gl.cullFace(gl.BACK);
+	gl.enable(gl.CULL_FACE);
 	
-	/*
-	//Set offset
-	gl.polygonOffset(0.5, 4.0);
 	gl.enable(gl.POLYGON_OFFSET_FILL);
-	*/       
+	gl.polygonOffset(1.0, 4.0);
+	
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
+	gl.enableVertexAttribArray(Shadows.shadow_shader.norm_attr);
 	
 	//Apply bias
 	var i;
@@ -262,21 +307,43 @@ ShadowMap.prototype.begin = function(gl)
 
 ShadowMap.prototype.end = function(gl)
 {
-	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-	
+	gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);	
 	gl.disable(gl.POLYGON_OFFSET_FILL);
-	gl.polygonOffset(0.0, 0.0);
-
 	
-	gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);
-	
-	gl.enable(gl.CULL_FACE);
+	gl.disable(gl.CULL_FACE);
+	gl.disable(gl.DEPTH_TEST);
+	gl.enable(gl.TEXTURE_2D);
 	
 	//Need to reset texture parameters since these get cleared when we render (stupid)
+	gl.bindFramebuffer(gl.FRAMEBUFFER, Shadows.blur_fbo);
+	gl.activeTexture(gl.TEXTURE0);
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-	gl.bindTexture(gl.TEXTURE_2D, null);
+	
+	//Do first blur pass
+	gl.useProgram(this.blur_shader);
+	gl.enableVertexAttribArray(this.blur_shader.pos_attr);
+	gl.uniform1i(this.blur_shader.tex, 0);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, Shadows.quad_vb);
+	gl.vertexAttribPointer(this.blur_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
+	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Shadows.quad_ib);
+	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+	
+	//Do second blur pass
+	gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+	gl.bindTexture(gl.TEXTURE_2D, Shadows.blur_tex);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+
+	//Unbind fbo
+	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 }
 
 ShadowMap.prototype.draw_debug = function(gl)

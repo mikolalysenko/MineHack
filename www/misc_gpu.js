@@ -59,6 +59,26 @@ getProgram = function(gl, fs_url, vs_url)
 	return ["Ok", fs, vs, prog];
 }
 
+function getProgramFromSource(gl, fs_source, vs_source)
+{
+	var vshader, fshader, prog;
+
+	vshader = gl.createShader(gl.VERTEX_SHADER);
+	gl.shaderSource(vshader, vs_source);
+	gl.compileShader(vshader);
+	
+	fshader = gl.createShader(gl.FRAGMENT_SHADER);
+	gl.shaderSource(fshader, fs_source);
+	gl.compileShader(fshader);
+	
+	prog = gl.createProgram();
+	gl.attachShader(prog, vshader);
+	gl.attachShader(prog, fshader);
+	gl.linkProgram(prog);
+
+	return prog;
+}
+
 getTexture = function(gl, url)
 {
 	var img = Loader.data[url];

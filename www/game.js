@@ -78,6 +78,8 @@ Game.init = function(canvas)
 		return "WebGL implementation does not support floating point textures";
 	}
 	
+	gl.getExtension("OES_standard_derivatives");
+	
 	
 	Game.gl = gl;
 
@@ -205,6 +207,8 @@ Game.draw = function()
 	
 	//Draw entities
 	EntityDB.draw(gl, cam);
+	
+	Shadows.shadow_maps[0].draw_debug();
 	
 	gl.flush();
 }

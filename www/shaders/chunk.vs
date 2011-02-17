@@ -40,9 +40,9 @@ void main(void)
 	gl_Position = proj * tpos;
 	
 	//Compute shadow mapstuff
-	frag_pos0 = shadow0 * tpos - vec4(0.0, 0.0, 0.001, 0.0);
-	frag_pos1 = shadow1 * tpos - vec4(0.0, 0.0, 0.001, 0.0);
-	frag_pos2 = shadow2 * tpos - vec4(0.0, 0.0, 0.001, 0.0);
+	frag_pos0 = shadow0 * tpos;
+	frag_pos1 = shadow1 * tpos;
+	frag_pos2 = shadow2 * tpos;
 	
 	//Texture coordinates
 	vec2 t = texCoord.xy * 16.0;
