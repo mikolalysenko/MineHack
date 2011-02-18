@@ -1,4 +1,15 @@
+"use strict";
+
+
 //Draws a chunk
+//
+// Convention:
+//
+//	Attrib 0 = position
+//	Attrib 1 = normal
+//	Attrib 2 = tex coord
+//	Attrib 3 = light map value
+//
 Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 {
 	if(	this.pending || 
@@ -19,13 +30,13 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 	//Bind buffers
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	if('pos_attr' in shader)
-		gl.vertexAttribPointer(shader.pos_attr,	3, gl.FLOAT, false, 48, 0);	
+		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
 	if('tc_attr' in shader)
-		gl.vertexAttribPointer(shader.tc_attr, 	2, gl.FLOAT, false, 48, 12);
+		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
 	if('norm_attr' in shader)
-		gl.vertexAttribPointer(shader.norm_attr, 3, gl.FLOAT, false, 48, 20);
+		gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
 	if('light_attr' in shader)
-		gl.vertexAttribPointer(shader.light_attr, 3, gl.FLOAT, false, 48, 32);
+		gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
 
 	if(transp)
 	{
@@ -81,22 +92,16 @@ Map.init = function(gl)
 	Map.chunk_vs 	 = res[2];
 	Map.chunk_shader = res[3];
 	
-	Map.chunk_shader.pos_attr = gl.getAttribLocation(Map.chunk_shader, "pos");
-	if(Map.chunk_shader.pos_attr == null)
-		return "Could not locate position attribute";
-
-	Map.chunk_shader.tc_attr = gl.getAttribLocation(Map.chunk_shader, "texCoord");
-	if(Map.chunk_shader.tc_attr == null)
-		return "Could not locate tex coord attribute";
-		
-	Map.chunk_shader.norm_attr = gl.getAttribLocation(Map.chunk_shader, "normal");
-	if(Map.chunk_shader.norm_attr == null)
-		return "Could not locate normal pointer";
-
-	Map.chunk_shader.light_attr = gl.getAttribLocation(Map.chunk_shader, "lightColor");
-	if(Map.chunk_shader.light_attr == null)
-		return "Could not locate light color attribute";	
-
+	//Bind attributes
+	Map.chunk_shader.pos_attr		= 0;
+	Map.chunk_shader.tc_attr		= 1;
+	Map.chunk_shader.norm_attr		= 2;
+	Map.chunk_shader.light_attr		= 3;
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.pos_attr, "pos");
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.tc_attr, "texCoord");
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.norm_attr, "normal");
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.light_attr, "lightColor");
+	
 	Map.chunk_shader.proj_mat = gl.getUniformLocation(Map.chunk_shader, "proj");
 	if(Map.chunk_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
@@ -182,9 +187,15 @@ Map.init = function(gl)
 	Map.vis_vs = res[2];
 	Map.vis_shader = res[3];
 	
+	/*
 	Map.vis_shader.pos_attr = gl.getAttribLocation(Map.vis_shader, "pos");
 	if(Map.vis_shader.pos_attr == null)
 		return "Could not locate position attribute";
+	*/
+	
+	Map.vis_shader.pos_attr = 0;
+	gl.bindAttribLocation(Map.vis_shader, Map.vis_shader.pos_attr, "pos");
+	
 
 	Map.vis_shader.proj_mat = gl.getUniformLocation(Map.vis_shader, "proj");
 	if(Map.vis_shader.proj_mat == null)
@@ -596,7 +607,6 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	chunk.num_elements = ind.length;
 	chunk.num_transparent_elements = tind.length;
 
-	//Set buffer data
 	gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
@@ -668,5 +678,8 @@ Map.init_worker = function()
 Map.shutdown = function()
 {
 	if(Map.vb_worker)
-		Map.vb_worker.close();
+		Map.vb_worker.terminate();
 }
+
+
+

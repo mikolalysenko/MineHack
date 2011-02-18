@@ -199,7 +199,7 @@ InputHandler.serialize = function()
 	//Clear old actions
 	InputHandler.actions = []
 	InputHandler.action_length = 0;
-	has_events = false;
+	InputHandler.has_events = false;
 
 	//Create blob
 	return bb.getBlob("application/octet-stream");		

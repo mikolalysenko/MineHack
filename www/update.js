@@ -1,4 +1,3 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
 "use strict";
 
 var UpdateHandler = {};
@@ -92,7 +91,7 @@ UpdateHandler.handle_update_packet = function(arr)
 	}
 	
 	//Append chat log
-	var chat_uint = arr.slice(idx, idx+chat_size);
+	var chat_uint = arr.subarray(idx, idx+chat_size);
 	idx += chat_size;
 	var chat_utf = "";	//Have to convert to UTF-8
 	for(var i=0; i<chat_uint.length; i++)
@@ -126,7 +125,7 @@ UpdateHandler.handle_update_packet = function(arr)
 	{
 		//Parse out entity data
 		var initialize = arr[idx++];
-		var entity_id = arr2str(arr.slice(idx, idx+8));
+		var entity_id = arr2str(arr.subarray(idx, idx+8));
 		idx += 8;
 		
 		var r = -1;
@@ -134,11 +133,11 @@ UpdateHandler.handle_update_packet = function(arr)
 		if(initialize == 1)
 		{
 			//Send update packet to the target
-			r = EntityDB.create_entity(entity_id, coords[n], arr.slice(idx));
+			r = EntityDB.create_entity(entity_id, coords[n], arr.subarray(idx));
 		}
 		else
 		{
-			r = EntityDB.update_entity(entity_id, coords[n], arr.slice(idx));
+			r = EntityDB.update_entity(entity_id, coords[n], arr.subarray(idx));
 		}
 		
 		if(r < 0)
@@ -157,7 +156,7 @@ UpdateHandler.handle_update_packet = function(arr)
 	idx = pidx + update_size;
 	while(--kill_size >= 0)
 	{
-		EntityDB.destroy_entity(arr2str(arr.slice(idx, idx+8)))
+		EntityDB.destroy_entity(arr2str(arr.subarray(idx, idx+8)))
 		idx += 8;
 	}
 }

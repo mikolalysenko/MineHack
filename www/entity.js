@@ -1,7 +1,7 @@
 "use strict";
 
 //Entity constructor
-Entity = function(coords, packet, len)
+function Entity(coords, packet, len)
 {
 	//Set base coordinates (temporary
 	this.x = coords[1];
@@ -141,7 +141,7 @@ Entity.prototype.draw = function(gl)
 
 
 //The entity database
-EntityDB = 
+var EntityDB = 
 {
 	index : {}
 };

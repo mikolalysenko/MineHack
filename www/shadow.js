@@ -1,3 +1,5 @@
+"use strict";
+
 var Shadows = {}
 
 Shadows.init = function(gl)
@@ -12,9 +14,8 @@ Shadows.init = function(gl)
 	Shadows.shadow_vs		= res[2];
 	Shadows.shadow_shader	= res[3];
 	
-	Shadows.shadow_shader.pos_attr = gl.getAttribLocation(Shadows.shadow_shader, "pos");
-	if(Shadows.shadow_shader.pos_attr == null)
-		return "Could not locate position attribute";
+	Shadows.shadow_shader.pos_attr = 0;
+	gl.bindAttribLocation(Shadows.shadow_shader, Shadows.shadow_shader.pos_attr, "pos");
 
 	Shadows.shadow_shader.proj_mat = gl.getUniformLocation(Shadows.shadow_shader, "proj");
 	if(Shadows.shadow_shader.proj_mat == null)
@@ -26,11 +27,7 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-	/*
-		new ShadowMap(gl, 128, 128, 20, 40,  3, 165),
-		new ShadowMap(gl, 128, 128, 60, 80,  2, 231),
-	*/
-		new ShadowMap(gl, 256, 256, 128, 256, 1, 150)
+		new ShadowMap(gl, 256, 256, 128, 256, 1, 160)
 		];
 	
 	

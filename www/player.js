@@ -68,7 +68,9 @@ Player.init = function()
 		}
 	};
 	
-	Game.canvas.onmousemove = function(event)
+	var body = document.getElementById("docBody");
+	
+	body.onmousemove = function(event)
 	{
 		var cx = Game.canvas.width / 2,
 			cy = Game.canvas.height / 2;
@@ -77,12 +79,12 @@ Player.init = function()
 		Player.dy = (event.y - cy) / Game.canvas.height;
 	};
 	
-	Game.canvas.onmousedown = function(event)
+	body.onmousedown = function(event)
 	{
 		Player.input["dig"] = 1;
 	}
 	
-	Game.canvas.onmouseup = function(event)
+	body.onmouseup = function(event)
 	{
 		Player.input["dig"] = 0;
 	}

@@ -1,4 +1,6 @@
-Game = 
+"use strict";
+
+var Game = 
 {
 	crashed : false,
 	running : false,
@@ -73,12 +75,15 @@ Game.init = function(canvas)
 		return 'Invalid WebGL object';
 	}
 	
-	if(!gl.getExtension("OES_texture_float"))
+	//Get extensions
+	Game.EXT_FPTex = gl.getExtension("OES_texture_float");
+	//Game.EXT_StdDeriv = gl.getExtension("OES_standard_derivatives");
+	//Game.EXT_VertexArray = gl.getExtension("OES_vertex_array_object");	
+	
+	if(!Game.EXT_FPTex)
 	{
 		return "WebGL implementation does not support floating point textures";
 	}
-	
-	gl.getExtension("OES_standard_derivatives");
 	
 	
 	Game.gl = gl;
@@ -174,7 +179,7 @@ Game.camera_matrix = function(width, height, fov, zfar, znear)
 Game.update_shadows = function()
 {
 	var gl = Game.gl, i;
-	
+
 	for(i=0; i<Shadows.shadow_maps.length; ++i)
 	{
 		Shadows.shadow_maps[i].begin(gl);

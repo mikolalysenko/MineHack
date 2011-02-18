@@ -1,3 +1,5 @@
+"use strict";
+
 //The chunk worker thread
 importScripts(
 	'constants.js', 
@@ -42,9 +44,9 @@ function gen_vb(p)
 		n220, n221, n222,
 	
 	//Buffers for scanning	
-		b00, b01, b02,
-		b10, b11, b12,
-		b20, b21, b22,
+		buf00, buf01, buf02,
+		buf10, buf11, buf12,
+		buf20, buf21, buf22,
 		
 	//Buffers
 		data 			= p.data,
@@ -259,7 +261,7 @@ function gen_vb(p)
 		if( dy >= 0 && dy < CHUNK_Y &&
 			dz >= 0 && dz < CHUNK_Z )
 		{
-			return data.slice(
+			return data.subarray(
 					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
 					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
 		}
@@ -268,7 +270,7 @@ function gen_vb(p)
 			var chunk = Map.lookup_chunk(p.x, p.y + (dy>>CHUNK_Y_S), p.z + (dz>>CHUNK_Z_S));
 			if(chunk && !chunk.pending)
 			{
-				return chunk.data.slice(
+				return chunk.data.subarray(
 					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
 					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
 			}
@@ -513,7 +515,7 @@ function grab_chunks()
 	var i, j, k = 0,
 		chunks = net_pending_chunks,
 		base_chunk = chunks[0], 
-		base_chunk_id = [base_chunk.x, base_chunk.y, base_chunk.z];
+		base_chunk_id = [base_chunk.x, base_chunk.y, base_chunk.z],
 		bb = new BlobBuilder(),
 		arr = new Uint8Array(12),
 		delta = new Uint8Array(3);	
@@ -556,7 +558,7 @@ function grab_chunks()
 		print("Got response: " + arr.length);
 	
 		wait_chunks = false;
-		arr = arr.slice(1);
+		arr = arr.subarray(1);
 	
 		for(i=0; i<chunks.length; i++)
 		{
@@ -603,7 +605,7 @@ function grab_chunks()
 			}
 			
 			//Resize array
-			arr = arr.slice(res);
+			arr = arr.subarray(res);
 
 			//Set dirty flags on neighboring chunks
 			set_dirty(chunk.x, chunk.y, chunk.z);
@@ -790,9 +792,9 @@ function worker_start(key)
 
 
 //Handles a block update
-onmessage = function(ev)
+self.onmessage = function(ev)
 {
-	//print("got event: " + ev.data + "," + ev.data.type);
+	print("got event: " + ev.data + "," + ev.data.type);
 
 	switch(ev.data.type)
 	{
@@ -852,4 +854,10 @@ function forget_chunk(chunk)
 			return;
 	}	
 }
+
+
+
+print("Worker started");
+
+
 

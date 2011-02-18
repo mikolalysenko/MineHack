@@ -1,17 +1,21 @@
+"use strict";
+
 function print(str)
 {
+/*
 	if(typeof(console) == 'undefined')
 	{
-		//postMessage({type:EV_PRINT, 'str':str});
+		postMessage({type:EV_PRINT, 'str':str});
 	}
 	else
 	{
-		//console.log(str);
+		console.log(str);
 	}
+*/
 }
 
 
-asyncGetBinary = function(url, handler, err_handler, body)
+function asyncGetBinary(url, handler, err_handler, body)
 {
 	var XHR = new XMLHttpRequest(),
 		timer = setTimeout(function()
@@ -51,7 +55,7 @@ asyncGetBinary = function(url, handler, err_handler, body)
 	XHR.send(body);
 }
 
-arr2str = function(arr)
+function arr2str(arr)
 {
 	var str = "";
 	for(var i=0; i<arr.length; i++)
@@ -69,7 +73,7 @@ function mmult(A, B)
 	{
 		for(var j=0; j<4; j++)
 		{
-			x = 0.0
+			var x = 0.0;
 			for(var k=0; k<4; k++)
 			{
 				x += A[i + 4*k] * B[k + 4*j];

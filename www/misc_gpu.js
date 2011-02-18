@@ -1,4 +1,7 @@
-getShader = function(gl, url)
+"use strict";
+
+
+function getShader(gl, url)
 {
 	var script = Loader.data[url];
 	if(!script)
@@ -32,7 +35,7 @@ getShader = function(gl, url)
 	return ["Ok", shader];
 }
 
-getProgram = function(gl, fs_url, vs_url)
+function getProgram(gl, fs_url, vs_url)
 {
 	//Load chunk vertex/frag shaders
 	var res = getShader(gl, fs_url);
@@ -79,7 +82,7 @@ function getProgramFromSource(gl, fs_source, vs_source)
 	return prog;
 }
 
-getTexture = function(gl, url)
+function getTexture(gl, url)
 {
 	var img = Loader.data[url];
 	if(!img)
