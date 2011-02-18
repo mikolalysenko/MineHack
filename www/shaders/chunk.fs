@@ -87,6 +87,7 @@ float get_shadow()
 	{
 		return shadow_weight(frag_pos2.z, get_far_moments());
 	}
+
 }
 
 

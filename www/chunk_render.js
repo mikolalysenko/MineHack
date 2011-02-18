@@ -129,25 +129,33 @@ Map.init = function(gl)
 		if(i <2)
 		{
 			uni = gl.getUniformLocation(Map.chunk_shader, "shadow_cutoff" + i);
+			/*
 			if(uni == null)
 				return "Could not locate shadow cutoff uniform no. " + i;
+			*/
 			Map.chunk_shader.cutoffs.push(uni);		
 		}
 	
 		uni = gl.getUniformLocation(Map.chunk_shader, "shadow" + i);
+		/*
 		if(uni == null)
 			return "Could not locate shadow matrix uniform no. " + i;
+		*/
 		Map.chunk_shader.light_mat.push(uni);
 
 		uni = gl.getUniformLocation(Map.chunk_shader, "shadow_tex" + i);
+		/*
 		if(uni == null)
 			return "Could not locate shadow texture uniform no. " + i;
+		*/
 		Map.chunk_shader.shadow_tex.push(uni);
 	}
 	
 	Map.chunk_shader.model_mat = gl.getUniformLocation(Map.chunk_shader, "model");
+	/*
 	if(Map.chunk_shader.model_mat == null)
 		return "Could not locate model uniform";
+	*/
 
 	Map.chunk_shader.shadow_fudge_factor = gl.getUniformLocation(Map.chunk_shader, "shadow_fudge_factor");
 	

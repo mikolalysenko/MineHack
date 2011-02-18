@@ -26,9 +26,9 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 256, 256, 1, 16,   4),
-		new ShadowMap(gl, 256, 256, 16, 64,  3),
-		new ShadowMap(gl, 256, 256, 64, 256, 1)
+		new ShadowMap(gl, 128, 128, 1, 16,  8, 32),
+		new ShadowMap(gl, 128, 128, 1, 64,  4, 64),
+		new ShadowMap(gl, 128, 128, 1, 256, 1, 256)
 		];
 	
 	
@@ -69,7 +69,7 @@ Shadows.init = function(gl)
 	gl.bindTexture(gl.TEXTURE_2D, Shadows.blur_tex);
 	gl.texParameteri(gl.TEXTURE_2D,	gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 256, 0, gl.RGBA, gl.FLOAT, null);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 128, 128, 0, gl.RGBA, gl.FLOAT, null);
 	gl.bindTexture(gl.TEXTURE_2D, null);	
 	
 	Shadows.blur_fbo = gl.createFramebuffer();
@@ -99,12 +99,13 @@ Shadows.init_map = function()
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height, z_near, z_far, radius)
+var ShadowMap = function(gl, width, height, z_near, z_far, radius, side)
 {
 	this.width		= width;
 	this.height		= height;
 	this.z_near		= z_near;
 	this.z_far		= z_far;
+	this.side		= side;
 	
 	this.light_matrix = new Float32Array([ 1, 0, 0, 0,
 										 0, 1, 0, 0,
@@ -153,13 +154,12 @@ uniform sampler2D tex;  \n\
 varying vec2 tc; \n\
 void main(void) \n\
 { \n\
-	vec4 result = vec4(0.0,0.0,100.0,0.0); \n\
+	vec4 result = vec4(0.0,0.0,0.0,0.0); \n\
 	for(int i=-'+radius+'; i<='+radius+'; ++i) \n\
-	for(int j=-'+radius+'; j<='+radius+'; ++j) \n\
 	{  \n\
-		result += texture2D(tex, tc + vec2(2.0*float(i)+0.5, 2.0*float(j)+0.5)/256.0); \n \
+		result += texture2D(tex, tc.yx + vec2(float(2*i)+0.5,0)/'+this.width+'.0); \n \
 	} \n\
-	gl_FragColor = result / '+((2*radius+1)*(2*radius+1))+'.0; \n\
+	gl_FragColor = result / '+(2*radius+1)+'.0; \n\
 }';
 	
 	this.blur_shader	= getProgramFromSource(gl, fs_source, vs_source);
@@ -248,11 +248,11 @@ ShadowMap.prototype.calc_light_matrix = function()
 	z_max = 256.0;
 	z_min = -256.0;
 	
-	var side = (this.z_far - this.z_near) * Math.sqrt(2.0) + 1.0 / 128.0,
+	var side = this.side,
 		ax = dx / side,
 		ay = dy / side,
-		cx = Math.floor( 0.5 * (x_max + x_min) / side * 128.0) / 128.0,
-		cy = Math.floor( 0.5 * (y_max + y_min) / side * 128.0) / 128.0,
+		cx = Math.floor( 0.5 * (x_max + x_min) / side * this.width * 0.5) / (this.width * 0.5),
+		cy = Math.floor( 0.5 * (y_max + y_min) / side * this.width * 0.5) / (this.width * 0.5),
 		z_scale = -1.0 / (z_max - z_min);
 	
 	return new Float32Array([
