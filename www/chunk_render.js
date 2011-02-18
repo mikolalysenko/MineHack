@@ -124,9 +124,9 @@ Map.init = function(gl)
 	Map.chunk_shader.shadow_tex = [];
 	Map.chunk_shader.cutoffs = [];
 		
-	for(i=0; i<3; ++i)
+	for(i=0; i<Shadows.shadow_maps.length; ++i)
 	{
-		if(i <2)
+		if(i <Shadows.shadow_maps.length-1)
 		{
 			uni = gl.getUniformLocation(Map.chunk_shader, "shadow_cutoff" + i);
 			/*
@@ -436,14 +436,14 @@ Map.draw = function(gl)
 	
 
 	//Set shadow map uniforms
-	for(i=0; i<3; ++i)
+	for(i=0; i<Shadows.shadow_maps.length; ++i)
 	{
 		gl.activeTexture(gl.TEXTURE0+1+i);
 		gl.bindTexture(gl.TEXTURE_2D, Shadows.shadow_maps[i].shadow_tex);
 		gl.uniform1i(Map.chunk_shader.shadow_tex[i], 1+i);
 		gl.uniformMatrix4fv(Map.chunk_shader.light_mat[i], false, Shadows.shadow_maps[i].light_matrix);
-		if(i < 2)
-			gl.uniform1f(Map.chunk_shader.cutoffs[i], Shadows.shadow_maps[i].z_far);
+		if(i < Shadows.shadow_maps.length-1)
+			gl.uniform1f(Map.chunk_shader.cutoffs[i], Shadows.shadow_maps[i].cutoff);
 	}
 	
 	//Set camera

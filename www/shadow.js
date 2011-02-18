@@ -26,9 +26,11 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 128, 128, 1, 16,  8, 32),
-		new ShadowMap(gl, 128, 128, 1, 64,  4, 64),
-		new ShadowMap(gl, 128, 128, 1, 256, 1, 256)
+	/*
+		new ShadowMap(gl, 128, 128, 20, 40,  3, 165),
+		new ShadowMap(gl, 128, 128, 60, 80,  2, 231),
+	*/
+		new ShadowMap(gl, 256, 256, 128, 256, 1, 150)
 		];
 	
 	
@@ -63,13 +65,11 @@ Shadows.init = function(gl)
 		return "Could not locate position attribute for shadow init shader";
 	
 	
-	
-	
 	Shadows.blur_tex = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, Shadows.blur_tex);
 	gl.texParameteri(gl.TEXTURE_2D,	gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 128, 128, 0, gl.RGBA, gl.FLOAT, null);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 256, 0, gl.RGBA, gl.FLOAT, null);
 	gl.bindTexture(gl.TEXTURE_2D, null);	
 	
 	Shadows.blur_fbo = gl.createFramebuffer();
@@ -99,12 +99,12 @@ Shadows.init_map = function()
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height, z_near, z_far, radius, side)
+var ShadowMap = function(gl, width, height, z_center, cutoff, radius, side)
 {
 	this.width		= width;
 	this.height		= height;
-	this.z_near		= z_near;
-	this.z_far		= z_far;
+	this.z_center	= z_center;
+	this.cutoff		= cutoff;
 	this.side		= side;
 	
 	this.light_matrix = new Float32Array([ 1, 0, 0, 0,
@@ -169,97 +169,25 @@ void main(void) \n\
 
 ShadowMap.prototype.calc_light_matrix = function()
 {
-	//First generate all bounding points on the frustum
-	var pts = [], 
-		camera = Game.proj_matrix(Game.width, Game.height, Game.fov, Game.zfar, Game.znear),
-		planes = get_frustum_planes(m4transp(camera)),
-
-		pose = Player.entity.pose_matrix(),
-		rot = [
-			pose[0], pose[1], pose[2],
-			pose[4], pose[5], pose[6],
-			pose[8], pose[9], pose[10] ],
+	var pose = Player.entity.pose_matrix(),
+		P = hgmult(pose, [0, 0, -this.z_center]),
 		
-		chunk = Player.chunk(),
-		orig = [ Player.entity.x - chunk[0]*CHUNK_X , Player.entity.y - chunk[1]*CHUNK_X, Player.entity.z - chunk[2]*CHUNK_X ],
 		
-		P, W = new Float32Array(3), 
 		basis = Sky.get_basis(),
 		n = basis[0], u = basis[1], v = basis[2],
 		
-		i, j, k,
-
-		//Z-coordinate dimensions		
-		z_max = -256.0, z_min = -256.0;		
-	
-	var pl_x = [ planes[0], planes[1] ],
-		pl_y = [ planes[2], planes[3] ],
-		pl_z = [ [0, 0, 1, this.z_far],  [0, 0, 1, this.z_near] ];
-	
-	//Construct the points for the frustum
-	for(i=0; i<2; ++i)
-	for(j=0; j<2; ++j)
-	for(k=0; k<2; ++k)
-	{
-		var px = pl_x[i],
-			py = pl_y[j],
-			pz = pl_z[k];
-	
-		M = m3inv([
-			px[0], py[0], pz[0],
-			px[1], py[1], pz[1],
-			px[2], py[2], pz[2]			
-			]);
-			
-		W = [ -px[3], -py[3], -pz[3] ];
+		z_max = 256.0, z_min = -256.0,
 		
-		P = m3xform(M, W);
-		
-		P = m3xform(m3transp(rot), P);
-
-		P[0] += orig[0];
-		P[1] += orig[1];
-		P[2] += orig[2];
-		
-		pts.push([dot(P, u), dot(P, v)]);
-		
-		z_max = Math.max(z_max, dot(P, n));
-	}
-	
-
-	//Compute center of square and side length
-	var dx = 1,
-		dy = 0,
-		x_min = 10000.0, x_max = -10000.0,
-		y_min = 10000.0, y_max = -10000.0,
-		px, py;
-
-	for(k=0; k<pts.length; ++k)
-	{
-		px =  dx * pts[k][0] + dy * pts[k][1];
-		py = -dy * pts[k][0] + dx * pts[k][1];
-	
-		x_min = Math.min(x_min, px);
-		x_max = Math.max(x_max, px);
-		y_min = Math.min(y_min, py);
-		y_max = Math.max(y_max, py);
-	}
-
-	z_max = 256.0;
-	z_min = -256.0;
-	
-	var side = this.side,
-		ax = dx / side,
-		ay = dy / side,
-		cx = Math.floor( 0.5 * (x_max + x_min) / side * this.width * 0.5) / (this.width * 0.5),
-		cy = Math.floor( 0.5 * (y_max + y_min) / side * this.width * 0.5) / (this.width * 0.5),
-		z_scale = -1.0 / (z_max - z_min);
+		w = 1.0 / this.side,
+		cx = Math.floor( 0.5 * dot(P, u) * w * this.width * 0.5) / (this.width * 0.5),
+		cy = Math.floor( 0.5 * dot(P, v) * w * this.width * 0.5) / (this.width * 0.5),
+		z_scale = -0.5 / (z_max - z_min);
 	
 	return new Float32Array([
-		ax*u[0]+ay*v[0],	-ay*u[0]+ax*v[0],	n[0]*z_scale,	0,
-		ax*u[1]+ay*v[1],	-ay*u[1]+ax*v[1],	n[1]*z_scale,	0,
-		ax*u[2]+ay*v[2],	-ay*u[2]+ax*v[2],	n[2]*z_scale,	0,
-		-cx,				-cy,				z_min*z_scale,	1]);
+		w*u[0],	w*v[0],	n[0]*z_scale,	0,
+		w*u[1],	w*v[1],	n[1]*z_scale,	0,
+		w*u[2],	w*v[2],	n[2]*z_scale,	0,
+		-cx,	-cy,	z_min*z_scale,	1]);
 }
 
 
@@ -284,9 +212,13 @@ ShadowMap.prototype.begin = function(gl)
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
 	
+	/*
 	gl.frontFace(gl.CW);
 	gl.cullFace(gl.BACK);
 	gl.enable(gl.CULL_FACE);
+	*/
+	
+	gl.disable(gl.CULL_FACE);
 	
 	gl.enable(gl.POLYGON_OFFSET_FILL);
 	gl.polygonOffset(1.0, 4.0);

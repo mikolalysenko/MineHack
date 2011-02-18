@@ -8,7 +8,7 @@ varying float depth;
 void main(void)
 {
 	vec4 pos = proj * view * vec4(pos, 1.0);
-	depth = pos.z;
+	depth = pos.z + 0.001;
 	gl_Position = pos;
 }
 

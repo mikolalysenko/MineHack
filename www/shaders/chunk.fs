@@ -58,6 +58,7 @@ vec2 get_far_moments()
 
 float get_shadow()
 {
+/*
 	float t, s;
 	vec2 moments;
 
@@ -87,7 +88,8 @@ float get_shadow()
 	{
 		return shadow_weight(frag_pos2.z, get_far_moments());
 	}
-
+*/
+	return shadow_weight(frag_pos0.z, get_near_moments());
 }
 
 
