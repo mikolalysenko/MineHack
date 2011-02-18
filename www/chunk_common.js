@@ -58,6 +58,10 @@ function Chunk(x, y, z)
 	this.z = z;
 	
 	this.pending = true;
+	
+	this.vb = null;
+	this.ib = null;
+	this.tib = null;
 }
 
 function frustum_test(m, cx, cy, cz)
@@ -115,11 +119,15 @@ var Map =
 	max_chunks		: 80000,	//Maximum number of chunks to load (not used yet)
 	chunk_count 	: 0,		//Number of loaded chunks
 	chunk_radius	: 3,		//These chunks are always fetched.
+	chunk_init_radius	: 6,		//Initially fetched chunks
+	num_pending_chunks	: 0,
+	
 	
 	//If set, then we draw the debug info for the chunk
 	show_debug		: false,
 	
 	//Visibility stuff
+	vis_angle		: 0,
 	vis_width		: 64,
 	vis_height		: 64,
 	vis_fov			: Math.PI * 3.0 / 4.0,

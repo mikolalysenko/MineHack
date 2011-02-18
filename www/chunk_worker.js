@@ -6,6 +6,8 @@ importScripts(
 	'misc.js', 
 	'chunk_common.js');
 
+const MAX_NET_CHUNKS	= 512;
+
 var net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
@@ -21,12 +23,6 @@ var net_pending_chunks = [],				 //Chunks we are waiting for on the network
 // This code makes me want to barf - Mik
 function gen_vb(p)
 {
-	if(p.is_air)
-	{
-		print("THIS SHOULD NOT HAPPEN");
-		return [[], [], []];
-	}
-
 	var vertices = [],
 		indices  = [],
 		tindices = [],
@@ -513,7 +509,8 @@ function grab_chunks()
 		return;
 	
 	var i, j, k = 0,
-		chunks = net_pending_chunks,
+		chunks = (net_pending_chunks.length > MAX_NET_CHUNKS) ? 
+				net_pending_chunks.slice(0,MAX_NET_CHUNKS) : net_pending_chunks,
 		base_chunk = chunks[0], 
 		base_chunk_id = [base_chunk.x, base_chunk.y, base_chunk.z],
 		bb = new BlobBuilder(),
@@ -523,7 +520,15 @@ function grab_chunks()
 	print("Grabbing chunks");
 		
 	wait_chunks = true;
-	net_pending_chunks = [];
+	
+	if(net_pending_chunks.length > MAX_NET_CHUNKS)
+	{
+		net_pending_chunks = net_pending_chunks.slice(MAX_NET_CHUNKS);
+	}
+	else
+	{
+		net_pending_chunks = [];
+	}
 	
 	bb.append(session_id.buffer);
 	
@@ -767,7 +772,7 @@ function set_block(x, y, z, b)
 //Starts the worker
 function worker_start(key)
 {
-	//print("starting worker");
+	print("starting worker");
 
 	session_id.set(key);
 	
@@ -794,7 +799,7 @@ function worker_start(key)
 //Handles a block update
 self.onmessage = function(ev)
 {
-	print("got event: " + ev.data + "," + ev.data.type);
+	//print("got event: " + ev.data + "," + ev.data.type);
 
 	switch(ev.data.type)
 	{
@@ -854,10 +859,4 @@ function forget_chunk(chunk)
 			return;
 	}	
 }
-
-
-
-print("Worker started");
-
-
 

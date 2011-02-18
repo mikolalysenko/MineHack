@@ -146,7 +146,7 @@ function m3xform(M, x)
 
 function m3transp(M)
 {
-	var res = new Float32Array(9);
+	var res = new Float32Array(9), i, j;
 	
 	for(i=0; i<3; ++i)
 	for(j=0; j<3; ++j)
@@ -221,7 +221,7 @@ function m4inv(m)
 
 function m4transp(M)
 {
-	var res = new Float32Array(16);
+	var res = new Float32Array(16), i, j;
 	
 	for(i=0; i<4; ++i)
 	for(j=0; j<4; ++j)

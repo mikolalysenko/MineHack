@@ -10,10 +10,7 @@ uniform mat4 view;
 uniform mat4 model;
 
 //Shadow map parameters
-uniform mat4 shadow0;
-uniform mat4 shadow1;
-uniform mat4 shadow2;
-
+uniform mat4 shadow;
 
 //Sunlight parameters
 uniform vec3 sun_dir;
@@ -23,26 +20,21 @@ varying vec4 tc;
 varying vec3 light_color;
 varying vec3 sun_light_color;
 varying float depth;
-
-varying vec4 frag_pos0;
-varying vec4 frag_pos1;
-varying vec4 frag_pos2;
+varying vec3 shadow_pos;
 
 void main(void)
 {
 	vec4 tpos = view * vec4(pos, 1);
 
-	vec4 spos = model * tpos;
-	
-	depth = -spos.z / spos.w;   
 
 	//Compute position
 	gl_Position = proj * tpos;
 	
-	//Compute shadow mapstuff
-	frag_pos0 = shadow0 * tpos;
-	frag_pos1 = shadow1 * tpos;
-	frag_pos2 = shadow2 * tpos;
+	//Depth
+	depth = gl_Position.z / gl_Position.w;
+	
+	//Shadow map coordinates
+	shadow_pos = (shadow * tpos).xyz;
 	
 	//Texture coordinates
 	vec2 t = texCoord.xy * 16.0;

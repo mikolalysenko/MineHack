@@ -27,7 +27,7 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 256, 256, 128, 256, 1, 160)
+		new ShadowMap(gl, 256, 256, 128, 256, 2, 140)
 		];
 	
 	
@@ -167,17 +167,16 @@ void main(void) \n\
 ShadowMap.prototype.calc_light_matrix = function()
 {
 	var pose = Player.entity.pose_matrix(),
-		P = hgmult(pose, [0, 0, -this.z_center]),
-		
-		
+		P = hgmult(m4inv(pose), [0, 0, -this.z_center]),
+	
 		basis = Sky.get_basis(),
 		n = basis[0], u = basis[1], v = basis[2],
 		
 		z_max = 256.0, z_min = -256.0,
 		
 		w = 1.0 / this.side,
-		cx = Math.floor( 0.5 * dot(P, u) * w * this.width * 0.5) / (this.width * 0.5),
-		cy = Math.floor( 0.5 * dot(P, v) * w * this.width * 0.5) / (this.width * 0.5),
+		cx = Math.floor(dot(P, u) * w * 64.0) / 64.0,
+		cy = Math.floor(dot(P, v) * w * 64.0) / 64.0,
 		z_scale = -0.5 / (z_max - z_min);
 	
 	return new Float32Array([
