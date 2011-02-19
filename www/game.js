@@ -31,7 +31,7 @@ var Game =
 	update_rate : 40,
 
 	znear : 1.0,
-	zfar  : 256.0,
+	zfar  : 128.0,
 	fov   : Math.PI / 4.0,
 	
 	wait_for_heartbeat : false,
