@@ -27,7 +27,7 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 256, 256, 100, 3, 150)
+		new ShadowMap(gl, 256, 256, 128, 3, 140)
 		];
 	
 	
