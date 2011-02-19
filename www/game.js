@@ -38,6 +38,8 @@ var Game =
 	
 	enable_ao : true,
 	
+	preload : true,
+	
 	initial_login : true,
 	wait_for_initial_chunks : true
 };
@@ -134,6 +136,17 @@ Game.init = function(canvas)
 	Game.running = true;	
 	Game.interval = setInterval(Game.tick, Game.update_rate);
 	
+	if(Game.preload)
+	{
+		Game.initial_login = true;
+		Game.wait_for_initial_chunks = true;
+	}
+	else
+	{
+		Game.initial_login = false;
+		Game.wait_for_initial_chunks = false;
+	}
+	
 	return 'Ok';
 }
 
@@ -162,7 +175,7 @@ Game.proj_matrix = function(w, h, fov, zfar, znear)
 }
 
 //Creates the total cmera matrix
-Game.camera_matrix = function(width, height, fov, zfar, znear)
+Game.camera_matrix = function(width, height, fov)
 {
 	if(!width)
 	{
@@ -171,13 +184,7 @@ Game.camera_matrix = function(width, height, fov, zfar, znear)
 		fov = Game.fov;
 	}
 	
-	if(!zfar)
-	{
-		zfar = Game.zfar;
-		znear = Game.znear;
-	}
-
-	return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.entity.pose_matrix());
+	return mmult(Game.proj_matrix(width, height, fov, Game.zfar, Game.znear), Player.entity.pose_matrix());
 }
 
 Game.update_shadows = function()
@@ -271,7 +278,7 @@ Game.tick = function()
 		var prog_bar = document.getElementById("progress");
 		prog_bar.style.display = "block";
 		
-		prog_bar.innerHTML = "Loading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
+		prog_bar.innerHTML = "Preloading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
 		
 		return;
 	}
@@ -284,11 +291,11 @@ Game.tick = function()
 		if(Map.num_pending_chunks == 0)
 		{
 			Game.wait_for_initial_chunks = false;
-			prog_bar.style.display = "hidden";
+			prog_bar.style.display = "none";
 		}
 		else
 		{
-			prog_bar.innerHTML = "Loading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
+			prog_bar.innerHTML = "Preloading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
 		}
 		return;
 	}

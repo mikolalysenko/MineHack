@@ -27,7 +27,7 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 256, 256, 128, 256, 2, 140)
+		new ShadowMap(gl, 256, 256, 100, 3, 150)
 		];
 	
 	
@@ -96,12 +96,11 @@ Shadows.init_map = function()
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height, z_center, cutoff, radius, side)
+var ShadowMap = function(gl, width, height, z_center, radius, side)
 {
 	this.width		= width;
 	this.height		= height;
 	this.z_center	= z_center;
-	this.cutoff		= cutoff;
 	this.side		= side;
 	
 	this.light_matrix = new Float32Array([ 1, 0, 0, 0,
@@ -154,9 +153,9 @@ void main(void) \n\
 	vec4 result = vec4(0.0,0.0,0.0,0.0); \n\
 	for(int i=-'+radius+'; i<='+radius+'; ++i) \n\
 	{  \n\
-		result += texture2D(tex, tc.yx + vec2(float(2*i)+0.5,0)/'+this.width+'.0); \n \
+		result += texture2D(tex, tc.yx + vec2(float(2*i)+0.5,0)/'+this.width+'.0); \n\
 	} \n\
-	gl_FragColor = result / '+(2*radius+1)+'.0; \n\
+	gl_FragColor = result / ' + (2*radius+1)+'.0; \n\
 }';
 	
 	this.blur_shader	= getProgramFromSource(gl, fs_source, vs_source);
@@ -172,11 +171,11 @@ ShadowMap.prototype.calc_light_matrix = function()
 		basis = Sky.get_basis(),
 		n = basis[0], u = basis[1], v = basis[2],
 		
-		z_max = 256.0, z_min = -256.0,
+		z_max = 512.0, z_min = -512.0,
 		
 		w = 1.0 / this.side,
-		cx = Math.floor(dot(P, u) * w * 64.0) / 64.0,
-		cy = Math.floor(dot(P, v) * w * 64.0) / 64.0,
+		cx = Math.floor(dot(P, u) * w * 128.0) / 128.0,
+		cy = Math.floor(dot(P, v) * w * 128.0) / 128.0,
 		z_scale = -0.5 / (z_max - z_min);
 	
 	return new Float32Array([

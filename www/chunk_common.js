@@ -119,7 +119,7 @@ var Map =
 	max_chunks		: 80000,	//Maximum number of chunks to load (not used yet)
 	chunk_count 	: 0,		//Number of loaded chunks
 	chunk_radius	: 3,		//These chunks are always fetched.
-	chunk_init_radius	: 6,		//Initially fetched chunks
+	chunk_init_radius	: 4,		//Initially fetched chunks
 	num_pending_chunks	: 0,
 	
 	

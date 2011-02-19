@@ -250,7 +250,7 @@ Map.visibility_query = function()
 {
 	var gl = Game.gl;
 	
-	if(Map.vis_state == Map.vis_bounds.length+2)
+	if(Map.vis_state == Map.vis_bounds.length+1)
 	{
 		//Process data to find visible chunks
 		for(var i=0; i<Map.vis_data.length; i+=4)
@@ -283,23 +283,24 @@ Map.visibility_query = function()
 	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	
-	if(Map.vis_state == Map.vis_bounds.length+1)
+	if(Map.vis_state == Map.vis_bounds.length)
 	{
 		//Read pixels
 		gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
 	}
-	else if(Map.vis_state == 0)
-	{
-		//Initialize background
-		gl.clearColor(0, 0, 0, 1);
-		gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
-	
-		//Get camera
-		Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1024, 1);
-		Map.vis_base_chunk = Player.chunk();
-	}
 	else
 	{
+		if(Map.vis_state == 0)
+		{
+			//Initialize background
+			gl.clearColor(0, 0, 0, 1);
+			gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
+	
+			//Get camera
+			Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov);
+			Map.vis_base_chunk = Player.chunk();
+		}
+		
 		//Set up shader program
 		gl.useProgram(Map.vis_shader);
 		gl.enableVertexAttribArray(Map.vis_shader.pos_attr);
@@ -346,15 +347,14 @@ Map.visibility_query = function()
 			}
 		}
 
-	
 		if(Map.vis_state == 1)
 		{
 			query_chunk(0, 0, 0);
 		}
 	
 		//Render all chunks to front-to-back
-		var rlo = Map.vis_bounds[Map.vis_state-1][0],
-			rhi = Map.vis_bounds[Map.vis_state-1][1];
+		var rlo = Map.vis_bounds[Map.vis_state][0],
+			rhi = Map.vis_bounds[Map.vis_state][1];
 		
 		for(var r=rlo; r<=rhi; ++r)
 		{
@@ -432,7 +432,7 @@ Map.draw = function(gl)
 	gl.enable(gl.BLEND);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.depthMask(0);
-	for(i=0; i<Shadows.shadow_maps.length; ++i)
+	for(c in Map.index)
 	{
 		chunk = Map.index[c];
 		if(chunk instanceof Chunk)
@@ -641,9 +641,9 @@ Map.get_initial_chunks = function()
 	//Need to grab all the chunks in the viewable cube around the player
 	var c = Player.chunk();
 	
-	for(var i=c[0] - Map.chunk_init_radius; i<=c[0] + Map.chunk_init_radius; i++)
+	for(var i=c[0] - Math.ceil(Game.zfar / CHUNK_X); i<=c[0] + Math.ceil(Game.zfar / CHUNK_X); i++)
 	for(var j=c[1] - Map.chunk_init_radius; j<=c[1] + Map.chunk_init_radius; j++)
-	for(var k=c[2] - Map.chunk_init_radius; k<=c[2] + Map.chunk_init_radius; k++)
+	for(var k=c[2] - Math.ceil(Game.zfar / CHUNK_Z); k<=c[2] + Math.ceil(Game.zfar / CHUNK_Z); k++)
 	{
 		Map.fetch_chunk(i, j, k);
 	}

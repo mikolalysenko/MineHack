@@ -2,12 +2,12 @@
 
 var Sky = 
 {
+	day_offset : 0
 }
 
 Sky.time_of_day = function()
 {
-	return (Game.game_ticks % 8000) / 4000.0;
-	//return 0.5;
+	return (((Game.game_ticks + Sky.day_offset) % 8000) / 4000.0) - 1.0;
 }
 
 Sky.get_shadow_fudge = function()
