@@ -36,9 +36,7 @@ var Game =
 	
 	wait_for_heartbeat : false,
 	
-	enable_ao : true,
-	
-	preload : true,
+	preload : false,
 	
 	initial_login : true,
 	wait_for_initial_chunks : true
