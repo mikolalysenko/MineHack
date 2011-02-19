@@ -1,3 +1,5 @@
+"use strict";
+
 var Shadows = {}
 
 Shadows.init = function(gl)
@@ -12,9 +14,8 @@ Shadows.init = function(gl)
 	Shadows.shadow_vs		= res[2];
 	Shadows.shadow_shader	= res[3];
 	
-	Shadows.shadow_shader.pos_attr = gl.getAttribLocation(Shadows.shadow_shader, "pos");
-	if(Shadows.shadow_shader.pos_attr == null)
-		return "Could not locate position attribute";
+	Shadows.shadow_shader.pos_attr = 0;
+	gl.bindAttribLocation(Shadows.shadow_shader, Shadows.shadow_shader.pos_attr, "pos");
 
 	Shadows.shadow_shader.proj_mat = gl.getUniformLocation(Shadows.shadow_shader, "proj");
 	if(Shadows.shadow_shader.proj_mat == null)
@@ -26,11 +27,7 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-	/*
-		new ShadowMap(gl, 128, 128, 20, 40,  3, 165),
-		new ShadowMap(gl, 128, 128, 60, 80,  2, 231),
-	*/
-		new ShadowMap(gl, 256, 256, 128, 256, 1, 150)
+		new ShadowMap(gl, 256, 256, 128, 3, 140)
 		];
 	
 	
@@ -99,12 +96,11 @@ Shadows.init_map = function()
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height, z_center, cutoff, radius, side)
+var ShadowMap = function(gl, width, height, z_center, radius, side)
 {
 	this.width		= width;
 	this.height		= height;
 	this.z_center	= z_center;
-	this.cutoff		= cutoff;
 	this.side		= side;
 	
 	this.light_matrix = new Float32Array([ 1, 0, 0, 0,
@@ -157,9 +153,9 @@ void main(void) \n\
 	vec4 result = vec4(0.0,0.0,0.0,0.0); \n\
 	for(int i=-'+radius+'; i<='+radius+'; ++i) \n\
 	{  \n\
-		result += texture2D(tex, tc.yx + vec2(float(2*i)+0.5,0)/'+this.width+'.0); \n \
+		result += texture2D(tex, tc.yx + vec2(float(2*i)+0.5,0)/'+this.width+'.0); \n\
 	} \n\
-	gl_FragColor = result / '+(2*radius+1)+'.0; \n\
+	gl_FragColor = result / ' + (2*radius+1)+'.0; \n\
 }';
 	
 	this.blur_shader	= getProgramFromSource(gl, fs_source, vs_source);
@@ -170,17 +166,16 @@ void main(void) \n\
 ShadowMap.prototype.calc_light_matrix = function()
 {
 	var pose = Player.entity.pose_matrix(),
-		P = hgmult(pose, [0, 0, -this.z_center]),
-		
-		
+		P = hgmult(m4inv(pose), [0, 0, -this.z_center]),
+	
 		basis = Sky.get_basis(),
 		n = basis[0], u = basis[1], v = basis[2],
 		
-		z_max = 256.0, z_min = -256.0,
+		z_max = 512.0, z_min = -512.0,
 		
 		w = 1.0 / this.side,
-		cx = Math.floor( 0.5 * dot(P, u) * w * this.width * 0.5) / (this.width * 0.5),
-		cy = Math.floor( 0.5 * dot(P, v) * w * this.width * 0.5) / (this.width * 0.5),
+		cx = Math.floor(dot(P, u) * w * 128.0) / 128.0,
+		cy = Math.floor(dot(P, v) * w * 128.0) / 128.0,
 		z_scale = -0.5 / (z_max - z_min);
 	
 	return new Float32Array([

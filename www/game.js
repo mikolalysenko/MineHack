@@ -1,4 +1,6 @@
-Game = 
+"use strict";
+
+var Game = 
 {
 	crashed : false,
 	running : false,
@@ -34,7 +36,12 @@ Game =
 	
 	wait_for_heartbeat : false,
 	
-	enable_ao : true
+	enable_ao : true,
+	
+	preload : true,
+	
+	initial_login : true,
+	wait_for_initial_chunks : true
 };
 
 Game.resize = function()
@@ -73,12 +80,15 @@ Game.init = function(canvas)
 		return 'Invalid WebGL object';
 	}
 	
-	if(!gl.getExtension("OES_texture_float"))
+	//Get extensions
+	Game.EXT_FPTex = gl.getExtension("OES_texture_float");
+	Game.EXT_StdDeriv = gl.getExtension("OES_standard_derivatives");
+	Game.EXT_VertexArray = gl.getExtension("OES_vertex_array_object");	
+	
+	if(!Game.EXT_FPTex)
 	{
 		return "WebGL implementation does not support floating point textures";
 	}
-	
-	gl.getExtension("OES_standard_derivatives");
 	
 	
 	Game.gl = gl;
@@ -126,6 +136,18 @@ Game.init = function(canvas)
 	Game.running = true;	
 	Game.interval = setInterval(Game.tick, Game.update_rate);
 	
+	if(Game.preload)
+	{
+		Game.initial_login = true;
+		Game.wait_for_initial_chunks = true;
+	}
+	else
+	{
+		Game.initial_login = false;
+		Game.wait_for_initial_chunks = false;
+		Map.set_throttle();
+	}
+	
 	return 'Ok';
 }
 
@@ -145,15 +167,16 @@ Game.proj_matrix = function(w, h, fov, zfar, znear)
 	var B = (ymax + ymin) / (ymax - ymin);
 	var C = -(zfar + znear) / (zfar - znear);
 	var D = -2.0 * zfar*znear / (zfar - znear);
-
-	return new Float32Array([X, 0, A, 0,
-							 0, Y, B, 0,
-						 	 0, 0, C, D,
-							 0, 0, -1, 0]);
+	
+	return new Float32Array([X, 0, 0, 0,
+							 0, Y, 0, 0,
+						 	 A, B, C, -1,
+							 0, 0, D, 0]);
+	
 }
 
 //Creates the total cmera matrix
-Game.camera_matrix = function(width, height, fov, zfar, znear)
+Game.camera_matrix = function(width, height, fov)
 {
 	if(!width)
 	{
@@ -162,19 +185,13 @@ Game.camera_matrix = function(width, height, fov, zfar, znear)
 		fov = Game.fov;
 	}
 	
-	if(!zfar)
-	{
-		zfar = Game.zfar;
-		znear = Game.znear;
-	}
-
-	return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.entity.pose_matrix());
+	return mmult(Game.proj_matrix(width, height, fov, Game.zfar, Game.znear), Player.entity.pose_matrix());
 }
 
 Game.update_shadows = function()
 {
 	var gl = Game.gl, i;
-	
+
 	for(i=0; i<Shadows.shadow_maps.length; ++i)
 	{
 		Shadows.shadow_maps[i].begin(gl);
@@ -194,19 +211,28 @@ Game.draw = function()
 	
 	gl.clear(gl.DEPTH_BUFFER_BIT);
 	
-	Sky.draw_bg();
+	if(Game.wait_for_initial_chunks)
+	{
+		//Draw loading stuff
+	}
+	else
+	{
+		Sky.draw_bg();
 	
-	gl.enable(gl.DEPTH_TEST);
+		gl.enable(gl.DEPTH_TEST);
 	
-	gl.frontFace(gl.CW);
-	gl.cullFace(gl.BACK);
-	gl.enable(gl.CULL_FACE);
+		gl.frontFace(gl.CW);
+		gl.cullFace(gl.BACK);
+		gl.enable(gl.CULL_FACE);
 
-	//Draw map
-	Map.draw(gl);
+		//Draw map
+		Map.draw(gl);
 	
-	//Draw entities
-	EntityDB.draw(gl, cam);
+		//Draw entities
+		EntityDB.draw(gl, cam);
+		
+		//Shadows.shadow_maps[0].draw_debug();
+	}
 	
 	gl.flush();
 }
@@ -244,6 +270,38 @@ Game.tick = function()
 	if(!Player.entity)
 		return;
 	
+	//Grab the initial chunks
+	if(Game.initial_login)
+	{
+		Map.get_initial_chunks();
+		Game.initial_login = false;
+		
+		var prog_bar = document.getElementById("progress");
+		prog_bar.style.display = "block";
+		
+		prog_bar.innerHTML = "Preloading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
+		
+		return;
+	}
+	
+	//Wait for the chunks to load
+	if(Game.wait_for_initial_chunks)
+	{
+		var prog_bar = document.getElementById("progress");
+		
+		if(Map.num_pending_chunks == 0)
+		{
+			Game.wait_for_initial_chunks = false;
+			prog_bar.style.display = "none";
+			Map.set_throttle();
+		}
+		else
+		{
+			prog_bar.innerHTML = "Preloading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
+		}
+		return;
+	}
+	
 	//Goal: Try to interpolate local clock so that  = remote_clock - ping 
 	if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
 	{
@@ -258,7 +316,6 @@ Game.tick = function()
 		++Game.game_ticks;
 	}
 	
-		
 	//Tick entities
 	EntityDB.tick();
 

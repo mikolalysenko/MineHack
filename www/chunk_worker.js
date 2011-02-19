@@ -1,10 +1,16 @@
+"use strict";
+
 //The chunk worker thread
 importScripts(
 	'constants.js', 
 	'misc.js', 
 	'chunk_common.js');
 
-var net_pending_chunks = [],				 //Chunks we are waiting for on the network
+const MAX_NET_CHUNKS	= 512;
+
+var 
+	high_throughput = true,					 //Maximizes vertex buffer generation throughput
+	net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	empty_data = new Uint8Array(CHUNK_SIZE), //Allocate an empty buffer for unloaded chunks
@@ -19,12 +25,6 @@ var net_pending_chunks = [],				 //Chunks we are waiting for on the network
 // This code makes me want to barf - Mik
 function gen_vb(p)
 {
-	if(p.is_air)
-	{
-		print("THIS SHOULD NOT HAPPEN");
-		return [[], [], []];
-	}
-
 	var vertices = [],
 		indices  = [],
 		tindices = [],
@@ -42,9 +42,9 @@ function gen_vb(p)
 		n220, n221, n222,
 	
 	//Buffers for scanning	
-		b00, b01, b02,
-		b10, b11, b12,
-		b20, b21, b22,
+		buf00, buf01, buf02,
+		buf10, buf11, buf12,
+		buf20, buf21, buf22,
 		
 	//Buffers
 		data 			= p.data,
@@ -259,7 +259,7 @@ function gen_vb(p)
 		if( dy >= 0 && dy < CHUNK_Y &&
 			dz >= 0 && dz < CHUNK_Z )
 		{
-			return data.slice(
+			return data.subarray(
 					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
 					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
 		}
@@ -268,7 +268,7 @@ function gen_vb(p)
 			var chunk = Map.lookup_chunk(p.x, p.y + (dy>>CHUNK_Y_S), p.z + (dz>>CHUNK_Z_S));
 			if(chunk && !chunk.pending)
 			{
-				return chunk.data.slice(
+				return chunk.data.subarray(
 					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
 					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
 			}
@@ -511,9 +511,10 @@ function grab_chunks()
 		return;
 	
 	var i, j, k = 0,
-		chunks = net_pending_chunks,
+		chunks = (net_pending_chunks.length > MAX_NET_CHUNKS) ? 
+				net_pending_chunks.slice(0,MAX_NET_CHUNKS) : net_pending_chunks,
 		base_chunk = chunks[0], 
-		base_chunk_id = [base_chunk.x, base_chunk.y, base_chunk.z];
+		base_chunk_id = [base_chunk.x, base_chunk.y, base_chunk.z],
 		bb = new BlobBuilder(),
 		arr = new Uint8Array(12),
 		delta = new Uint8Array(3);	
@@ -521,7 +522,15 @@ function grab_chunks()
 	print("Grabbing chunks");
 		
 	wait_chunks = true;
-	net_pending_chunks = [];
+	
+	if(net_pending_chunks.length > MAX_NET_CHUNKS)
+	{
+		net_pending_chunks = net_pending_chunks.slice(MAX_NET_CHUNKS);
+	}
+	else
+	{
+		net_pending_chunks = [];
+	}
 	
 	bb.append(session_id.buffer);
 	
@@ -556,7 +565,7 @@ function grab_chunks()
 		print("Got response: " + arr.length);
 	
 		wait_chunks = false;
-		arr = arr.slice(1);
+		arr = arr.subarray(1);
 	
 		for(i=0; i<chunks.length; i++)
 		{
@@ -603,7 +612,7 @@ function grab_chunks()
 			}
 			
 			//Resize array
-			arr = arr.slice(res);
+			arr = arr.subarray(res);
 
 			//Set dirty flags on neighboring chunks
 			set_dirty(chunk.x, chunk.y, chunk.z);
@@ -701,10 +710,13 @@ function generate_vbs()
 {
 	print("Generating vbs");
 
-	var i, chunk, vbs;
-	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
+	var limit = high_throughput ? 
+		vb_pending_chunks.length :
+		Math.min(vb_pending_chunks.length, MAX_VB_UPDATES),
+		i, chunk, vbs;
+		
+	for(i=0; i < limit; ++i)
 	{
-	
 		chunk = vb_pending_chunks[i];
 		//print("generating vb: " + chunk.x + "," + chunk.y + "," + chunk.z);
 		send_vb(chunk.x, chunk.y, chunk.z, gen_vb(chunk));
@@ -765,7 +777,7 @@ function set_block(x, y, z, b)
 //Starts the worker
 function worker_start(key)
 {
-	//print("starting worker");
+	print("starting worker");
 
 	session_id.set(key);
 	
@@ -790,7 +802,7 @@ function worker_start(key)
 
 
 //Handles a block update
-onmessage = function(ev)
+self.onmessage = function(ev)
 {
 	//print("got event: " + ev.data + "," + ev.data.type);
 
@@ -806,6 +818,10 @@ onmessage = function(ev)
 		
 		case EV_FETCH_CHUNK:
 			fetch_chunk(ev.data.x, ev.data.y, ev.data.z);
+		break;
+		
+		case EV_SET_THROTTLE:
+			high_throughput = false;
 		break;
 	}
 

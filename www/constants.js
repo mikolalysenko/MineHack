@@ -1,5 +1,4 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: false, regexp: true, maxerr: 50, indent: 4 */
-
+"use strict";
 
 //Chunk parameters
 const CHUNK_X_S		= 4;
@@ -64,6 +63,7 @@ const EV_VB_UPDATE			= 3;
 const EV_CHUNK_UPDATE		= 4;
 const EV_PRINT				= 5;
 const EV_FORGET_CHUNK		= 6;
+const EV_SET_THROTTLE		= 7;
 
 const MAX_PENDING_CHUNKS	= 25;
 const MAX_VB_UPDATES		= 10;

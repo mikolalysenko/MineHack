@@ -1,5 +1,8 @@
+"use strict";
+
 var Sky = 
 {
+	day_offset : 0
 }
 
 //Ranges from -1 to +1
@@ -7,7 +10,7 @@ var Sky =
 //    0 = sunrise
 Sky.time_of_day = function()
 {
-	return (Game.game_ticks % 8000) / 4000.0 - 1.0;
+	return (((Game.game_ticks + Sky.day_offset) % 8000) / 4000.0) - 1.0;
 }
 
 Sky.get_shadow_fudge = function()

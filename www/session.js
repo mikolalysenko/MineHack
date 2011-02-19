@@ -1,4 +1,3 @@
-/*jslint strict: true, undef: true, onevar: true, evil: true, es5: true, adsafe: true, regexp: true, maxerr: 50, indent: 4 */
 "use strict";
 
 var Session = 
@@ -34,9 +33,8 @@ Session.get_session_id_arr = function()
 Session.handle_login = function(XHR)
 {
 	XHR.send(null);
-	var response = XHR.responseText;
-	
-	lines = response.split('\n');
+	var response = XHR.responseText,
+		lines = response.split('\n');
 	if(lines.length == 2 && lines[0] == 'Ok')
 	{
 		Session.logged_in = true;

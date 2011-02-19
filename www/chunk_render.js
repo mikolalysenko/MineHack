@@ -1,4 +1,15 @@
+"use strict";
+
+
 //Draws a chunk
+//
+// Convention:
+//
+//	Attrib 0 = position
+//	Attrib 1 = normal
+//	Attrib 2 = tex coord
+//	Attrib 3 = light map value
+//
 Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 {
 	if(	this.pending || 
@@ -19,13 +30,13 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 	//Bind buffers
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
 	if('pos_attr' in shader)
-		gl.vertexAttribPointer(shader.pos_attr,	3, gl.FLOAT, false, 48, 0);	
+		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
 	if('tc_attr' in shader)
-		gl.vertexAttribPointer(shader.tc_attr, 	2, gl.FLOAT, false, 48, 12);
+		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
 	if('norm_attr' in shader)
-		gl.vertexAttribPointer(shader.norm_attr, 3, gl.FLOAT, false, 48, 20);
+		gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
 	if('light_attr' in shader)
-		gl.vertexAttribPointer(shader.light_attr, 3, gl.FLOAT, false, 48, 32);
+		gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
 
 	if(transp)
 	{
@@ -81,22 +92,16 @@ Map.init = function(gl)
 	Map.chunk_vs 	 = res[2];
 	Map.chunk_shader = res[3];
 	
-	Map.chunk_shader.pos_attr = gl.getAttribLocation(Map.chunk_shader, "pos");
-	if(Map.chunk_shader.pos_attr == null)
-		return "Could not locate position attribute";
-
-	Map.chunk_shader.tc_attr = gl.getAttribLocation(Map.chunk_shader, "texCoord");
-	if(Map.chunk_shader.tc_attr == null)
-		return "Could not locate tex coord attribute";
-		
-	Map.chunk_shader.norm_attr = gl.getAttribLocation(Map.chunk_shader, "normal");
-	if(Map.chunk_shader.norm_attr == null)
-		return "Could not locate normal pointer";
-
-	Map.chunk_shader.light_attr = gl.getAttribLocation(Map.chunk_shader, "lightColor");
-	if(Map.chunk_shader.light_attr == null)
-		return "Could not locate light color attribute";	
-
+	//Bind attributes
+	Map.chunk_shader.pos_attr		= 0;
+	Map.chunk_shader.tc_attr		= 1;
+	Map.chunk_shader.norm_attr		= 2;
+	Map.chunk_shader.light_attr		= 3;
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.pos_attr, "pos");
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.tc_attr, "texCoord");
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.norm_attr, "normal");
+	gl.bindAttribLocation(Map.chunk_shader, Map.chunk_shader.light_attr, "lightColor");
+	
 	Map.chunk_shader.proj_mat = gl.getUniformLocation(Map.chunk_shader, "proj");
 	if(Map.chunk_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
@@ -117,48 +122,10 @@ Map.init = function(gl)
 	if(Map.chunk_shader.sun_color == null)
 		return "Could not locate sunlight color uniform";
 		
-		
-	var uni;
-		
-	Map.chunk_shader.light_mat = [];
-	Map.chunk_shader.shadow_tex = [];
-	Map.chunk_shader.cutoffs = [];
-		
-	for(i=0; i<Shadows.shadow_maps.length; ++i)
-	{
-		if(i <Shadows.shadow_maps.length-1)
-		{
-			uni = gl.getUniformLocation(Map.chunk_shader, "shadow_cutoff" + i);
-			/*
-			if(uni == null)
-				return "Could not locate shadow cutoff uniform no. " + i;
-			*/
-			Map.chunk_shader.cutoffs.push(uni);		
-		}
-	
-		uni = gl.getUniformLocation(Map.chunk_shader, "shadow" + i);
-		/*
-		if(uni == null)
-			return "Could not locate shadow matrix uniform no. " + i;
-		*/
-		Map.chunk_shader.light_mat.push(uni);
-
-		uni = gl.getUniformLocation(Map.chunk_shader, "shadow_tex" + i);
-		/*
-		if(uni == null)
-			return "Could not locate shadow texture uniform no. " + i;
-		*/
-		Map.chunk_shader.shadow_tex.push(uni);
-	}
-	
-	Map.chunk_shader.model_mat = gl.getUniformLocation(Map.chunk_shader, "model");
-	/*
-	if(Map.chunk_shader.model_mat == null)
-		return "Could not locate model uniform";
-	*/
+	Map.chunk_shader.light_mat = gl.getUniformLocation(Map.chunk_shader, "shadow");
+	Map.chunk_shader.shadow_tex = gl.getUniformLocation(Map.chunk_shader, "shadow_tex");
 
 	Map.chunk_shader.shadow_fudge_factor = gl.getUniformLocation(Map.chunk_shader, "shadow_fudge_factor");
-	
 	if(Map.chunk_shader.shadow_fudge_factor == null)
 		return "Could not locate shadow fudge uniform";
 		
@@ -182,9 +149,15 @@ Map.init = function(gl)
 	Map.vis_vs = res[2];
 	Map.vis_shader = res[3];
 	
+	/*
 	Map.vis_shader.pos_attr = gl.getAttribLocation(Map.vis_shader, "pos");
 	if(Map.vis_shader.pos_attr == null)
 		return "Could not locate position attribute";
+	*/
+	
+	Map.vis_shader.pos_attr = 0;
+	gl.bindAttribLocation(Map.vis_shader, Map.vis_shader.pos_attr, "pos");
+	
 
 	Map.vis_shader.proj_mat = gl.getUniformLocation(Map.vis_shader, "proj");
 	if(Map.vis_shader.proj_mat == null)
@@ -277,7 +250,7 @@ Map.visibility_query = function()
 {
 	var gl = Game.gl;
 	
-	if(Map.vis_state == Map.vis_bounds.length+2)
+	if(Map.vis_state == Map.vis_bounds.length+1)
 	{
 		//Process data to find visible chunks
 		for(var i=0; i<Map.vis_data.length; i+=4)
@@ -310,23 +283,24 @@ Map.visibility_query = function()
 	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
 	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	
-	if(Map.vis_state == Map.vis_bounds.length+1)
+	if(Map.vis_state == Map.vis_bounds.length)
 	{
 		//Read pixels
 		gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
 	}
-	else if(Map.vis_state == 0)
-	{
-		//Initialize background
-		gl.clearColor(0, 0, 0, 1);
-		gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
-	
-		//Get camera
-		Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1, 256);
-		Map.vis_base_chunk = Player.chunk();
-	}
 	else
 	{
+		if(Map.vis_state == 0)
+		{
+			//Initialize background
+			gl.clearColor(0, 0, 0, 1);
+			gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
+	
+			//Get camera
+			Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov);
+			Map.vis_base_chunk = Player.chunk();
+		}
+		
 		//Set up shader program
 		gl.useProgram(Map.vis_shader);
 		gl.enableVertexAttribArray(Map.vis_shader.pos_attr);
@@ -373,15 +347,14 @@ Map.visibility_query = function()
 			}
 		}
 
-	
 		if(Map.vis_state == 1)
 		{
 			query_chunk(0, 0, 0);
 		}
 	
 		//Render all chunks to front-to-back
-		var rlo = Map.vis_bounds[Map.vis_state-1][0],
-			rhi = Map.vis_bounds[Map.vis_state-1][1];
+		var rlo = Map.vis_bounds[Map.vis_state][0],
+			rhi = Map.vis_bounds[Map.vis_state][1];
 		
 		for(var r=rlo; r<=rhi; ++r)
 		{
@@ -434,18 +407,12 @@ Map.draw = function(gl)
 	gl.bindTexture(gl.TEXTURE_2D, Map.terrain_tex);
 	gl.uniform1i(Map.chunk_shader.tex_samp, 0);
 	
-
 	//Set shadow map uniforms
-	for(i=0; i<Shadows.shadow_maps.length; ++i)
-	{
-		gl.activeTexture(gl.TEXTURE0+1+i);
-		gl.bindTexture(gl.TEXTURE_2D, Shadows.shadow_maps[i].shadow_tex);
-		gl.uniform1i(Map.chunk_shader.shadow_tex[i], 1+i);
-		gl.uniformMatrix4fv(Map.chunk_shader.light_mat[i], false, Shadows.shadow_maps[i].light_matrix);
-		if(i < Shadows.shadow_maps.length-1)
-			gl.uniform1f(Map.chunk_shader.cutoffs[i], Shadows.shadow_maps[i].cutoff);
-	}
-	
+	gl.activeTexture(gl.TEXTURE0+1);
+	gl.bindTexture(gl.TEXTURE_2D, Shadows.shadow_maps[0].shadow_tex);
+	gl.uniform1i(Map.chunk_shader.shadow_tex, 1);
+	gl.uniformMatrix4fv(Map.chunk_shader.light_mat, false, Shadows.shadow_maps[0].light_matrix);
+
 	//Set camera
 	camera = Game.camera_matrix();
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
@@ -461,29 +428,17 @@ Map.draw = function(gl)
 			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
 	}
 
-/*
 	//Draw transparent chunks	
 	gl.enable(gl.BLEND);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.depthMask(0);
-	for(i=0; i<Shadows.shadow_maps.length; ++i)
+	for(c in Map.index)
 	{
-		//Set shadow map
-		gl.bindTexture(gl.TEXTURE_2D, Shadows.shadow_maps[i].shadow_tex);
-		gl.uniformMatrix4fv(Map.chunk_shader.light_mat, false, Shadows.shadow_maps[i].light_matrix);
-
-		clip_camera = Game.camera_matrix(Game.width, Game.height, Game.fov, Shadows.shadow_maps[i].z_far, Shadows.shadow_maps[i].z_near);
-
-		//Draw transparent chunks
-		for(c in Map.index)
-		{
-			chunk = Map.index[c];
-			if(chunk instanceof Chunk)
-				chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
-		}
+		chunk = Map.index[c];
+		if(chunk instanceof Chunk)
+			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
 	}
 	gl.depthMask(1);
-*/
 
 	//Unbind textures
 	for(i=0; i<4; ++i)
@@ -552,7 +507,7 @@ Map.fetch_chunk = function(x, y, z)
 		return;
 
 	var chunk = Map.add_chunk(x, y, z);
-	chunk.pending = true;
+	Map.num_pending_chunks++;
 	
 	Map.vb_worker.postMessage({type: EV_FETCH_CHUNK,
 		'x':x, 'y':y, 'z':z});
@@ -578,6 +533,12 @@ Map.set_block = function(x, y, z, b)
 	return c.set_block(bx, by, bz, b);
 }
 
+//Sets the throttle on the vertex buffer generation
+Map.set_throttle = function()
+{
+	Map.vb_worker.postMessage({type: EV_SET_THROTTLE});
+}
+
 //Updates the vertex buffer for a chunk
 Map.update_vb = function(x, y, z, verts, ind, tind)
 {
@@ -591,12 +552,12 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 		chunk.vb	= gl.createBuffer();
 		chunk.ib	= gl.createBuffer();
 		chunk.tib	= gl.createBuffer();
+		Map.num_pending_chunks--;
 	}
 
 	chunk.num_elements = ind.length;
 	chunk.num_transparent_elements = tind.length;
 
-	//Set buffer data
 	gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
@@ -618,6 +579,11 @@ Map.forget_chunk = function(str)
 	var chunk = Map.index[str], gl = Game.gl;
 	if(chunk)
 	{
+		if(chunk.pending)
+		{
+			Map.num_pending_chunks--;
+		}
+	
 		if(chunk.vb)	gl.deleteBuffer(chunk.vb);
 		if(chunk.ib)	gl.deleteBuffer(chunk.ib);
 		if(chunk.tib)	gl.deleteBuffer(chunk.tib);
@@ -630,6 +596,11 @@ Map.forget_chunk = function(str)
 Map.init_worker = function()
 {
 	Map.vb_worker = new Worker('chunk_worker.js');
+	
+	Map.vb_worker.onerror = function(msg)
+	{
+		alert("WORKER IS DEAD!  OH SHIIII---");
+	}
 	
 	//Set event handlers
 	Map.vb_worker.onmessage = function(ev)
@@ -665,8 +636,24 @@ Map.init_worker = function()
 }
 
 
+
 Map.shutdown = function()
 {
 	if(Map.vb_worker)
-		Map.vb_worker.close();
+		Map.vb_worker.terminate();
 }
+
+Map.get_initial_chunks = function()
+{
+	//Need to grab all the chunks in the viewable cube around the player
+	var c = Player.chunk();
+	
+	for(var i=c[0] - Math.ceil(Game.zfar / CHUNK_X); i<=c[0] + Math.ceil(Game.zfar / CHUNK_X); i++)
+	for(var j=c[1] - Map.chunk_init_radius; j<=c[1] + Map.chunk_init_radius; j++)
+	for(var k=c[2] - Math.ceil(Game.zfar / CHUNK_Z); k<=c[2] + Math.ceil(Game.zfar / CHUNK_Z); k++)
+	{
+		Map.fetch_chunk(i, j, k);
+	}
+}
+
+
