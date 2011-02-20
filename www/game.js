@@ -31,7 +31,7 @@ var Game =
 	update_rate : 40,
 
 	znear : 1.0,
-	zfar  : 128.0,
+	zfar  : 512.0,
 	fov   : Math.PI / 4.0,
 	
 	wait_for_heartbeat : false,
@@ -174,7 +174,7 @@ Game.proj_matrix = function(w, h, fov, zfar, znear)
 }
 
 //Creates the total cmera matrix
-Game.camera_matrix = function(width, height, fov)
+Game.camera_matrix = function(width, height, fov, zfar, znear)
 {
 	if(!width)
 	{
@@ -183,7 +183,13 @@ Game.camera_matrix = function(width, height, fov)
 		fov = Game.fov;
 	}
 	
-	return mmult(Game.proj_matrix(width, height, fov, Game.zfar, Game.znear), Player.entity.pose_matrix());
+	if(!zfar)
+	{
+		zfar = Game.zfar;
+		znear = Game.znear;
+	}
+	
+	return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.entity.pose_matrix());
 }
 
 Game.update_shadows = function()

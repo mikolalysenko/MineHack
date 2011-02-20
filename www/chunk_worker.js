@@ -7,9 +7,14 @@ importScripts(
 	'chunk_common.js');
 
 const MAX_NET_CHUNKS	= 512;
+const VERT_SIZE			= 12;
 
 var 
-	high_throughput = true,					 //Maximizes vertex buffer generation throughput
+	vbuffer		= new Array(6*4*CHUNK_SIZE*VERT_SIZE),
+	indbuffer	= new Array(6*4*CHUNK_SIZE),
+	tindbuffer	= new Array(6*4*CHUNK_SIZE),
+
+	high_throughput = false,					 //Maximizes vertex buffer generation throughput
 	net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
@@ -25,9 +30,11 @@ var
 // This code makes me want to barf - Mik
 function gen_vb(p)
 {
-	var vertices = [],
-		indices  = [],
-		tindices = [],
+	var 
+		v_ptr = 0,
+		i_ptr = 0,
+		t_ptr = 0,
+		
 		nv = 0, x, y, z,
 	
 	//var neighborhood = new Uint32Array(27); (too slow goddammit.  variant arrays even worse.  am forced to do this. hate self.)
@@ -99,42 +106,47 @@ function gen_vb(p)
 		{
 			if(orient < 0)
 			{
-				tindices.push(nv);
-				tindices.push(nv+1);
-				tindices.push(nv+2);
-				tindices.push(nv);
-				tindices.push(nv+2);
-				tindices.push(nv+3);
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+1;
+				tindbuffer[t_ptr++] = nv+2;
+				
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+2;
+				tindbuffer[t_ptr++] = nv+3;
+
 			}
 			else
 			{
-				tindices.push(nv);
-				tindices.push(nv+2);
-				tindices.push(nv+1);
-				tindices.push(nv);
-				tindices.push(nv+3);
-				tindices.push(nv+2);				
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+2;
+				tindbuffer[t_ptr++] = nv+1;
+				
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+3;
+				tindbuffer[t_ptr++] = nv+2;
 			}
 		}
 		else
 		{
 			if(orient < 0)
 			{
-				indices.push(nv);
-				indices.push(nv+1);
-				indices.push(nv+2);
-				indices.push(nv);
-				indices.push(nv+2);
-				indices.push(nv+3);
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+1;
+				indbuffer[i_ptr++] = nv+2;
+
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+2;
+				indbuffer[i_ptr++] = nv+3;
 			}
 			else
 			{
-				indices.push(nv);
-				indices.push(nv+2);
-				indices.push(nv+1);
-				indices.push(nv);
-				indices.push(nv+3);
-				indices.push(nv+2);			
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+2;
+				indbuffer[i_ptr++] = nv+1;
+
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+3;
+				indbuffer[i_ptr++] = nv+2;
 			}
 		}
 	
@@ -152,70 +164,70 @@ function gen_vb(p)
 			ox, oy, oz,
 			nx, ny, nz, 
 			ao01, ao10, ao00);
-		vertices.push(ox);
-		vertices.push(oy);
-		vertices.push(oz);
-		vertices.push(tx);
-		vertices.push(ty+dt);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox);
+		vbuffer[v_ptr++] = (oy);
+		vbuffer[v_ptr++] = (oz);
+		vbuffer[v_ptr++] = (tx);
+		vbuffer[v_ptr++] = (ty+dt);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 		
 	
 		light = calc_light(
 			ox+ux, oy+uy, oz+uz,
 			nx, ny, nz, 
 			ao01, ao12, ao02);
-		vertices.push(ox + ux);
-		vertices.push(oy + uy);
-		vertices.push(oz + uz);
-		vertices.push(tx);
-		vertices.push(ty);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox + ux);
+		vbuffer[v_ptr++] = (oy + uy);
+		vbuffer[v_ptr++] = (oz + uz);
+		vbuffer[v_ptr++] = (tx);
+		vbuffer[v_ptr++] = (ty);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 
 		light = calc_light(
 			ox+ux+vx, oy+uy+vz, oz+uz+vz,
 			nx, ny, nz, 
 			ao12, ao21, ao22);
-		vertices.push(ox + ux + vx);
-		vertices.push(oy + uy + vy);
-		vertices.push(oz + uz + vz);
-		vertices.push(tx+dt);
-		vertices.push(ty);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox + ux + vx);
+		vbuffer[v_ptr++] = (oy + uy + vy);
+		vbuffer[v_ptr++] = (oz + uz + vz);
+		vbuffer[v_ptr++] = (tx+dt);
+		vbuffer[v_ptr++] = (ty);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 
 		light = calc_light(
 			ox+vx, oy+vy, oz+vz,
 			nx, ny, nz, 
 			ao10, ao21, ao20);
-		vertices.push(ox + vx);
-		vertices.push(oy + vy);
-		vertices.push(oz + vz);
-		vertices.push(tx+dt);
-		vertices.push(ty+dt);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox + vx);
+		vbuffer[v_ptr++] = (oy + vy);
+		vbuffer[v_ptr++] = (oz + vz);
+		vbuffer[v_ptr++] = (tx+dt);
+		vbuffer[v_ptr++] = (ty+dt);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 			
 		nv += 4;
 	},
@@ -463,7 +475,7 @@ function gen_vb(p)
 	}
 	
 	//Return result	
-	return [vertices, indices, tindices];
+	return [vbuffer.slice(0, v_ptr), indbuffer.slice(0, i_ptr), tindbuffer.slice(0, t_ptr)];
 }
 
 //Decodes a run-length encoded chunk
@@ -710,12 +722,9 @@ function generate_vbs()
 {
 	print("Generating vbs");
 
-	var limit = high_throughput ? 
-		vb_pending_chunks.length :
-		Math.min(vb_pending_chunks.length, MAX_VB_UPDATES),
-		i, chunk, vbs;
+	var i, chunk, vbs;
 		
-	for(i=0; i < limit; ++i)
+	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
 	{
 		chunk = vb_pending_chunks[i];
 		//print("generating vb: " + chunk.x + "," + chunk.y + "," + chunk.z);

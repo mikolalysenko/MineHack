@@ -297,7 +297,7 @@ Map.visibility_query = function()
 			gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
 	
 			//Get camera
-			Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov);
+			Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 256, 1);
 			Map.vis_base_chunk = Player.chunk();
 		}
 		
@@ -334,8 +334,7 @@ Map.visibility_query = function()
 					(cz&0xff)/255.0, 1.0);
 			}
 	
-			if(!c || c.pending || 
-				(c.num_elements == 0 && !Transparent[c.data[0]]) )
+			if(!c || c.pending)
 			{
 				Map.draw_box(gl, cx, cy, cz);
 				Map.vis_just_drew_box = true;
