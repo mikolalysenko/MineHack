@@ -68,23 +68,23 @@ Entity.prototype.pose_matrix = function()
 	var cr = Math.cos(this.roll);
 	var sr = Math.sin(this.roll);
 	
-	var rotp = new Float32Array([
+	var rotp = [
 		 1,   0,  0, 0,
 		 0,  cp, sp, 0,
 		 0, -sp, cp, 0,
-		 0,   0,  0, 1]); 
+		 0,   0,  0, 1]; 
 		  
-	var roty = new Float32Array([
+	var roty = [
 		 cy, 0, sy, 0,
 		  0, 1,  0, 0,
 		-sy, 0, cy, 0,
-		  0, 0,  0, 1]);
+		  0, 0,  0, 1];
 		  
-	var rotr = new Float32Array([
+	var rotr = [
 		cr, sr, 0, 0,
 		-sr, cr, 0, 0,
 		0, 0, 1, 0,
-		0, 0, 0, 1]);
+		0, 0, 0, 1];
 	
 	var rot = mmult(mmult(rotp, roty), rotr);
 	
@@ -94,11 +94,11 @@ Entity.prototype.pose_matrix = function()
 	c[1] *= CHUNK_Y;
 	c[2] *= CHUNK_Z;
 		
-	var trans = new Float32Array([
+	var trans = [
 		1, 0, 0, 0,
 		0, 1, 0, 0,
 		0, 0, 1, 0,
-		c[0]-this.x, c[1]-this.y, c[2]-this.z, 1])
+		c[0]-this.x, c[1]-this.y, c[2]-this.z, 1]
 	
 	return mmult(rot, trans);
 }

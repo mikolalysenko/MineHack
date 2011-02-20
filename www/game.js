@@ -166,10 +166,10 @@ Game.proj_matrix = function(w, h, fov, zfar, znear)
 	var C = -(zfar + znear) / (zfar - znear);
 	var D = -2.0 * zfar*znear / (zfar - znear);
 	
-	return new Float32Array([X, 0, 0, 0,
-							 0, Y, 0, 0,
-						 	 A, B, C, -1,
-							 0, 0, D, 0]);
+	return [X, 0, 0, 0,
+			 0, Y, 0, 0,
+		 	 A, B, C, -1,
+			 0, 0, D, 0];
 	
 }
 

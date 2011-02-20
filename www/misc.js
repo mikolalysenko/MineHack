@@ -67,7 +67,7 @@ function arr2str(arr)
 
 function mmult(A, B)
 {
-	var C = new Float32Array(16);
+	var C = new Array(16);
 	
 	for(var i=0; i<4; i++)
 	{
@@ -86,7 +86,7 @@ function mmult(A, B)
 
 function hgmult(M, X)
 {
-	var R = new Float32Array([0, 0, 0, 0]), V = [X[0], X[1], X[2], 1.0], i, j;
+	var R = [0, 0, 0, 0], V = [X[0], X[1], X[2], 1.0], i, j;
 	
 	for(j=0; j<4; ++j)
 	{
@@ -111,16 +111,16 @@ function m3inv(mat)
 	
 	M = function(i, j) { return mat[i + 3*j]; },
 	
-	R = new Float32Array([
+	R = [
 		 M(1,1)*M(2,2)-M(1,2)*M(2,1),	-M(1,0)*M(2,2)+M(1,2)*M(2,0),	 M(1,0)*M(2,1)-M(1,1)*M(2,0),
 		-M(0,1)*M(2,2)+M(0,2)*M(2,1),	 M(0,0)*M(2,2)-M(0,2)*M(2,0),	-M(0,0)*M(2,1)+M(0,1)*M(2,0),
-		 M(0,1)*M(1,2)-M(0,2)*M(1,1),	-M(0,0)*M(1,2)+M(0,2)*M(1,0),	 M(0,0)*M(1,1)-M(0,1)*M(1,0) ]),
+		 M(0,1)*M(1,2)-M(0,2)*M(1,1),	-M(0,0)*M(1,2)+M(0,2)*M(1,0),	 M(0,0)*M(1,1)-M(0,1)*M(1,0) ],
 	
 	D = M(0,0) * R[0]  + M(0,1) * R[1] + M(0,2) * R[2];
 	
 	if(Math.abs(D) < 0.0001)
 	{
-		return new Float32Array(9);
+		return [];
 	}
 	
 	for(k=0; k<9; ++k)
@@ -133,7 +133,7 @@ function m3inv(mat)
 
 function m3xform(M, x)
 {
-	var i, j, y = new Float32Array(3);
+	var i, j, y = [0,0,0];
 	
 	for(i=0; i<3; ++i)
 	for(j=0; j<3; ++j)
@@ -146,7 +146,7 @@ function m3xform(M, x)
 
 function m3transp(M)
 {
-	var res = new Float32Array(9), i, j;
+	var res = new Array(9), i, j;
 	
 	for(i=0; i<3; ++i)
 	for(j=0; j<3; ++j)
@@ -169,7 +169,7 @@ function m4det(m)
 
 function m4inv(m)
 {
-	var inv = new Float32Array(16);
+	var inv = new Array(16);
 
 	inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
 		m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
@@ -221,7 +221,7 @@ function m4inv(m)
 
 function m4transp(M)
 {
-	var res = new Float32Array(16), i, j;
+	var res = new Array(16), i, j;
 	
 	for(i=0; i<4; ++i)
 	for(j=0; j<4; ++j)

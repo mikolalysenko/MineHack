@@ -18,12 +18,12 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 		!frustum_test(cam, this.x - base_chunk[0], this.y - base_chunk[1], this.z - base_chunk[2]) )
 		return;
 		
-	var pos = new Float32Array([1, 0, 0, 0,
-								0, 1, 0, 0,
-								0, 0, 1, 0,
-								(this.x-base_chunk[0])<<CHUNK_X_S, 
-								(this.y-base_chunk[1])<<CHUNK_Y_S, 
-								(this.z-base_chunk[2])<<CHUNK_Z_S, 1]);
+	var pos = [1, 0, 0, 0,
+				0, 1, 0, 0,
+				0, 0, 1, 0,
+				(this.x-base_chunk[0])<<CHUNK_X_S, 
+				(this.y-base_chunk[1])<<CHUNK_Y_S, 
+				(this.z-base_chunk[2])<<CHUNK_Z_S, 1];
 	
 	gl.uniformMatrix4fv(shader.view_mat, false, pos);
 	
@@ -57,12 +57,12 @@ Map.draw_box = function(gl, cx, cy, cz)
 	if(!frustum_test(Map.vis_camera, cx, cy, cz))
 		return;
 
-	var pos = new Float32Array([1, 0, 0, 0,
+	var pos = [1, 0, 0, 0,
 								0, 1, 0, 0,
 								0, 0, 1, 0,
 								(cx+0.5)*CHUNK_X, 
 								(cy+0.5)*CHUNK_Y, 
-								(cz+0.5)*CHUNK_Z, 1]);
+								(cz+0.5)*CHUNK_Z, 1];
 	
 	//Set uniform
 	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
@@ -302,17 +302,17 @@ Map.visibility_query = function()
 			c[1] *= CHUNK_Y;
 			c[2] *= CHUNK_Z;
 	
-			var trans = new Float32Array([
+			var trans = [
 				1, 0, 0, 0,
 				0, 1, 0, 0,
 				0, 0, 1, 0,
-				c[0]-Player.entity.x, c[1]-Player.entity.y, c[2]-Player.entity.z, 1]);
+				c[0]-Player.entity.x, c[1]-Player.entity.y, c[2]-Player.entity.z, 1];
 				
-			var rot = new Float32Array([
+			var rot = [
 				0, 0, 0, 0,
 				0, 0, 0, 0,
 				0, 0, 0, 0,
-				0, 0, 0, 1]);
+				0, 0, 0, 1];
 				
 			
 			var k = Math.floor(Map.vis_angle / 2),

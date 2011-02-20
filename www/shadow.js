@@ -103,10 +103,10 @@ var ShadowMap = function(gl, width, height, z_center, radius, side)
 	this.z_center	= z_center;
 	this.side		= side;
 	
-	this.light_matrix = new Float32Array([ 1, 0, 0, 0,
+	this.light_matrix = [ 1, 0, 0, 0,
 										 0, 1, 0, 0,
 										 0, 0, 1, 0,
-										 0, 0, 0, 1 ]);
+										 0, 0, 0, 1 ];
 
 	this.shadow_tex = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
@@ -178,11 +178,11 @@ ShadowMap.prototype.calc_light_matrix = function()
 		cy = Math.floor(dot(P, v) * w * 128.0) / 128.0,
 		z_scale = -0.5 / (z_max - z_min);
 	
-	return new Float32Array([
+	return [
 		w*u[0],	w*v[0],	n[0]*z_scale,	0,
 		w*u[1],	w*v[1],	n[1]*z_scale,	0,
 		w*u[2],	w*v[2],	n[2]*z_scale,	0,
-		-cx,	-cy,	z_min*z_scale,	1]);
+		-cx,	-cy,	z_min*z_scale,	1];
 }
 
 
