@@ -128,8 +128,8 @@ var Map =
 	
 	//Visibility stuff
 	vis_angle		: 0,
-	vis_width		: 64,
-	vis_height		: 64,
+	vis_width		: 128,
+	vis_height		: 128,
 	vis_fov			: Math.PI * 3.0 / 4.0,
 	vis_state		: 0,	
 	vis_bounds		: [ [1, 6],
@@ -170,7 +170,7 @@ Map.get_block = function(x, y, z)
 		cz = (z >> CHUNK_Z_S);
 	var c = Map.lookup_chunk(cx, cy, cz);		
 	if(!c)
-		return -1;
+		return 1;
 	
 	var bx = (x & CHUNK_X_MASK), 
 		by = (y & CHUNK_Y_MASK), 

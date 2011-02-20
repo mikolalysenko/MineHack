@@ -266,16 +266,13 @@ Map.visibility_query = function()
 			//Issue the fetch request
 			var bx = Map.vis_base_chunk[0] + ((Map.vis_data[i]<<24)>>24),
 				by = Map.vis_base_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
-				bz = Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24);	
-			for(var dx=bx-1; dx<=bx+1; ++dx)
-			for(var dy=by;   dy<=by+1; ++dy)
-			for(var dz=bz-1; dz<=bz+1; ++dz)
-			{
-				Map.fetch_chunk(dx, dy, dz);
-			}
+				bz = Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24);
+			
+			Map.fetch_chunk(bx, by, bz);
 		}
 		
 		Map.vis_state = 0;
+		Map.vis_angle = (Map.vis_angle + 1) % 6;
 		return;
 	}
 
@@ -297,7 +294,38 @@ Map.visibility_query = function()
 			gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
 	
 			//Get camera
-			Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 256, 1);
+			//TODO: Rotate camera by vis angle here
+			
+			//Need to shift by player chunk in order to avoid numerical problems
+			var c = Player.chunk();	
+			c[0] *= CHUNK_X;
+			c[1] *= CHUNK_Y;
+			c[2] *= CHUNK_Z;
+	
+			var trans = new Float32Array([
+				1, 0, 0, 0,
+				0, 1, 0, 0,
+				0, 0, 1, 0,
+				c[0]-Player.entity.x, c[1]-Player.entity.y, c[2]-Player.entity.z, 1]);
+				
+			var rot = new Float32Array([
+				0, 0, 0, 0,
+				0, 0, 0, 0,
+				0, 0, 0, 0,
+				0, 0, 0, 1]);
+				
+			
+			var k = Math.floor(Map.vis_angle / 2),
+				s = (Map.vis_angle % 2)*2 - 1;	
+			
+			
+			rot[k] = s;
+			rot[4+((k+1)%3)] = 1;
+			rot[8+((k+2)%3)] = s;
+			
+			Map.vis_camera = mmult(
+				Game.proj_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1024, 1),
+				mmult(rot, trans));
 			Map.vis_base_chunk = Player.chunk();
 		}
 		
@@ -308,9 +336,9 @@ Map.visibility_query = function()
 	
 		//Set state flags
 		gl.disable(gl.BLEND);
-		gl.blendFunc(gl.ONE, gl.ZERO);
 		gl.enable(gl.DEPTH_TEST);
 		gl.frontFace(gl.CW);
+		gl.cullFace(gl.BACK);
 		gl.enable(gl.CULL_FACE);
 
 		Map.vis_just_drew_box = false;

@@ -246,7 +246,7 @@ function gen_vb(p)
 					dy + (p.y<<CHUNK_Y_S),
 					dz + (p.z<<CHUNK_Z_S));
 		}
-		return 0;
+		return 1;
 	},
 	
 	get_right_block = function(dy, dz)
@@ -263,7 +263,7 @@ function gen_vb(p)
 					dy + (p.y<<CHUNK_Y_S),
 					dz + (p.z<<CHUNK_Z_S));
 		}
-		return 0;
+		return 1;
 	},
 	
 	get_buf = function(dy, dz)
@@ -334,15 +334,15 @@ function gen_vb(p)
 		buf22 = get_buf(y+1, z+1);
 		
 		//Read in the right hand neighborhood
-		n200 = buf00 ? buf00[0] : 0;
-		n201 = buf01 ? buf01[0] : 0;
-		n202 = buf02 ? buf02[0] : 0;
-		n210 = buf10 ? buf10[0] : 0;
-		n211 = buf11 ? buf11[0] : 0;
-		n212 = buf12 ? buf12[0] : 0;
-		n220 = buf20 ? buf20[0] : 0;
-		n221 = buf21 ? buf21[0] : 0;
-		n222 = buf22 ? buf22[0] : 0;
+		n200 = buf00 ? buf00[0] : 1;
+		n201 = buf01 ? buf01[0] : 1;
+		n202 = buf02 ? buf02[0] : 1;
+		n210 = buf10 ? buf10[0] : 1;
+		n211 = buf11 ? buf11[0] : 1;
+		n212 = buf12 ? buf12[0] : 1;
+		n220 = buf20 ? buf20[0] : 1;
+		n221 = buf21 ? buf21[0] : 1;
+		n222 = buf22 ? buf22[0] : 1;
 
 	
 		for(x=0; x<CHUNK_X; ++x)
