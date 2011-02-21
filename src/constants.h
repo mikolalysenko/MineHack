@@ -71,7 +71,7 @@
 //Radius of one network update region (for a player)
 #define UPDATE_RADIUS			256
 
-#define CHUNK_RADIUS			(2*UPDATE_RADIUS)
+#define CHUNK_RADIUS			(1024)
 
 //Bounds on chat line
 #define CHAT_LINE_MAX_LEN		128
@@ -138,6 +138,7 @@
 	((uint64_t)(X) | \
 	((uint64_t)(Y) << BUCKET_BITS_X) | \
 	((uint64_t)(Z) << (BUCKET_BITS_X+BUCKET_BITS_Y)))
+
 
 #endif
 

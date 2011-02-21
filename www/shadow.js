@@ -21,9 +21,9 @@ Shadows.init = function(gl)
 	if(Shadows.shadow_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
 	
-	Shadows.shadow_shader.view_mat = gl.getUniformLocation(Shadows.shadow_shader, "view");
-	if(Shadows.shadow_shader.view_mat == null)
-		return "Could not locate view matrix uniform";
+	Shadows.shadow_shader.chunk_offset = gl.getUniformLocation(Shadows.shadow_shader, "chunk_offset");
+	if(Shadows.shadow_shader.chunk_offset == null)
+		return "Could not locate chunk offset uniform";
 
 	
 	Shadows.shadow_maps = [ 

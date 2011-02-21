@@ -6,8 +6,7 @@ attribute vec3 normal;
 attribute vec3 lightColor;
 
 uniform mat4 proj;
-uniform mat4 view;
-uniform mat4 model;
+uniform vec3 chunk_offset;
 
 //Shadow map parameters
 uniform mat4 shadow;
@@ -19,19 +18,14 @@ uniform vec3 sun_color;
 varying vec4 tc;
 varying vec3 light_color;
 varying vec3 sun_light_color;
-varying float depth;
 varying vec3 shadow_pos;
 
 void main(void)
 {
-	vec4 tpos = view * vec4(pos, 1);
-
+	vec4 tpos = vec4(pos + chunk_offset, 1);
 
 	//Compute position
 	gl_Position = proj * tpos;
-	
-	//Depth
-	depth = gl_Position.z / gl_Position.w;
 	
 	//Shadow map coordinates
 	shadow_pos = (shadow * tpos).xyz;

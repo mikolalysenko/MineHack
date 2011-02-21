@@ -6,8 +6,6 @@ uniform float	shadow_fudge_factor;
 varying vec4 tc;
 varying vec3 sun_light_color;
 varying vec3 light_color;
-varying float depth;
-
 
 uniform sampler2D shadow_tex;
 varying vec3 shadow_pos;

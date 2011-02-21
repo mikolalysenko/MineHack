@@ -18,14 +18,11 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 		!frustum_test(cam, this.x - base_chunk[0], this.y - base_chunk[1], this.z - base_chunk[2]) )
 		return;
 		
-	var pos = [1, 0, 0, 0,
-				0, 1, 0, 0,
-				0, 0, 1, 0,
-				(this.x-base_chunk[0])<<CHUNK_X_S, 
-				(this.y-base_chunk[1])<<CHUNK_Y_S, 
-				(this.z-base_chunk[2])<<CHUNK_Z_S, 1];
-	
-	gl.uniformMatrix4fv(shader.view_mat, false, pos);
+
+	gl.uniform3f(shader.chunk_offset, 
+		(this.x-base_chunk[0])<<CHUNK_X_S, 
+		(this.y-base_chunk[1])<<CHUNK_Y_S, 
+		(this.z-base_chunk[2])<<CHUNK_Z_S);
 	
 	//Bind buffers
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
@@ -52,26 +49,22 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 
 
 //Used for visibility testing
-Map.draw_box = function(gl, cx, cy, cz)
+Map.draw_box = function(gl, shader, cx, cy, cz)
 {
 	if(!frustum_test(Map.vis_camera, cx, cy, cz))
 		return;
 
-	var pos = [1, 0, 0, 0,
-								0, 1, 0, 0,
-								0, 0, 1, 0,
-								(cx+0.5)*CHUNK_X, 
-								(cy+0.5)*CHUNK_Y, 
-								(cz+0.5)*CHUNK_Z, 1];
-	
 	//Set uniform
-	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
-	
+	gl.uniform3f(shader.chunk_offset, 
+		(cx+0.5)*CHUNK_X, 
+		(cy+0.5)*CHUNK_Y, 
+		(cz+0.5)*CHUNK_Z);
+
 	//Draw the cube
 	if(!Map.vis_just_drew_box)
 	{
 		gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
-		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
 		Map.vis_just_drew_box = true;
 	}
@@ -107,9 +100,9 @@ Map.init = function(gl)
 	if(Map.chunk_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
 	
-	Map.chunk_shader.view_mat = gl.getUniformLocation(Map.chunk_shader, "view");
-	if(Map.chunk_shader.view_mat == null)
-		return "Could not locate view matrix uniform";
+	Map.chunk_shader.chunk_offset = gl.getUniformLocation(Map.chunk_shader, "chunk_offset");
+	if(Map.chunk_shader.chunk_offset == null)
+		return "Could not locate chunk offset uniform";
 
 	Map.chunk_shader.tex_samp = gl.getUniformLocation(Map.chunk_shader, "tex");
 	if(Map.chunk_shader.tex_samp == null)
@@ -163,10 +156,12 @@ Map.init = function(gl)
 	Map.vis_shader.proj_mat = gl.getUniformLocation(Map.vis_shader, "proj");
 	if(Map.vis_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
+
+		
+	Map.vis_shader.chunk_offset = gl.getUniformLocation(Map.vis_shader, "chunk_offset");
+	if(Map.vis_shader.chunk_offset == null)
+		return "Could not locate chunk_offset uniform";
 	
-	Map.vis_shader.view_mat = gl.getUniformLocation(Map.vis_shader, "view");
-	if(Map.vis_shader.view_mat == null)
-		return "Could not locate view matrix uniform";
 		
 	Map.vis_shader.chunk_id = gl.getUniformLocation(Map.vis_shader, "chunk_id");
 	if(Map.vis_shader.chunk_id == null)
@@ -281,7 +276,7 @@ Map.visibility_query = function()
 		}
 		
 		Map.vis_state = 0;
-		Map.vis_angle = (Map.vis_angle + 1) % 6;
+		Map.vis_angle = (Map.vis_angle + 1) % 7;
 		return;
 	}
 	else
@@ -293,38 +288,43 @@ Map.visibility_query = function()
 			gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
 	
 			//Get camera
-			//TODO: Rotate camera by vis angle here
-			
-			//Need to shift by player chunk in order to avoid numerical problems
-			var c = Player.chunk();	
-			c[0] *= CHUNK_X;
-			c[1] *= CHUNK_Y;
-			c[2] *= CHUNK_Z;
+			if(Map.vis_angle == 6)
+			{
+				Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1024, 1);
+			}
+			else
+			{
+				//Need to shift by player chunk in order to avoid numerical problems
+				var c = Player.chunk();	
+				c[0] *= CHUNK_X;
+				c[1] *= CHUNK_Y;
+				c[2] *= CHUNK_Z;
 	
-			var trans = [
-				1, 0, 0, 0,
-				0, 1, 0, 0,
-				0, 0, 1, 0,
-				c[0]-Player.entity.x, c[1]-Player.entity.y, c[2]-Player.entity.z, 1];
+				var trans = [
+					1, 0, 0, 0,
+					0, 1, 0, 0,
+					0, 0, 1, 0,
+					c[0]-Player.entity.x, c[1]-Player.entity.y, c[2]-Player.entity.z, 1];
 				
-			var rot = [
-				0, 0, 0, 0,
-				0, 0, 0, 0,
-				0, 0, 0, 0,
-				0, 0, 0, 1];
+				var rot = [
+					0, 0, 0, 0,
+					0, 0, 0, 0,
+					0, 0, 0, 0,
+					0, 0, 0, 1];
 				
 			
-			var k = Math.floor(Map.vis_angle / 2),
-				s = (Map.vis_angle % 2)*2 - 1;	
+				var k = Math.floor(Map.vis_angle / 2),
+					s = (Map.vis_angle % 2)*2 - 1;	
 			
 			
-			rot[k] = s;
-			rot[4+((k+1)%3)] = 1;
-			rot[8+((k+2)%3)] = s;
+				rot[k] = s;
+				rot[4+((k+1)%3)] = 1;
+				rot[8+((k+2)%3)] = s;
 			
-			Map.vis_camera = mmult(
-				Game.proj_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1024, 1),
-				mmult(rot, trans));
+				Map.vis_camera = mmult(
+					Game.proj_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1024, 1),
+					mmult(rot, trans));
+			}
 			Map.vis_base_chunk = Player.chunk();
 		}
 		
@@ -363,7 +363,7 @@ Map.visibility_query = function()
 	
 			if(!c || c.pending)
 			{
-				Map.draw_box(gl, cx, cy, cz);
+				Map.draw_box(gl, Map.vis_shader, cx, cy, cz);
 			}
 			else
 			{
@@ -399,8 +399,6 @@ Map.visibility_query = function()
 	++Map.vis_state;
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
-
-
 
 //Draws the map
 // Input:
@@ -441,9 +439,6 @@ Map.draw = function(gl)
 	//Set camera
 	camera = Game.camera_matrix();
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
-	
-	//Set model matrix
-	gl.uniformMatrix4fv(Map.chunk_shader.model_mat, false, Player.entity.pose_matrix());
 	
 	//Draw chunks
 	for(c in Map.index)
@@ -515,10 +510,12 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
+	/*
 	if(Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
+	*/
 	
 	//TODO: Purge old chunks
 }

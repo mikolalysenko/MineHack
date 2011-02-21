@@ -26,8 +26,6 @@ Sky.get_sun_dir = function()
 	
 	if(angle < 0)
 		angle += Math.PI;
-		
-	angle = (angle - Math.PI/2.0) * 1.05 + Math.PI/2.0;
 	
 	return [Math.cos(angle), Math.sin(angle), 0];
 }

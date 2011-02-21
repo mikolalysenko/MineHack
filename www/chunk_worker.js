@@ -614,14 +614,29 @@ function grab_chunks()
 			
 			//Check if chunk is air
 			chunk.is_air = true;
+			
+			var all_stone = true,
+				all_air = true;
+			
+			
 			for(j=0; j<CHUNK_SIZE; ++j)
 			{
 				if(chunk.data[j] != 0)
 				{
-					chunk.is_air = false;
+					all_air = false;
+				}
+				if(chunk.data[j] != 1)
+				{
+					all_stone = false;
+				}
+				
+				if(!all_air && !all_stone)
+				{
 					break;
 				}
 			}
+			
+			chunk.is_air = (all_air || all_stone);
 			
 			//Resize array
 			arr = arr.subarray(res);
