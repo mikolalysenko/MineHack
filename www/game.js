@@ -31,14 +31,14 @@ var Game =
 	update_rate : 40,
 
 	znear : 1.0,
-	zfar  : 256.0,
+	zfar  : 512.0,
 	fov   : Math.PI / 4.0,
 	
 	wait_for_heartbeat : false,
 	
-	enable_ao : true,
+	show_shadows : true,
 	
-	preload : true,
+	preload : false,
 	
 	initial_login : true,
 	wait_for_initial_chunks : true
@@ -145,6 +145,7 @@ Game.init = function(canvas)
 	{
 		Game.initial_login = false;
 		Game.wait_for_initial_chunks = false;
+		Map.set_throttle();
 	}
 	
 	return 'Ok';
@@ -167,15 +168,15 @@ Game.proj_matrix = function(w, h, fov, zfar, znear)
 	var C = -(zfar + znear) / (zfar - znear);
 	var D = -2.0 * zfar*znear / (zfar - znear);
 	
-	return new Float32Array([X, 0, 0, 0,
-							 0, Y, 0, 0,
-						 	 A, B, C, -1,
-							 0, 0, D, 0]);
+	return [X, 0, 0, 0,
+			 0, Y, 0, 0,
+		 	 A, B, C, -1,
+			 0, 0, D, 0];
 	
 }
 
 //Creates the total cmera matrix
-Game.camera_matrix = function(width, height, fov)
+Game.camera_matrix = function(width, height, fov, zfar, znear)
 {
 	if(!width)
 	{
@@ -184,7 +185,13 @@ Game.camera_matrix = function(width, height, fov)
 		fov = Game.fov;
 	}
 	
-	return mmult(Game.proj_matrix(width, height, fov, Game.zfar, Game.znear), Player.entity.pose_matrix());
+	if(!zfar)
+	{
+		zfar = Game.zfar;
+		znear = Game.znear;
+	}
+	
+	return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.entity.pose_matrix());
 }
 
 Game.update_shadows = function()
@@ -230,7 +237,8 @@ Game.draw = function()
 		//Draw entities
 		EntityDB.draw(gl, cam);
 		
-		//Shadows.shadow_maps[0].draw_debug();
+		if(Game.show_shadows)
+			Shadows.shadow_maps[0].draw_debug();
 	}
 	
 	gl.flush();
@@ -292,6 +300,7 @@ Game.tick = function()
 		{
 			Game.wait_for_initial_chunks = false;
 			prog_bar.style.display = "none";
+			Map.set_throttle();
 		}
 		else
 		{

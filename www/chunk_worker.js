@@ -7,8 +7,15 @@ importScripts(
 	'chunk_common.js');
 
 const MAX_NET_CHUNKS	= 512;
+const VERT_SIZE			= 12;
 
-var net_pending_chunks = [],				 //Chunks we are waiting for on the network
+var 
+	vbuffer		= new Array(6*4*CHUNK_SIZE*VERT_SIZE),
+	indbuffer	= new Array(6*4*CHUNK_SIZE),
+	tindbuffer	= new Array(6*4*CHUNK_SIZE),
+
+	high_throughput = false,				 //Maximizes vertex buffer generation throughput at the expense of higher latency
+	net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
@@ -61,9 +68,11 @@ function pack_buffer(cx, cy, cz)
 // This code makes me want to barf - Mik
 function gen_vb(p)
 {
-	var vertices = [],
-		indices  = [],
-		tindices = [],
+	var 
+		v_ptr = 0,
+		i_ptr = 0,
+		t_ptr = 0,
+		
 		nv = 0, x, y, z,
 	
 	//var neighborhood = new Uint32Array(27); (too slow goddammit.  variant arrays even worse.  am forced to do this. hate self.)
@@ -135,42 +144,47 @@ function gen_vb(p)
 		{
 			if(orient < 0)
 			{
-				tindices.push(nv);
-				tindices.push(nv+1);
-				tindices.push(nv+2);
-				tindices.push(nv);
-				tindices.push(nv+2);
-				tindices.push(nv+3);
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+1;
+				tindbuffer[t_ptr++] = nv+2;
+				
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+2;
+				tindbuffer[t_ptr++] = nv+3;
+
 			}
 			else
 			{
-				tindices.push(nv);
-				tindices.push(nv+2);
-				tindices.push(nv+1);
-				tindices.push(nv);
-				tindices.push(nv+3);
-				tindices.push(nv+2);				
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+2;
+				tindbuffer[t_ptr++] = nv+1;
+				
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+3;
+				tindbuffer[t_ptr++] = nv+2;
 			}
 		}
 		else
 		{
 			if(orient < 0)
 			{
-				indices.push(nv);
-				indices.push(nv+1);
-				indices.push(nv+2);
-				indices.push(nv);
-				indices.push(nv+2);
-				indices.push(nv+3);
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+1;
+				indbuffer[i_ptr++] = nv+2;
+
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+2;
+				indbuffer[i_ptr++] = nv+3;
 			}
 			else
 			{
-				indices.push(nv);
-				indices.push(nv+2);
-				indices.push(nv+1);
-				indices.push(nv);
-				indices.push(nv+3);
-				indices.push(nv+2);			
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+2;
+				indbuffer[i_ptr++] = nv+1;
+
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+3;
+				indbuffer[i_ptr++] = nv+2;
 			}
 		}
 	
@@ -188,70 +202,70 @@ function gen_vb(p)
 			ox, oy, oz,
 			nx, ny, nz, 
 			ao01, ao10, ao00);
-		vertices.push(ox);
-		vertices.push(oy);
-		vertices.push(oz);
-		vertices.push(tx);
-		vertices.push(ty+dt);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox);
+		vbuffer[v_ptr++] = (oy);
+		vbuffer[v_ptr++] = (oz);
+		vbuffer[v_ptr++] = (tx);
+		vbuffer[v_ptr++] = (ty+dt);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 		
 	
 		light = calc_light(
 			ox+ux, oy+uy, oz+uz,
 			nx, ny, nz, 
 			ao01, ao12, ao02);
-		vertices.push(ox + ux);
-		vertices.push(oy + uy);
-		vertices.push(oz + uz);
-		vertices.push(tx);
-		vertices.push(ty);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox + ux);
+		vbuffer[v_ptr++] = (oy + uy);
+		vbuffer[v_ptr++] = (oz + uz);
+		vbuffer[v_ptr++] = (tx);
+		vbuffer[v_ptr++] = (ty);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 
 		light = calc_light(
 			ox+ux+vx, oy+uy+vz, oz+uz+vz,
 			nx, ny, nz, 
 			ao12, ao21, ao22);
-		vertices.push(ox + ux + vx);
-		vertices.push(oy + uy + vy);
-		vertices.push(oz + uz + vz);
-		vertices.push(tx+dt);
-		vertices.push(ty);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox + ux + vx);
+		vbuffer[v_ptr++] = (oy + uy + vy);
+		vbuffer[v_ptr++] = (oz + uz + vz);
+		vbuffer[v_ptr++] = (tx+dt);
+		vbuffer[v_ptr++] = (ty);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 
 		light = calc_light(
 			ox+vx, oy+vy, oz+vz,
 			nx, ny, nz, 
 			ao10, ao21, ao20);
-		vertices.push(ox + vx);
-		vertices.push(oy + vy);
-		vertices.push(oz + vz);
-		vertices.push(tx+dt);
-		vertices.push(ty+dt);
-		vertices.push(nx);
-		vertices.push(ny);
-		vertices.push(nz);
-		vertices.push(light[0]);
-		vertices.push(light[1]);
-		vertices.push(light[2]);
-		vertices.push(0);
+		vbuffer[v_ptr++] = (ox + vx);
+		vbuffer[v_ptr++] = (oy + vy);
+		vbuffer[v_ptr++] = (oz + vz);
+		vbuffer[v_ptr++] = (tx+dt);
+		vbuffer[v_ptr++] = (ty+dt);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
 			
 		nv += 4;
 	},
@@ -270,7 +284,7 @@ function gen_vb(p)
 					dy + (p.y<<CHUNK_Y_S),
 					dz + (p.z<<CHUNK_Z_S));
 		}
-		return 0;
+		return 1;
 	},
 	
 	get_right_block = function(dy, dz)
@@ -287,7 +301,7 @@ function gen_vb(p)
 					dy + (p.y<<CHUNK_Y_S),
 					dz + (p.z<<CHUNK_Z_S));
 		}
-		return 0;
+		return 1;
 	},
 	
 	get_buf = function(dy, dz)
@@ -358,15 +372,15 @@ function gen_vb(p)
 		buf22 = get_buf(y+1, z+1);
 		
 		//Read in the right hand neighborhood
-		n200 = buf00 ? buf00[0] : 0;
-		n201 = buf01 ? buf01[0] : 0;
-		n202 = buf02 ? buf02[0] : 0;
-		n210 = buf10 ? buf10[0] : 0;
-		n211 = buf11 ? buf11[0] : 0;
-		n212 = buf12 ? buf12[0] : 0;
-		n220 = buf20 ? buf20[0] : 0;
-		n221 = buf21 ? buf21[0] : 0;
-		n222 = buf22 ? buf22[0] : 0;
+		n200 = buf00 ? buf00[0] : 1;
+		n201 = buf01 ? buf01[0] : 1;
+		n202 = buf02 ? buf02[0] : 1;
+		n210 = buf10 ? buf10[0] : 1;
+		n211 = buf11 ? buf11[0] : 1;
+		n212 = buf12 ? buf12[0] : 1;
+		n220 = buf20 ? buf20[0] : 1;
+		n221 = buf21 ? buf21[0] : 1;
+		n222 = buf22 ? buf22[0] : 1;
 
 	
 		for(x=0; x<CHUNK_X; ++x)
@@ -499,7 +513,7 @@ function gen_vb(p)
 	}
 	
 	//Return result	
-	return [vertices, indices, tindices];
+	return [vbuffer.slice(0, v_ptr), indbuffer.slice(0, i_ptr), tindbuffer.slice(0, t_ptr)];
 }
 
 //Decodes a run-length encoded chunk
@@ -638,14 +652,29 @@ function grab_chunks()
 			
 			//Check if chunk is air
 			chunk.is_air = true;
+			
+			var all_stone = true,
+				all_air = true;
+			
+			
 			for(j=0; j<CHUNK_SIZE; ++j)
 			{
 				if(chunk.data[j] != 0)
 				{
-					chunk.is_air = false;
+					all_air = false;
+				}
+				if(chunk.data[j] != 1)
+				{
+					all_stone = false;
+				}
+				
+				if(!all_air && !all_stone)
+				{
 					break;
 				}
 			}
+			
+			chunk.is_air = (all_air || all_stone);
 			
 			//Resize array
 			arr = arr.subarray(res);
@@ -747,9 +776,9 @@ function generate_vbs()
 	print("Generating vbs");
 
 	var i, chunk, vbs;
+		
 	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
 	{
-	
 		chunk = vb_pending_chunks[i];
 		//print("generating vb: " + chunk.x + "," + chunk.y + "," + chunk.z);
 		send_vb(chunk.x, chunk.y, chunk.z, gen_vb(chunk));
@@ -851,6 +880,10 @@ self.onmessage = function(ev)
 		
 		case EV_FETCH_CHUNK:
 			fetch_chunk(ev.data.x, ev.data.y, ev.data.z);
+		break;
+		
+		case EV_SET_THROTTLE:
+			high_throughput = false;
 		break;
 	}
 

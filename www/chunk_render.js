@@ -18,14 +18,11 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 		!frustum_test(cam, this.x - base_chunk[0], this.y - base_chunk[1], this.z - base_chunk[2]) )
 		return;
 		
-	var pos = new Float32Array([1, 0, 0, 0,
-								0, 1, 0, 0,
-								0, 0, 1, 0,
-								(this.x-base_chunk[0])<<CHUNK_X_S, 
-								(this.y-base_chunk[1])<<CHUNK_Y_S, 
-								(this.z-base_chunk[2])<<CHUNK_Z_S, 1]);
-	
-	gl.uniformMatrix4fv(shader.view_mat, false, pos);
+
+	gl.uniform3f(shader.chunk_offset, 
+		(this.x-base_chunk[0])<<CHUNK_X_S, 
+		(this.y-base_chunk[1])<<CHUNK_Y_S, 
+		(this.z-base_chunk[2])<<CHUNK_Z_S);
 	
 	//Bind buffers
 	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
@@ -52,27 +49,24 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 
 
 //Used for visibility testing
-Map.draw_box = function(gl, cx, cy, cz)
+Map.draw_box = function(gl, shader, cx, cy, cz)
 {
 	if(!frustum_test(Map.vis_camera, cx, cy, cz))
 		return;
 
-	var pos = new Float32Array([1, 0, 0, 0,
-								0, 1, 0, 0,
-								0, 0, 1, 0,
-								(cx+0.5)*CHUNK_X, 
-								(cy+0.5)*CHUNK_Y, 
-								(cz+0.5)*CHUNK_Z, 1]);
-	
 	//Set uniform
-	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
-	
+	gl.uniform3f(shader.chunk_offset, 
+		(cx+0.5)*CHUNK_X, 
+		(cy+0.5)*CHUNK_Y, 
+		(cz+0.5)*CHUNK_Z);
+
 	//Draw the cube
-	if(!Map.just_drew_box)
+	if(!Map.vis_just_drew_box)
 	{
 		gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
-		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
+		Map.vis_just_drew_box = true;
 	}
 	gl.drawElements(gl.TRIANGLES, Map.box_elements, gl.UNSIGNED_SHORT, 0);
 }
@@ -106,9 +100,9 @@ Map.init = function(gl)
 	if(Map.chunk_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
 	
-	Map.chunk_shader.view_mat = gl.getUniformLocation(Map.chunk_shader, "view");
-	if(Map.chunk_shader.view_mat == null)
-		return "Could not locate view matrix uniform";
+	Map.chunk_shader.chunk_offset = gl.getUniformLocation(Map.chunk_shader, "chunk_offset");
+	if(Map.chunk_shader.chunk_offset == null)
+		return "Could not locate chunk offset uniform";
 
 	Map.chunk_shader.tex_samp = gl.getUniformLocation(Map.chunk_shader, "tex");
 	if(Map.chunk_shader.tex_samp == null)
@@ -162,10 +156,12 @@ Map.init = function(gl)
 	Map.vis_shader.proj_mat = gl.getUniformLocation(Map.vis_shader, "proj");
 	if(Map.vis_shader.proj_mat == null)
 		return "Could not locate projection matrix uniform";
+
+		
+	Map.vis_shader.chunk_offset = gl.getUniformLocation(Map.vis_shader, "chunk_offset");
+	if(Map.vis_shader.chunk_offset == null)
+		return "Could not locate chunk_offset uniform";
 	
-	Map.vis_shader.view_mat = gl.getUniformLocation(Map.vis_shader, "view");
-	if(Map.vis_shader.view_mat == null)
-		return "Could not locate view matrix uniform";
 		
 	Map.vis_shader.chunk_id = gl.getUniformLocation(Map.vis_shader, "chunk_id");
 	if(Map.vis_shader.chunk_id == null)
@@ -249,9 +245,17 @@ Map.init = function(gl)
 Map.visibility_query = function()
 {
 	var gl = Game.gl;
+
+	//Start by binding fbo
+	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
+	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	
-	if(Map.vis_state == Map.vis_bounds.length+1)
+	if(Map.vis_state == Map.vis_bounds.length)
 	{
+		//Read pixels
+		gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
+		
+		
 		//Process data to find visible chunks
 		for(var i=0; i<Map.vis_data.length; i+=4)
 		{
@@ -266,27 +270,14 @@ Map.visibility_query = function()
 			//Issue the fetch request
 			var bx = Map.vis_base_chunk[0] + ((Map.vis_data[i]<<24)>>24),
 				by = Map.vis_base_chunk[1] + ((Map.vis_data[i+1]<<24)>>24),
-				bz = Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24);	
-			for(var dx=bx-1; dx<=bx+1; ++dx)
-			for(var dy=by;   dy<=by+1; ++dy)
-			for(var dz=bz-1; dz<=bz+1; ++dz)
-			{
-				Map.fetch_chunk(dx, dy, dz);
-			}
+				bz = Map.vis_base_chunk[2] + ((Map.vis_data[i+2]<<24)>>24);
+			
+			Map.fetch_chunk(bx, by, bz);
 		}
 		
 		Map.vis_state = 0;
+		Map.vis_angle = (Map.vis_angle + 1) % 7;
 		return;
-	}
-
-	//Start by binding fbo
-	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
-	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
-	
-	if(Map.vis_state == Map.vis_bounds.length)
-	{
-		//Read pixels
-		gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
 	}
 	else
 	{
@@ -297,7 +288,43 @@ Map.visibility_query = function()
 			gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
 	
 			//Get camera
-			Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov);
+			if(Map.vis_angle == 6)
+			{
+				Map.vis_camera = Game.camera_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1024, 1);
+			}
+			else
+			{
+				//Need to shift by player chunk in order to avoid numerical problems
+				var c = Player.chunk();	
+				c[0] *= CHUNK_X;
+				c[1] *= CHUNK_Y;
+				c[2] *= CHUNK_Z;
+	
+				var trans = [
+					1, 0, 0, 0,
+					0, 1, 0, 0,
+					0, 0, 1, 0,
+					c[0]-Player.entity.x, c[1]-Player.entity.y, c[2]-Player.entity.z, 1];
+				
+				var rot = [
+					0, 0, 0, 0,
+					0, 0, 0, 0,
+					0, 0, 0, 0,
+					0, 0, 0, 1];
+				
+			
+				var k = Math.floor(Map.vis_angle / 2),
+					s = (Map.vis_angle % 2)*2 - 1;	
+			
+			
+				rot[k] = s;
+				rot[4+((k+1)%3)] = 1;
+				rot[8+((k+2)%3)] = s;
+			
+				Map.vis_camera = mmult(
+					Game.proj_matrix(Map.vis_width, Map.vis_height, Map.vis_fov, 1024, 1),
+					mmult(rot, trans));
+			}
 			Map.vis_base_chunk = Player.chunk();
 		}
 		
@@ -308,14 +335,14 @@ Map.visibility_query = function()
 	
 		//Set state flags
 		gl.disable(gl.BLEND);
-		gl.blendFunc(gl.ONE, gl.ZERO);
 		gl.enable(gl.DEPTH_TEST);
 		gl.frontFace(gl.CW);
+		gl.cullFace(gl.BACK);
 		gl.enable(gl.CULL_FACE);
 
 		Map.vis_just_drew_box = false;
 	
-		var query_chunk = function(cx, cy, cz)
+		function query_chunk(cx, cy, cz)
 		{
 			var c = Map.lookup_chunk(
 				Map.vis_base_chunk[0] + cx, 
@@ -334,11 +361,9 @@ Map.visibility_query = function()
 					(cz&0xff)/255.0, 1.0);
 			}
 	
-			if(!c || c.pending || 
-				(c.num_elements == 0 && !Transparent[c.data[0]]) )
+			if(!c || c.pending)
 			{
-				Map.draw_box(gl, cx, cy, cz);
-				Map.vis_just_drew_box = true;
+				Map.draw_box(gl, Map.vis_shader, cx, cy, cz);
 			}
 			else
 			{
@@ -374,8 +399,6 @@ Map.visibility_query = function()
 	++Map.vis_state;
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
-
-
 
 //Draws the map
 // Input:
@@ -416,9 +439,6 @@ Map.draw = function(gl)
 	//Set camera
 	camera = Game.camera_matrix();
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
-	
-	//Set model matrix
-	gl.uniformMatrix4fv(Map.chunk_shader.model_mat, false, Player.entity.pose_matrix());
 	
 	//Draw chunks
 	for(c in Map.index)
@@ -490,10 +510,12 @@ Map.update_cache = function()
 		Map.fetch_chunk(i, j, k);
 	}
 	
+	/*
 	if(Game.local_ticks % 2 == 1)
 	{
 		Map.visibility_query(Game.gl);
 	}
+	*/
 	
 	//TODO: Purge old chunks
 }
@@ -533,6 +555,12 @@ Map.set_block = function(x, y, z, b)
 	return c.set_block(bx, by, bz, b);
 }
 
+//Sets the throttle on the vertex buffer generation
+Map.set_throttle = function()
+{
+	Map.vb_worker.postMessage({type: EV_SET_THROTTLE});
+}
+
 //Updates the vertex buffer for a chunk
 Map.update_vb = function(x, y, z, verts, ind, tind)
 {
@@ -543,21 +571,37 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	if(chunk.pending)
 	{
 		chunk.pending = false;
-		chunk.vb	= gl.createBuffer();
-		chunk.ib	= gl.createBuffer();
-		chunk.tib	= gl.createBuffer();
 		Map.num_pending_chunks--;
 	}
 
 	chunk.num_elements = ind.length;
 	chunk.num_transparent_elements = tind.length;
 
-	gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ind), gl.DYNAMIC_DRAW);
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tind), gl.DYNAMIC_DRAW);
+
+	if(verts.length > 0)
+	{
+		if(!chunk.vb)
+			chunk.vb	= gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+	}
+
+	if(ind.length > 0)
+	{
+		if(!chunk.ib)
+			chunk.ib	= gl.createBuffer();
+
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
+		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ind), gl.DYNAMIC_DRAW);
+	}
+	
+	if(tind.length > 0)
+	{
+		if(!chunk.tib)
+			chunk.tib	= gl.createBuffer();
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
+		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tind), gl.DYNAMIC_DRAW);
+	}
 }
 
 //Updates the chunk data
@@ -628,6 +672,7 @@ Map.init_worker = function()
 	//Start the worker	
 	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
 }
+
 
 
 Map.shutdown = function()
