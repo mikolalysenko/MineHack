@@ -7,19 +7,18 @@ importScripts(
 	'chunk_common.js');
 
 const MAX_NET_CHUNKS	= 512;
-const VERT_SIZE			= 12;
+
+const PACK_X_STRIDE		= 1;
+const PACK_Y_STRIDE		= CHUNK_X * 3;
+const PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9;
 
 var 
-	vbuffer		= new Array(6*4*CHUNK_SIZE*VERT_SIZE),
-	indbuffer	= new Array(6*4*CHUNK_SIZE),
-	tindbuffer	= new Array(6*4*CHUNK_SIZE),
-
-	high_throughput = false,				 //Maximizes vertex buffer generation throughput at the expense of higher latency
 	net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
+	high_throughput = true,					 //If set, try to maximize throughput at the expense of greater latency.
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
-	empty_data = new Uint8Array(CHUNK_SIZE), //Allocate an empty buffer for unloaded chunks
+	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
 	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
 	fetch_interval = null;					 //Interval timer for chunk fetch events
@@ -28,6 +27,8 @@ var
 
 function pack_buffer(cx, cy, cz)
 {
+	print("Packing buffer");
+
 	var i, j, k, 
 		dx, dy, dz,
 		data_offset, buf_offset,
@@ -38,7 +39,7 @@ function pack_buffer(cx, cy, cz)
 	for(dx=-1; dx<=1; ++dx)
 	{
 		chunk = Map.lookup_chunk(cx+dx, cy+dy, cz+dz);
-		if(data)
+		if(chunk)
 		{
 			data = chunk.data;
 		}
@@ -48,473 +49,24 @@ function pack_buffer(cx, cy, cz)
 		}
 		
 		//Store result into packed buffer
+		data_offset = 0;
 		for(k=0; k<CHUNK_Z; ++k)
 		for(j=0; j<CHUNK_Y; ++j)
 		{
-			var data_offset = (j<<CHUNK_X_S) + (k << CHUNK_XY_S),
-				buf_offset  =
+			buf_offset  =
 					 (dx+1) * CHUNK_X +
-					((dy+1) * CHUNK_Y + j) * CHUNK_X * 3 +
-					((dz+1) * CHUNK_Z + k) * CHUNK_X * CHUNK_Y * 9;
+					((dy+1) * CHUNK_Y + j) * PACK_Y_STRIDE +
+					((dz+1) * CHUNK_Z + k) * PACK_Z_STRIDE;
 					
-			for(var i=0; i<CHUNK_X; ++i)
+			for(i=0; i<CHUNK_X; ++i)
 				packed_buffer[buf_offset++] = data[data_offset++];
 		}
 	}
+	
+	//print("Packed: " + packed_buffer);
 }
 
 
-//Construct vertex buffer for this chunk
-// This code makes me want to barf - Mik
-function gen_vb(p)
-{
-	var 
-		v_ptr = 0,
-		i_ptr = 0,
-		t_ptr = 0,
-		
-		nv = 0, x, y, z,
-	
-	//var neighborhood = new Uint32Array(27); (too slow goddammit.  variant arrays even worse.  am forced to do this. hate self.)
-		n000, n001, n002,
-		n010, n011, n012,
-		n020, n021, n022,
-		n100, n101, n102,
-		n110, n111, n112,
-		n120, n121, n122,
-		n200, n201, n202,
-		n210, n211, n212,
-		n220, n221, n222,
-	
-	//Buffers for scanning	
-		buf00, buf01, buf02,
-		buf10, buf11, buf12,
-		buf20, buf21, buf22,
-		
-	//Buffers
-		data 			= p.data,
-		left_buffer		= Map.lookup_chunk(p.x-1, p.y, p.z),
-		right_buffer	= Map.lookup_chunk(p.x+1, p.y, p.z),
-		
-	//Calculates ambient occlusion value
-	ao_value = function(s1, s2, c)
-	{
-		s1 = !Transparent[s1];
-		s2 = !Transparent[s2];
-		c  = !Transparent[c];
-		
-		if(s1 && s2)
-		{
-			return 0.25;
-		}
-		
-		return 1.0 - 0.25 * (s1 + s2 + c);
-	},
-	
-	calc_light = function(
-		ox, oy, oz,
-		nx, ny, nz,
-		s1, s2, c)
-	{
-		var ao;
-		
-		ao = ao_value(s1, s2, c);
-		
-		return [ao, ao, ao];
-	},
-	
-	appendv = function(
-		ux, uy, uz,
-		vx, vy, vz,
-		nx, ny, nz,
-		block_id, 
-		dir,
-		ao00, ao01, ao02,
-		ao10, /*ao11,*/ ao12,
-		ao20, ao21, ao22)
-	{
-		var tc, tx, ty, dt,
-			ox, oy, oz,
-			light,
-			orient = nx * (uy * vz - uz * vy) +
-					 ny * (uz * vx - ux * vz) +
-					 nz * (ux * vy - uy * vx);
-	
-		if(Transparent[block_id])
-		{
-			if(orient < 0)
-			{
-				tindbuffer[t_ptr++] = nv;
-				tindbuffer[t_ptr++] = nv+1;
-				tindbuffer[t_ptr++] = nv+2;
-				
-				tindbuffer[t_ptr++] = nv;
-				tindbuffer[t_ptr++] = nv+2;
-				tindbuffer[t_ptr++] = nv+3;
-
-			}
-			else
-			{
-				tindbuffer[t_ptr++] = nv;
-				tindbuffer[t_ptr++] = nv+2;
-				tindbuffer[t_ptr++] = nv+1;
-				
-				tindbuffer[t_ptr++] = nv;
-				tindbuffer[t_ptr++] = nv+3;
-				tindbuffer[t_ptr++] = nv+2;
-			}
-		}
-		else
-		{
-			if(orient < 0)
-			{
-				indbuffer[i_ptr++] = nv;
-				indbuffer[i_ptr++] = nv+1;
-				indbuffer[i_ptr++] = nv+2;
-
-				indbuffer[i_ptr++] = nv;
-				indbuffer[i_ptr++] = nv+2;
-				indbuffer[i_ptr++] = nv+3;
-			}
-			else
-			{
-				indbuffer[i_ptr++] = nv;
-				indbuffer[i_ptr++] = nv+2;
-				indbuffer[i_ptr++] = nv+1;
-
-				indbuffer[i_ptr++] = nv;
-				indbuffer[i_ptr++] = nv+3;
-				indbuffer[i_ptr++] = nv+2;
-			}
-		}
-	
-		tc = BlockTexCoords[block_id][dir];
-		tx = tc[1] / 16.0;
-		ty = tc[0] / 16.0;
-		dt = 1.0 / 16.0 - 1.0/256.0;
-		
-		ox = x - 0.5 + (nx > 0 ? 1 : 0);
-		oy = y - 0.5 + (ny > 0 ? 1 : 0);
-		oz = z - 0.5 + (nz > 0 ? 1 : 0);
-
-		
-		light = calc_light(
-			ox, oy, oz,
-			nx, ny, nz, 
-			ao01, ao10, ao00);
-		vbuffer[v_ptr++] = (ox);
-		vbuffer[v_ptr++] = (oy);
-		vbuffer[v_ptr++] = (oz);
-		vbuffer[v_ptr++] = (tx);
-		vbuffer[v_ptr++] = (ty+dt);
-		vbuffer[v_ptr++] = (nx);
-		vbuffer[v_ptr++] = (ny);
-		vbuffer[v_ptr++] = (nz);
-		vbuffer[v_ptr++] = (light[0]);
-		vbuffer[v_ptr++] = (light[1]);
-		vbuffer[v_ptr++] = (light[2]);
-		vbuffer[v_ptr++] = (0);
-		
-	
-		light = calc_light(
-			ox+ux, oy+uy, oz+uz,
-			nx, ny, nz, 
-			ao01, ao12, ao02);
-		vbuffer[v_ptr++] = (ox + ux);
-		vbuffer[v_ptr++] = (oy + uy);
-		vbuffer[v_ptr++] = (oz + uz);
-		vbuffer[v_ptr++] = (tx);
-		vbuffer[v_ptr++] = (ty);
-		vbuffer[v_ptr++] = (nx);
-		vbuffer[v_ptr++] = (ny);
-		vbuffer[v_ptr++] = (nz);
-		vbuffer[v_ptr++] = (light[0]);
-		vbuffer[v_ptr++] = (light[1]);
-		vbuffer[v_ptr++] = (light[2]);
-		vbuffer[v_ptr++] = (0);
-
-		light = calc_light(
-			ox+ux+vx, oy+uy+vz, oz+uz+vz,
-			nx, ny, nz, 
-			ao12, ao21, ao22);
-		vbuffer[v_ptr++] = (ox + ux + vx);
-		vbuffer[v_ptr++] = (oy + uy + vy);
-		vbuffer[v_ptr++] = (oz + uz + vz);
-		vbuffer[v_ptr++] = (tx+dt);
-		vbuffer[v_ptr++] = (ty);
-		vbuffer[v_ptr++] = (nx);
-		vbuffer[v_ptr++] = (ny);
-		vbuffer[v_ptr++] = (nz);
-		vbuffer[v_ptr++] = (light[0]);
-		vbuffer[v_ptr++] = (light[1]);
-		vbuffer[v_ptr++] = (light[2]);
-		vbuffer[v_ptr++] = (0);
-
-		light = calc_light(
-			ox+vx, oy+vy, oz+vz,
-			nx, ny, nz, 
-			ao10, ao21, ao20);
-		vbuffer[v_ptr++] = (ox + vx);
-		vbuffer[v_ptr++] = (oy + vy);
-		vbuffer[v_ptr++] = (oz + vz);
-		vbuffer[v_ptr++] = (tx+dt);
-		vbuffer[v_ptr++] = (ty+dt);
-		vbuffer[v_ptr++] = (nx);
-		vbuffer[v_ptr++] = (ny);
-		vbuffer[v_ptr++] = (nz);
-		vbuffer[v_ptr++] = (light[0]);
-		vbuffer[v_ptr++] = (light[1]);
-		vbuffer[v_ptr++] = (light[2]);
-		vbuffer[v_ptr++] = (0);
-			
-		nv += 4;
-	},
-
-	get_left_block = function(dy, dz)
-	{
-		if( dy >= 0 && dy < CHUNK_Y && dz >= 0 && dz < CHUNK_Z )
-		{
-			if(left_buffer)	
-				return left_buffer[CHUNK_X - 1 + (dy<<CHUNK_X_S) + (dz<<(CHUNK_XY_S))];
-		}
-		else	
-		{
-			return Map.get_block(
-					(p.x<<CHUNK_X_S) - 1,
-					dy + (p.y<<CHUNK_Y_S),
-					dz + (p.z<<CHUNK_Z_S));
-		}
-		return 1;
-	},
-	
-	get_right_block = function(dy, dz)
-	{
-		if( dy >= 0 && dy < CHUNK_Y && dz >= 0 && dz < CHUNK_Z )
-		{
-			if(right_buffer)	
-				return right_buffer[(dy<<CHUNK_X_S) + (dz<<(CHUNK_XY_S))];
-		}
-		else	
-		{
-			return Map.get_block(
-					((p.x + 1)      <<CHUNK_X_S),
-					dy + (p.y<<CHUNK_Y_S),
-					dz + (p.z<<CHUNK_Z_S));
-		}
-		return 1;
-	},
-	
-	get_buf = function(dy, dz)
-	{
-		if( dy >= 0 && dy < CHUNK_Y &&
-			dz >= 0 && dz < CHUNK_Z )
-		{
-			return data.subarray(
-					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
-					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
-		}
-		else
-		{
-			var chunk = Map.lookup_chunk(p.x, p.y + (dy>>CHUNK_Y_S), p.z + (dz>>CHUNK_Z_S));
-			if(chunk && !chunk.pending)
-			{
-				return chunk.data.subarray(
-					((dy&CHUNK_Y_MASK)<<CHUNK_X_S) +
-					((dz&CHUNK_Z_MASK)<<CHUNK_XY_S) );
-			}
-		}
-		
-		return null;
-	};
-	
-	
-	if(left_buffer && !left_buffer.pending)
-	{
-		left_buffer = left_buffer.data;
-	}
-	else
-	{
-		left_buffer = null;
-	}
-	
-	if(right_buffer && !right_buffer.pending)
-	{
-		right_buffer = right_buffer.data;		
-	}
-	else
-	{
-		right_buffer = null;
-	}
-		
-	for(z=0; z<CHUNK_Z; ++z)
-	for(y=0; y<CHUNK_Y; ++y)
-	{
-		//Read in center part of neighborhood
-		n100 = get_left_block(y-1, z-1);
-		n101 = get_left_block(y-1, z);
-		n102 = get_left_block(y-1, z+1);
-		n110 = get_left_block(y,   z-1);
-		n111 = get_left_block(y,   z);
-		n112 = get_left_block(y,   z+1);
-		n120 = get_left_block(y+1, z-1);
-		n121 = get_left_block(y+1, z);
-		n122 = get_left_block(y+1, z+1);
-		
-		//Set up neighborhood buffers
-		buf00 = get_buf(y-1, z-1);
-		buf01 = get_buf(y-1, z);
-		buf02 = get_buf(y-1, z+1);
-		buf10 = get_buf(y,   z-1);
-		buf11 = get_buf(y,   z);
-		buf12 = get_buf(y,   z+1);
-		buf20 = get_buf(y+1, z-1);
-		buf21 = get_buf(y+1, z);
-		buf22 = get_buf(y+1, z+1);
-		
-		//Read in the right hand neighborhood
-		n200 = buf00 ? buf00[0] : 1;
-		n201 = buf01 ? buf01[0] : 1;
-		n202 = buf02 ? buf02[0] : 1;
-		n210 = buf10 ? buf10[0] : 1;
-		n211 = buf11 ? buf11[0] : 1;
-		n212 = buf12 ? buf12[0] : 1;
-		n220 = buf20 ? buf20[0] : 1;
-		n221 = buf21 ? buf21[0] : 1;
-		n222 = buf22 ? buf22[0] : 1;
-
-	
-		for(x=0; x<CHUNK_X; ++x)
-		{
-			//Shift old 1-neighborhood back by 1 x value
-			n000 = n100;
-			n001 = n101;
-			n002 = n102;
-			n010 = n110;
-			n011 = n111;
-			n012 = n112;
-			n020 = n120;
-			n021 = n121;
-			n022 = n122;
-			n100 = n200;
-			n101 = n201;
-			n102 = n202;
-			n110 = n210;
-			n111 = n211;
-			n112 = n212;
-			n120 = n220;
-			n121 = n221;
-			n122 = n222;
-			
-			//Fast case: In the middle of an x-scan
-			if(x < CHUNK_X - 1)
-			{
-				if(buf00) n200 = buf00[x+1];
-				if(buf01) n201 = buf01[x+1];
-				if(buf02) n202 = buf02[x+1];
-				if(buf10) n210 = buf10[x+1];
-				if(buf11) n211 = buf11[x+1];
-				if(buf12) n212 = buf12[x+1];
-				if(buf20) n220 = buf20[x+1];
-				if(buf21) n221 = buf21[x+1];
-				if(buf22) n222 = buf22[x+1];
-			}
-			else	//Bad case, end of x-scan
-			{
-				//Read in center part of neighborhood
-				n200 = get_right_block(y-1, z-1);
-				n201 = get_right_block(y-1, z);
-				n202 = get_right_block(y-1, z+1);
-				n210 = get_right_block(y,   z-1);
-				n211 = get_right_block(y,   z);
-				n212 = get_right_block(y,   z+1);
-				n220 = get_right_block(y+1, z-1);
-				n221 = get_right_block(y+1, z);
-				n222 = get_right_block(y+1, z+1);
-			}
-
-			if(n111 == 0)
-				continue;
-				
-				
-			if(Transparent[n011] && n011 != n111)
-			{
-				appendv( 
-					 0,  1,  0,
-					 0,  0,  1,
-					-1,  0,  0,
-					n111, 1,
-					n000,  n010,  n020,
-					n001,/*n011,*/n021,
-					n002,  n012,  n022);
-			}
-			
-			if(Transparent[n211] && n211 != n111)
-			{
-				appendv( 
-					 0,  1,  0,
-					 0,  0,  1,
-					 1,  0,  0,
-					n111, 1,
-					n200,  n210,  n220,
-					n201,/*n211,*/n221,
-					n202,  n212,  n222);
-			}
-			
-			if(Transparent[n101] && n101 != n111)
-			{
-				appendv( 
-					 0,  0,  1,
-					 1,  0,  0,
-					 0, -1,  0,
-					n111, 2,
-					n000,  n001,  n002,
-					n100,/*n101,*/n102,
-					n200,  n201,  n202);
-			}
-			
-			
-			if(Transparent[n121] && n121 != n111)
-			{
-				appendv( 
-					 0,  0,  1,
- 					 1,  0,  0,
-					 0,  1,  0,
-					n111, 0,
-					n020,  n021,  n022,
-					n120,/*n121,*/n122,
-					n220,  n221,  n222);
-			}
-			
-
-			if(Transparent[n110] && n110 != n111)
-			{
-				appendv( 
-					 0, 1,  0,
-					 1,  0,  0,
-					 0,  0, -1,
-					n111, 1,
-					n000,  n010,  n020,
-					n100,/*n110,*/n120,
-					n200,  n210,  n220);
-			}
-
-			if(Transparent[n112] && n112 != n111)
-			{
-				appendv( 
-					 0, 1,  0,
-					 1,  0,  0,
-					 0,  0, 1,
-					n111, 1,
-					n002,  n012,  n022,
-					n102,/*n112,*/n122,
-					n202,  n212,  n222);
-			}
-		}
-	}
-	
-	//Return result	
-	return [vbuffer.slice(0, v_ptr), indbuffer.slice(0, i_ptr), tindbuffer.slice(0, t_ptr)];
-}
 
 //Decodes a run-length encoded chunk
 function decompress_chunk(arr, data)
@@ -747,7 +299,7 @@ function set_dirty(x, y, z, priority)
 		}
 		else if(chunk.is_air)
 		{
-			send_vb(chunk.x, chunk.y, chunk.z, [[], [], []]);
+			set_non_pending(chunk.x, chunk.y, chunk.z);
 		}
 		else if(priority)
 		{
@@ -775,16 +327,25 @@ function generate_vbs()
 {
 	print("Generating vbs");
 
-	var i, chunk, vbs;
+	var i, chunk, vbs, nchunks = [];
 		
-	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
+	for(i=0; i < vb_pending_chunks.length; ++i)
 	{
 		chunk = vb_pending_chunks[i];
-		//print("generating vb: " + chunk.x + "," + chunk.y + "," + chunk.z);
-		send_vb(chunk.x, chunk.y, chunk.z, gen_vb(chunk));
-		chunk.dirty = false;
+		
+		if(!chunk.working)
+		{
+			pack_buffer(chunk.x, chunk.y, chunk.z);
+			update_vb(chunk.x, chunk.y, chunk.z);
+			chunk.working = true;
+			chunk.dirty = false;
+		}
+		else
+		{
+			nchunks.push(chunk);
+		}
 	}
-	vb_pending_chunks = vb_pending_chunks.slice(i);
+	vb_pending_chunks = nchunks;
 }
 
 //Sets a block
@@ -858,7 +419,7 @@ function worker_start(key)
 	
 	for(var i=0; i<CHUNK_SIZE; ++i)
 	{
-		empty_data[i] = 0;
+		empty_data[i] = 1;
 	}
 }
 
@@ -885,19 +446,29 @@ self.onmessage = function(ev)
 		case EV_SET_THROTTLE:
 			high_throughput = false;
 		break;
+		
+		case EV_VB_COMPLETE:
+			vb_gen_complete(ev.data.x, ev.data.y, ev.data.z);
+		break;
 	}
 
 };
 
+//Handle a completed vb generation round
+function vb_gen_complete(x, y, z)
+{
+	var chunk = Map.lookup_chunk(x, y, z);
+	chunk.working = false;
+	print("VB Gen complete");
+}
+			
 //Sends an updated set of vertex buffers to the client
-function send_vb(x, y, z, vbs)
+function update_vb(x, y, z)
 {
 	postMessage({ 
 		type: EV_VB_UPDATE, 
 		'x': x, 'y': y, 'z': z, 
-		verts: vbs[0],
-		ind: vbs[1],
-		tind: vbs[2]});
+		'data': packed_buffer} );
 }
 
 //Sends a new chunk to the client
@@ -912,6 +483,13 @@ function send_chunk(chunk)
 		type: EV_CHUNK_UPDATE,
 		x:chunk.x, y:chunk.y, z:chunk.z,
 		data: tmp_data });
+}
+
+function set_non_pending(x, y, z)
+{
+	postMessage({
+		type:EV_SET_NON_PENDING,
+		'x':x, 'y':y, 'z':z});
 }
 
 //Removes a chunk from the database

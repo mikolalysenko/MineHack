@@ -50,7 +50,7 @@ const Transparent =
 function Chunk(x, y, z)
 {
 	//Set chunk data
-	this.data = new Uint8Array(CHUNK_SIZE);
+	this.data = new Array(CHUNK_SIZE);
 	
 	//Set position
 	this.x = x;
@@ -58,6 +58,8 @@ function Chunk(x, y, z)
 	this.z = z;
 	
 	this.pending = true;
+	this.working = false;
+	this.dirty = false;
 	
 	this.vb = null;
 	this.ib = null;

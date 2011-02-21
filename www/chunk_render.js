@@ -531,7 +531,7 @@ Map.fetch_chunk = function(x, y, z)
 	var chunk = Map.add_chunk(x, y, z);
 	Map.num_pending_chunks++;
 	
-	Map.vb_worker.postMessage({type: EV_FETCH_CHUNK,
+	Map.chunk_worker.postMessage({type: EV_FETCH_CHUNK,
 		'x':x, 'y':y, 'z':z});
 }
 
@@ -546,7 +546,7 @@ Map.set_block = function(x, y, z, b)
 		return -1;
 		
 	//Post message to worker
-	Map.vb_worker.postMessage({type: EV_SET_BLOCK,
+	Map.chunk_worker.postMessage({type: EV_SET_BLOCK,
 		'x':x, 'y':y, 'z':z, 'b':b});
 		
 	var bx = (x & CHUNK_X_MASK), 
@@ -558,7 +558,7 @@ Map.set_block = function(x, y, z, b)
 //Sets the throttle on the vertex buffer generation
 Map.set_throttle = function()
 {
-	Map.vb_worker.postMessage({type: EV_SET_THROTTLE});
+	Map.chunk_worker.postMessage({type: EV_SET_THROTTLE});
 }
 
 //Updates the vertex buffer for a chunk
@@ -608,7 +608,7 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 Map.update_chunk = function(x, y, z, data)
 {
 	var chunk = Map.lookup_chunk(x, y, z);
-	chunk.data.set(data);
+	chunk.data = data;
 }
 
 //Kills off a chunk
@@ -630,55 +630,76 @@ Map.forget_chunk = function(str)
 	}
 }
 
+function handle_chunk_event(ev)
+{
+	switch(ev.data.type)
+	{
+		case EV_VB_UPDATE:
+			Map.vb_workers[Map.worker_idx].postMessage(ev.data);
+			Map.worker_idx = (Map.worker_idx+1) % Map.vb_workers.length;
+		break;
+
+		case EV_CHUNK_UPDATE:
+			Map.update_chunk(
+				ev.data.x, ev.data.y, ev.data.z, 
+				ev.data.data);
+		break;
+		
+		case EV_PRINT:
+			console.log(ev.data.str);				
+		break;
+		
+		case EV_FORGET_CHUNK:
+			Map.forget_chunk(ev.data.idx);
+		break;
+		
+		case EV_SET_NON_PENDING:
+			var c = Map.lookup_chunk(ev.data.x, ev.data.y, ev.data.z);
+			if(c && c.pending)
+			{
+				c.pending = false;
+				Map.num_pending_chunks--;
+			}
+		break;
+	}
+}
+
+//This is wasteful, but there doesn't seem to be a better way to get worker-to-worker communication
+function handle_vb_complete(ev)
+{
+	Map.update_vb(
+		ev.data.x, ev.data.y, ev.data.z, 
+		ev.data.verts, 
+		ev.data.ind, 
+		ev.data.tind);
+		
+	Map.chunk_worker.postMessage({type:EV_VB_COMPLETE, x:ev.data.x, y:ev.data.y, z:ev.data.z});
+}
+
 //Initialize the web worker
 Map.init_worker = function()
 {
-	Map.vb_worker = new Worker('chunk_worker.js');
-	
-	Map.vb_worker.onerror = function(msg)
+	//Create vb workers
+	Map.vb_workers = new Array(NUM_VB_WORKERS);
+	for(var i=0; i<Map.vb_workers.length; ++i)
 	{
-		alert("WORKER IS DEAD!  OH SHIIII---");
+		Map.vb_workers[i] = new Worker('vb_worker.js');
+		Map.vb_workers[i].onmessage = handle_vb_complete;
 	}
-	
-	//Set event handlers
-	Map.vb_worker.onmessage = function(ev)
-	{
-		switch(ev.data.type)
-		{
-			case EV_VB_UPDATE:
-				Map.update_vb(
-					ev.data.x, ev.data.y, ev.data.z, 
-					ev.data.verts, 
-					ev.data.ind, 
-					ev.data.tind);
-			break;
-			
-			case EV_CHUNK_UPDATE:
-				Map.update_chunk(
-					ev.data.x, ev.data.y, ev.data.z, 
-					ev.data.data);
-			break;
-			
-			case EV_PRINT:
-				console.log(ev.data.str);				
-			break;
-			
-			case EV_FORGET_CHUNK:
-				Map.forget_chunk(ev.data.idx);
-			break;
-		}
-	};
+	Map.worker_idx = 0;
 
-	//Start the worker	
-	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
+	//Create chunk worker
+	Map.chunk_worker = new Worker('chunk_worker.js');
+	Map.chunk_worker.onmessage = handle_chunk_event;
+	Map.chunk_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
 }
 
 
 
 Map.shutdown = function()
 {
-	if(Map.vb_worker)
-		Map.vb_worker.terminate();
+	if(Map.chunk_worker)
+		Map.chunk_worker.terminate();
 }
 
 Map.get_initial_chunks = function()
