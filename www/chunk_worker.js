@@ -11,12 +11,50 @@ const MAX_NET_CHUNKS	= 512;
 var net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
+	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
 	empty_data = new Uint8Array(CHUNK_SIZE), //Allocate an empty buffer for unloaded chunks
 	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
 	fetch_interval = null;					 //Interval timer for chunk fetch events
 	
-	
+
+
+function pack_buffer(cx, cy, cz)
+{
+	var i, j, k, 
+		dx, dy, dz,
+		data_offset, buf_offset,
+		chunk, data;
+
+	for(dz=-1; dz<=1; ++dz)
+	for(dy=-1; dy<=1; ++dy)
+	for(dx=-1; dx<=1; ++dx)
+	{
+		chunk = Map.lookup_chunk(cx+dx, cy+dy, cz+dz);
+		if(data)
+		{
+			data = chunk.data;
+		}
+		else
+		{
+			data = empty_data;
+		}
+		
+		//Store result into packed buffer
+		for(k=0; k<CHUNK_Z; ++k)
+		for(j=0; j<CHUNK_Y; ++j)
+		{
+			var data_offset = (j<<CHUNK_X_S) + (k << CHUNK_XY_S),
+				buf_offset  =
+					 (dx+1) * CHUNK_X +
+					((dy+1) * CHUNK_Y + j) * CHUNK_X * 3 +
+					((dz+1) * CHUNK_Z + k) * CHUNK_X * CHUNK_Y * 9;
+					
+			for(var i=0; i<CHUNK_X; ++i)
+				packed_buffer[buf_offset++] = data[data_offset++];
+		}
+	}
+}
 
 
 //Construct vertex buffer for this chunk
