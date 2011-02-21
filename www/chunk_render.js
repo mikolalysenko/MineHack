@@ -574,21 +574,37 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	if(chunk.pending)
 	{
 		chunk.pending = false;
-		chunk.vb	= gl.createBuffer();
-		chunk.ib	= gl.createBuffer();
-		chunk.tib	= gl.createBuffer();
 		Map.num_pending_chunks--;
 	}
 
 	chunk.num_elements = ind.length;
 	chunk.num_transparent_elements = tind.length;
 
-	gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ind), gl.DYNAMIC_DRAW);
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
-	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tind), gl.DYNAMIC_DRAW);
+
+	if(verts.length > 0)
+	{
+		if(!chunk.vb)
+			chunk.vb	= gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);	
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+	}
+
+	if(ind.length > 0)
+	{
+		if(!chunk.ib)
+			chunk.ib	= gl.createBuffer();
+
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
+		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(ind), gl.DYNAMIC_DRAW);
+	}
+	
+	if(tind.length > 0)
+	{
+		if(!chunk.tib)
+			chunk.tib	= gl.createBuffer();
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
+		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(tind), gl.DYNAMIC_DRAW);
+	}
 }
 
 //Updates the chunk data

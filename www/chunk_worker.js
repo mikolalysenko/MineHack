@@ -14,7 +14,7 @@ var
 	indbuffer	= new Array(6*4*CHUNK_SIZE),
 	tindbuffer	= new Array(6*4*CHUNK_SIZE),
 
-	high_throughput = false,					 //Maximizes vertex buffer generation throughput
+	high_throughput = false,				 //Maximizes vertex buffer generation throughput at the expense of higher latency
 	net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
