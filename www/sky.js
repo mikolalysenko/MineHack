@@ -19,9 +19,15 @@ Sky.get_shadow_fudge = function()
 }
 
 //Retrieves the light direction
+// (sun/moon)
 Sky.get_sun_dir = function()
 {
 	var angle = Sky.time_of_day() * Math.PI;
+	
+	if(angle < 0)
+		angle += Math.PI;
+		
+	angle = (angle - Math.PI/2.0) * 1.05 + Math.PI/2.0;
 	
 	return [Math.cos(angle), Math.sin(angle), 0];
 }
@@ -44,14 +50,33 @@ Sky.get_basis = function()
 //Returns the color of the sunlight
 Sky.get_sun_color = function()
 {
-	return [0.79, 0.81,  0.85];
+	var t = Sky.time_of_day();
+	
+	if(t < 0.0)
+	{
+		//Night
+		return [0.23, 0.24,  0.4]
+	}
+	else
+	{
+		return [0.79, 0.81,  0.85];
+	}
 }
 
 //Draws the sky background
 Sky.draw_bg = function()
 {
-	var gl = Game.gl;
-
-	gl.clearColor(0.4, 0.64, 0.9, 1.0);
-	gl.clear(gl.COLOR_BUFFER_BIT);
+	var gl = Game.gl,
+		t = Sky.time_of_day();
+	
+	if(t < 0.0)
+	{
+		gl.clearColor(0.1, 0.18, 0.28, 1.0);
+		gl.clear(gl.COLOR_BUFFER_BIT);		
+	}
+	else
+	{
+		gl.clearColor(0.4, 0.64, 0.9, 1.0);
+		gl.clear(gl.COLOR_BUFFER_BIT);
+	}
 }

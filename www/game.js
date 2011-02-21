@@ -36,6 +36,8 @@ var Game =
 	
 	wait_for_heartbeat : false,
 	
+	show_shadows : true,
+	
 	preload : false,
 	
 	initial_login : true,
@@ -235,7 +237,8 @@ Game.draw = function()
 		//Draw entities
 		EntityDB.draw(gl, cam);
 		
-		//Shadows.shadow_maps[0].draw_debug();
+		if(Game.show_shadows)
+			Shadows.shadow_maps[0].draw_debug();
 	}
 	
 	gl.flush();

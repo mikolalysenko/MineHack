@@ -69,12 +69,14 @@ function frustum_test(m, cx, cy, cz)
 	var vx = (cx)*CHUNK_X,
 		vy = (cy)*CHUNK_Y,
 		vz = (cz)*CHUNK_Z,
-		qx, qy, qz, in_p = 0, w, x, y, z;
+		qx, qy, qz, 
+		dx, dy, dz,
+		in_p = 0, w, x, y, z;
 	
 	
-	for(var dx=-1; dx<=CHUNK_X; dx+=CHUNK_X+1)
-	for(var dy=-1; dy<=CHUNK_Y; dy+=CHUNK_Y+1)
-	for(var dz=-1; dz<=CHUNK_Z; dz+=CHUNK_Z+1)	
+	for(dx=-1; dx<=CHUNK_X; dx+=CHUNK_X+1)
+	for(dy=-1; dy<=CHUNK_Y; dy+=CHUNK_Y+1)
+	for(dz=-1; dz<=CHUNK_Z; dz+=CHUNK_Z+1)	
 	{
 		qx = dx + vx;
 		qy = dy + vy;

@@ -198,6 +198,12 @@ valgrind: $(exe) $(datadir)
 test: $(exe) $(datadir)
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)
+
+
+fftest: $(exe) $(datadir)
+	(sleep 2; /home/mikola/Apps/firefox/firefox-bin $(URL)) &
+	./$(exe)
+
 	
 gdb: $(exe) $(datadir)
 	(sleep 2; $(BROWSER) $(URL)) &

@@ -68,11 +68,12 @@ Map.draw_box = function(gl, cx, cy, cz)
 	gl.uniformMatrix4fv(Map.vis_shader.view_mat, false, pos);
 	
 	//Draw the cube
-	if(!Map.just_drew_box)
+	if(!Map.vis_just_drew_box)
 	{
 		gl.bindBuffer(gl.ARRAY_BUFFER, Map.box_vb);
 		gl.vertexAttribPointer(Map.vis_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Map.box_ib);
+		Map.vis_just_drew_box = true;
 	}
 	gl.drawElements(gl.TRIANGLES, Map.box_elements, gl.UNSIGNED_SHORT, 0);
 }
@@ -249,9 +250,17 @@ Map.init = function(gl)
 Map.visibility_query = function()
 {
 	var gl = Game.gl;
+
+	//Start by binding fbo
+	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
+	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
 	
-	if(Map.vis_state == Map.vis_bounds.length+1)
+	if(Map.vis_state == Map.vis_bounds.length)
 	{
+		//Read pixels
+		gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
+		
+		
 		//Process data to find visible chunks
 		for(var i=0; i<Map.vis_data.length; i+=4)
 		{
@@ -274,16 +283,6 @@ Map.visibility_query = function()
 		Map.vis_state = 0;
 		Map.vis_angle = (Map.vis_angle + 1) % 6;
 		return;
-	}
-
-	//Start by binding fbo
-	gl.bindFramebuffer(gl.FRAMEBUFFER, Map.vis_fbo);
-	gl.viewport(0, 0, Map.vis_width, Map.vis_height);
-	
-	if(Map.vis_state == Map.vis_bounds.length)
-	{
-		//Read pixels
-		gl.readPixels(0, 0, Map.vis_width, Map.vis_height, gl.RGBA, gl.UNSIGNED_BYTE, Map.vis_data);	
 	}
 	else
 	{
@@ -343,7 +342,7 @@ Map.visibility_query = function()
 
 		Map.vis_just_drew_box = false;
 	
-		var query_chunk = function(cx, cy, cz)
+		function query_chunk(cx, cy, cz)
 		{
 			var c = Map.lookup_chunk(
 				Map.vis_base_chunk[0] + cx, 
@@ -365,7 +364,6 @@ Map.visibility_query = function()
 			if(!c || c.pending)
 			{
 				Map.draw_box(gl, cx, cy, cz);
-				Map.vis_just_drew_box = true;
 			}
 			else
 			{

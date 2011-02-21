@@ -27,7 +27,7 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 256, 256, 128, 3, 280)
+		new ShadowMap(gl, 512, 512, 256, 2, 300)
 		];
 	
 	
@@ -66,7 +66,7 @@ Shadows.init = function(gl)
 	gl.bindTexture(gl.TEXTURE_2D, Shadows.blur_tex);
 	gl.texParameteri(gl.TEXTURE_2D,	gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 256, 0, gl.RGBA, gl.FLOAT, null);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.FLOAT, null);
 	gl.bindTexture(gl.TEXTURE_2D, null);	
 	
 	Shadows.blur_fbo = gl.createFramebuffer();
@@ -102,6 +102,7 @@ var ShadowMap = function(gl, width, height, z_center, radius, side)
 	this.height		= height;
 	this.z_center	= z_center;
 	this.side		= side;
+	this.radius 	= radius;
 	
 	this.light_matrix = [ 1, 0, 0, 0,
 										 0, 1, 0, 0,
@@ -171,18 +172,23 @@ ShadowMap.prototype.calc_light_matrix = function()
 		basis = Sky.get_basis(),
 		n = basis[0], u = basis[1], v = basis[2],
 		
+		aspect = 0.25 + 0.8 * Math.abs(n[1]),
+		
 		z_max = 512.0, z_min = -512.0,
 		
 		w = 1.0 / this.side,
-		cx = Math.floor(dot(P, u) * w * 128.0) / 128.0,
-		cy = Math.floor(dot(P, v) * w * 128.0) / 128.0,
-		z_scale = -0.5 / (z_max - z_min);
+		w1 = w,
+		w2 = w / aspect,
+		
+		cx = Math.floor(dot(P, u) * w1 * 128.0) / 128.0,
+		cy = Math.floor(dot(P, v) * w2 * (aspect*aspect)  * 128.0) / 128.0,
+		z_scale = -1.0 / (z_max - z_min);
 	
 	return [
-		w*u[0],	w*v[0],	n[0]*z_scale,	0,
-		w*u[1],	w*v[1],	n[1]*z_scale,	0,
-		w*u[2],	w*v[2],	n[2]*z_scale,	0,
-		-cx,	-cy,	z_min*z_scale,	1];
+		w1*u[0],	w2*v[0],	n[0]*z_scale,	0,
+		w1*u[1],	w2*v[1],	n[1]*z_scale,	0,
+		w1*u[2],	w2*v[2],	n[2]*z_scale,	0,
+		-cx,	-cy,	-z_max*z_scale,	1];
 }
 
 
@@ -207,16 +213,10 @@ ShadowMap.prototype.begin = function(gl)
 	gl.disable(gl.BLEND);
 	gl.enable(gl.DEPTH_TEST);
 	
-	/*
-	gl.frontFace(gl.CW);
-	gl.cullFace(gl.BACK);
-	gl.enable(gl.CULL_FACE);
-	*/
-	
 	gl.disable(gl.CULL_FACE);
 	
 	gl.enable(gl.POLYGON_OFFSET_FILL);
-	gl.polygonOffset(1.0, 4.0);
+	gl.polygonOffset(1.1, 6.0);
 	
 	gl.enableVertexAttribArray(Shadows.shadow_shader.pos_attr);
 	gl.enableVertexAttribArray(Shadows.shadow_shader.norm_attr);
@@ -241,31 +241,35 @@ ShadowMap.prototype.end = function(gl)
 	gl.disable(gl.DEPTH_TEST);
 	gl.enable(gl.TEXTURE_2D);
 	
-	//Need to reset texture parameters since these get cleared when we render (stupid)
-	gl.bindFramebuffer(gl.FRAMEBUFFER, Shadows.blur_fbo);
-	gl.activeTexture(gl.TEXTURE0);
-	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	
-	//Do first blur pass
-	gl.useProgram(this.blur_shader);
-	gl.enableVertexAttribArray(this.blur_shader.pos_attr);
-	gl.uniform1i(this.blur_shader.tex, 0);
+	if(this.radius > 0)
+	{
+		//Need to reset texture parameters since these get cleared when we render (stupid)
+		gl.bindFramebuffer(gl.FRAMEBUFFER, Shadows.blur_fbo);
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 	
-	gl.bindBuffer(gl.ARRAY_BUFFER, Shadows.quad_vb);
-	gl.vertexAttribPointer(this.blur_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
-	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Shadows.quad_ib);
-	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+		//Do first blur pass
+		gl.useProgram(this.blur_shader);
+		gl.enableVertexAttribArray(this.blur_shader.pos_attr);
+		gl.uniform1i(this.blur_shader.tex, 0);
 	
-	//Do second blur pass
-	gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
-	gl.bindTexture(gl.TEXTURE_2D, Shadows.blur_tex);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.bindBuffer(gl.ARRAY_BUFFER, Shadows.quad_vb);
+		gl.vertexAttribPointer(this.blur_shader.pos_attr, 4, gl.FLOAT, false, 0, 0);
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Shadows.quad_ib);
+		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+	
+		//Do second blur pass
+		gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+		gl.bindTexture(gl.TEXTURE_2D, Shadows.blur_tex);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 
-	gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-
+		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+	}
+	
 	//Unbind fbo
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
