@@ -8,9 +8,15 @@ importScripts(
 
 const MAX_NET_CHUNKS	= 512;
 
+const VERT_SIZE			= 12;
+
 const PACK_X_STRIDE		= 1;
 const PACK_Y_STRIDE		= CHUNK_X * 3;
 const PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9;
+
+const PACK_X_OFFSET		= CHUNK_X;
+const PACK_Y_OFFSET		= CHUNK_Y;
+const PACK_Z_OFFSET		= CHUNK_Z;
 
 var 
 	net_pending_chunks = [],				 //Chunks we are waiting for on the network
@@ -21,8 +27,390 @@ var
 	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
 	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
-	fetch_interval = null;					 //Interval timer for chunk fetch events
+	fetch_interval = null,					 //Interval timer for chunk fetch events
 	
+	v_ptr = 0,
+	i_ptr = 0,
+	t_ptr = 0,
+	nv = 0,
+	
+	vbuffer		= new Array(6*4*CHUNK_SIZE*VERT_SIZE),
+	indbuffer	= new Array(6*4*CHUNK_SIZE),
+	tindbuffer	= new Array(6*4*CHUNK_SIZE);
+	
+//Retrieves a pointer into a packed buffer
+function get_ptr(j, k)
+{
+	return PACK_X_OFFSET-1 +
+		(PACK_Y_OFFSET+j)*PACK_Y_STRIDE +
+		(PACK_Z_OFFSET+k)*PACK_Z_STRIDE;
+}
+
+//Calculates ambient occlusion value
+function ao_value(s1, s2, c)
+{
+	s1 = !Transparent[s1];
+	s2 = !Transparent[s2];
+	c  = !Transparent[c];
+	
+	if(s1 && s2)
+	{
+		return 0.25;
+	}
+	
+	return 1.0 - 0.25 * (s1 + s2 + c);
+}
+
+//Calculates the light value
+function calc_light(
+	ox, oy, oz,
+	nx, ny, nz,
+	s1, s2, c)
+{
+	var ao;
+	
+	ao = ao_value(s1, s2, c);
+	
+	return [ao, ao, ao];
+}
+
+
+
+
+
+
+
+//Construct vertex buffer for this chunk
+// This code makes me want to barf - Mik
+function gen_vb()
+{
+	var 
+		x=0, y=0, z=0,
+	
+	//var neighborhood = new Uint32Array(27); (too slow goddammit.  variant arrays even worse.  am forced to do this. hate self.)
+		n000=0, n001=0, n002=0,
+		n010=0, n011=0, n012=0,
+		n020=0, n021=0, n022=0,
+		n100=0, n101=0, n102=0,
+		n110=0, n111=0, n112=0,
+		n120=0, n121=0, n122=0,
+		n200=0, n201=0, n202=0,
+		n210=0, n211=0, n212=0,
+		n220=0, n221=0, n222=0,
+	
+	//Buffers for scanning	
+		p00=0, p01=0, p02=0,
+		p10=0, p11=0, p12=0,
+		p20=0, p21=0, p22=0;
+	
+	//Initialize vertex buffer pointers
+	v_ptr = 0;
+	i_ptr = 0;
+	t_ptr = 0;
+	nv = 0;
+	
+	
+	function appendv(
+		ux, uy, uz,
+		vx, vy, vz,
+		nx, ny, nz,
+		block_id, 
+		dir,
+		ao00, ao01, ao02,
+		ao10, /*ao11,*/ ao12,
+		ao20, ao21, ao22)
+	{
+		var tc, tx, ty, dt,
+			ox, oy, oz,
+			light,
+			orient = nx * (uy * vz - uz * vy) +
+					 ny * (uz * vx - ux * vz) +
+					 nz * (ux * vy - uy * vx);
+
+		if(Transparent[block_id])
+		{
+			if(orient < 0)
+			{
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+1;
+				tindbuffer[t_ptr++] = nv+2;
+			
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+2;
+				tindbuffer[t_ptr++] = nv+3;
+
+			}
+			else
+			{
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+2;
+				tindbuffer[t_ptr++] = nv+1;
+			
+				tindbuffer[t_ptr++] = nv;
+				tindbuffer[t_ptr++] = nv+3;
+				tindbuffer[t_ptr++] = nv+2;
+			}
+		}
+		else
+		{
+			if(orient < 0)
+			{
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+1;
+				indbuffer[i_ptr++] = nv+2;
+
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+2;
+				indbuffer[i_ptr++] = nv+3;
+			}
+			else
+			{
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+2;
+				indbuffer[i_ptr++] = nv+1;
+
+				indbuffer[i_ptr++] = nv;
+				indbuffer[i_ptr++] = nv+3;
+				indbuffer[i_ptr++] = nv+2;
+			}
+		}
+
+		tc = BlockTexCoords[block_id][dir];
+		tx = tc[1] / 16.0;
+		ty = tc[0] / 16.0;
+		dt = 1.0 / 16.0 - 1.0/256.0;
+	
+		ox = x - 0.5 + (nx > 0 ? 1 : 0);
+		oy = y - 0.5 + (ny > 0 ? 1 : 0);
+		oz = z - 0.5 + (nz > 0 ? 1 : 0);
+
+	
+		light = calc_light(
+			ox, oy, oz,
+			nx, ny, nz, 
+			ao01, ao10, ao00);
+		vbuffer[v_ptr++] = (ox);
+		vbuffer[v_ptr++] = (oy);
+		vbuffer[v_ptr++] = (oz);
+		vbuffer[v_ptr++] = (tx);
+		vbuffer[v_ptr++] = (ty+dt);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
+	
+
+		light = calc_light(
+			ox+ux, oy+uy, oz+uz,
+			nx, ny, nz, 
+			ao01, ao12, ao02);
+		vbuffer[v_ptr++] = (ox + ux);
+		vbuffer[v_ptr++] = (oy + uy);
+		vbuffer[v_ptr++] = (oz + uz);
+		vbuffer[v_ptr++] = (tx);
+		vbuffer[v_ptr++] = (ty);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
+
+		light = calc_light(
+			ox+ux+vx, oy+uy+vz, oz+uz+vz,
+			nx, ny, nz, 
+			ao12, ao21, ao22);
+		vbuffer[v_ptr++] = (ox + ux + vx);
+		vbuffer[v_ptr++] = (oy + uy + vy);
+		vbuffer[v_ptr++] = (oz + uz + vz);
+		vbuffer[v_ptr++] = (tx+dt);
+		vbuffer[v_ptr++] = (ty);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
+
+		light = calc_light(
+			ox+vx, oy+vy, oz+vz,
+			nx, ny, nz, 
+			ao10, ao21, ao20);
+		vbuffer[v_ptr++] = (ox + vx);
+		vbuffer[v_ptr++] = (oy + vy);
+		vbuffer[v_ptr++] = (oz + vz);
+		vbuffer[v_ptr++] = (tx+dt);
+		vbuffer[v_ptr++] = (ty+dt);
+		vbuffer[v_ptr++] = (nx);
+		vbuffer[v_ptr++] = (ny);
+		vbuffer[v_ptr++] = (nz);
+		vbuffer[v_ptr++] = (light[0]);
+		vbuffer[v_ptr++] = (light[1]);
+		vbuffer[v_ptr++] = (light[2]);
+		vbuffer[v_ptr++] = (0);
+		
+		nv += 4;
+	}
+		
+	for(z=0; z<CHUNK_Z; ++z)
+	for(y=0; y<CHUNK_Y; ++y)
+	{
+		//Set up neighborhood buffers
+		p00 = get_ptr(y-1, z-1);
+		p01 = get_ptr(y-1, z);
+		p02 = get_ptr(y-1, z+1);
+		p10 = get_ptr(y,   z-1);
+		p11 = get_ptr(y,   z);
+		p12 = get_ptr(y,   z+1);
+		p20 = get_ptr(y+1, z-1);
+		p21 = get_ptr(y+1, z);
+		p22 = get_ptr(y+1, z+1);
+
+
+		//Read in initial neighborhood
+		n100 = packed_buffer[p00++];
+		n101 = packed_buffer[p01++];
+		n102 = packed_buffer[p02++];
+		n110 = packed_buffer[p10++];
+		n111 = packed_buffer[p11++];
+		n112 = packed_buffer[p12++];
+		n120 = packed_buffer[p20++];
+		n121 = packed_buffer[p21++];
+		n122 = packed_buffer[p22++];
+		
+		n200 = packed_buffer[p00++];
+		n201 = packed_buffer[p01++];
+		n202 = packed_buffer[p02++];
+		n210 = packed_buffer[p10++];
+		n211 = packed_buffer[p11++];
+		n212 = packed_buffer[p12++];
+		n220 = packed_buffer[p20++];
+		n221 = packed_buffer[p21++];
+		n222 = packed_buffer[p22++];
+
+		
+		for(x=0; x<CHUNK_X; ++x)
+		{
+			//Shift old 1-neighborhood back by 1 x value
+			n000 = n100;
+			n001 = n101;
+			n002 = n102;
+			n010 = n110;
+			n011 = n111;
+			n012 = n112;
+			n020 = n120;
+			n021 = n121;
+			n022 = n122;
+			n100 = n200;
+			n101 = n201;
+			n102 = n202;
+			n110 = n210;
+			n111 = n211;
+			n112 = n212;
+			n120 = n220;
+			n121 = n221;
+			n122 = n222;
+			
+			//Read in next neighborhood
+			n200 = packed_buffer[p00++];
+			n201 = packed_buffer[p01++];
+			n202 = packed_buffer[p02++];
+			n210 = packed_buffer[p10++];
+			n211 = packed_buffer[p11++];
+			n212 = packed_buffer[p12++];
+			n220 = packed_buffer[p20++];
+			n221 = packed_buffer[p21++];
+			n222 = packed_buffer[p22++];
+
+			if(n111 == 0)
+				continue;
+				
+				
+			if(Transparent[n011] && n011 != n111)
+			{
+				appendv( 
+					 0,  1,  0,
+					 0,  0,  1,
+					-1,  0,  0,
+					n111, 1,
+					n000,  n010,  n020,
+					n001,/*n011,*/n021,
+					n002,  n012,  n022);
+			}
+			
+			if(Transparent[n211] && n211 != n111)
+			{
+				appendv( 
+					 0,  1,  0,
+					 0,  0,  1,
+					 1,  0,  0,
+					n111, 1,
+					n200,  n210,  n220,
+					n201,/*n211,*/n221,
+					n202,  n212,  n222);
+			}
+			
+			if(Transparent[n101] && n101 != n111)
+			{
+				appendv( 
+					 0,  0,  1,
+					 1,  0,  0,
+					 0, -1,  0,
+					n111, 2,
+					n000,  n001,  n002,
+					n100,/*n101,*/n102,
+					n200,  n201,  n202);
+			}
+			
+			
+			if(Transparent[n121] && n121 != n111)
+			{
+				appendv( 
+					 0,  0,  1,
+ 					 1,  0,  0,
+					 0,  1,  0,
+					n111, 0,
+					n020,  n021,  n022,
+					n120,/*n121,*/n122,
+					n220,  n221,  n222);
+			}
+			
+
+			if(Transparent[n110] && n110 != n111)
+			{
+				appendv( 
+					 0, 1,  0,
+					 1,  0,  0,
+					 0,  0, -1,
+					n111, 1,
+					n000,  n010,  n020,
+					n100,/*n110,*/n120,
+					n200,  n210,  n220);
+			}
+
+			if(Transparent[n112] && n112 != n111)
+			{
+				appendv( 
+					 0, 1,  0,
+					 1,  0,  0,
+					 0,  0, 1,
+					n111, 1,
+					n002,  n012,  n022,
+					n102,/*n112,*/n122,
+					n202,  n212,  n222);
+			}
+		}
+	}
+	
+	//Return result	
+	return [vbuffer.slice(0, v_ptr), indbuffer.slice(0, i_ptr), tindbuffer.slice(0, t_ptr)];
+}
+
 
 
 function pack_buffer(cx, cy, cz)
@@ -111,7 +499,7 @@ function grab_chunks()
 {
 	if(wait_chunks || net_pending_chunks.length == 0)
 		return;
-	
+
 	var i, j, k = 0,
 		chunks = (net_pending_chunks.length > MAX_NET_CHUNKS) ? 
 				net_pending_chunks.slice(0,MAX_NET_CHUNKS) : net_pending_chunks,
@@ -120,11 +508,11 @@ function grab_chunks()
 		bb = new BlobBuilder(),
 		arr = new Uint8Array(12),
 		delta = new Uint8Array(3);	
-		
+
 	print("Grabbing chunks");
-		
+
 	wait_chunks = true;
-	
+
 	if(net_pending_chunks.length > MAX_NET_CHUNKS)
 	{
 		net_pending_chunks = net_pending_chunks.slice(MAX_NET_CHUNKS);
@@ -133,55 +521,55 @@ function grab_chunks()
 	{
 		net_pending_chunks = [];
 	}
-	
+
 	bb.append(session_id.buffer);
-	
+
 	for(i=0; i<3; ++i)
 	{
 		arr[k++] = (base_chunk_id[i])		& 0xff;
 		arr[k++] = (base_chunk_id[i] >> 8)	& 0xff;
 		arr[k++] = (base_chunk_id[i] >> 16)	& 0xff;
 		arr[k++] = (base_chunk_id[i] >> 24)	& 0xff;
-		
+
 	}
 	bb.append(arr.buffer);
-	
+
 	//Encode chunk offsets
 	for(i=0; i<chunks.length; ++i)
 	{
-		
+
 		delta[0] = chunks[i].x - base_chunk.x;
 		delta[1] = chunks[i].y - base_chunk.y;
 		delta[2] = chunks[i].z - base_chunk.z;
-		
+
 		bb.append(delta.buffer);
 	}
-	
+
 	print("Executing XHR");
-	
+
 	asyncGetBinary("g", 
 	function(arr)
 	{
 		var i, j, chunk, block, res;
-		
+
 		print("Got response: " + arr.length);
-	
+
 		wait_chunks = false;
 		arr = arr.subarray(1);
-	
+
 		for(i=0; i<chunks.length; i++)
 		{
 			chunk = chunks[i];
-			
+
 			//print("Decompressing chunk: " + chunk.x + "," + chunk.y + "," + chunk.z);
-			
+
 			//Decompress chunk
 			res = -1;			
 			if(arr.length > 0)
 				res = decompress_chunk(arr, chunk.data);
-				
+
 			//print("Res = " + res);
-			
+
 			//EOF, clear out remaining chunks
 			if(res < 0)
 			{
@@ -192,7 +580,7 @@ function grab_chunks()
 				}
 				return;
 			}
-			
+
 			//Handle any pending writes
 			chunk.pending = false;
 			for(j=0; j<chunk.pending_blocks.length; ++j)
@@ -201,14 +589,14 @@ function grab_chunks()
 				chunk.set_block(block[0], block[1], block[2], block[3]);
 			}
 			delete chunk.pending_blocks;
-			
+
 			//Check if chunk is air
 			chunk.is_air = true;
-			
+
 			var all_stone = true,
 				all_air = true;
-			
-			
+
+
 			for(j=0; j<CHUNK_SIZE; ++j)
 			{
 				if(chunk.data[j] != 0)
@@ -219,15 +607,15 @@ function grab_chunks()
 				{
 					all_stone = false;
 				}
-				
+
 				if(!all_air && !all_stone)
 				{
 					break;
 				}
 			}
-			
+
 			chunk.is_air = (all_air || all_stone);
-			
+
 			//Resize array
 			arr = arr.subarray(res);
 
@@ -239,17 +627,17 @@ function grab_chunks()
 			set_dirty(chunk.x, chunk.y+1, chunk.z);
 			set_dirty(chunk.x, chunk.y, chunk.z-1);
 			set_dirty(chunk.x, chunk.y, chunk.z+1);
-			
+
 			//Send result to main thread
 			send_chunk(chunk);
 		}
-		
+
 		print("Response done");
 	}, 
 	function()
 	{
 		var i;
-		
+
 		print("ERROR IN XMLHTTPREQUEST!  COULD NOT GET CHUNKS!");
 		for(i=0; i<chunks.length; ++i)
 		{
@@ -268,17 +656,17 @@ function fetch_chunk(x, y, z)
 	//print("fetching chunk: " + str + ", waiting = " + wait_chunks);
 	if(str in Map.index)
 		return;
-		
+
 	//Create temporary chunk
 	chunk = new Chunk(x, y, z);
 	chunk.pending = true;
 	chunk.dirty = false;
 	chunk.pending_blocks = [];
-	
+
 	//Add to index
 	Map.index[str] = chunk;
 	net_pending_chunks.push(chunk);
-	
+
 	if(net_pending_chunks.length >= MAX_PENDING_CHUNKS)
 	{
 		wait_chunks = false;
@@ -290,7 +678,7 @@ function fetch_chunk(x, y, z)
 function set_dirty(x, y, z, priority)
 {
 	var chunk = Map.lookup_chunk(x, y, z), i;
-	
+
 	if(chunk)
 	{
 		if(chunk.pending)
@@ -299,7 +687,7 @@ function set_dirty(x, y, z, priority)
 		}
 		else if(chunk.is_air)
 		{
-			set_non_pending(chunk.x, chunk.y, chunk.z);
+			send_vb(chunk.x, chunk.y, chunk.z, [[], [], []]);
 		}
 		else if(priority)
 		{
@@ -327,25 +715,16 @@ function generate_vbs()
 {
 	print("Generating vbs");
 
-	var i, chunk, vbs, nchunks = [];
-		
-	for(i=0; i < vb_pending_chunks.length; ++i)
+	var i, chunk, vbs;
+
+	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
 	{
 		chunk = vb_pending_chunks[i];
-		
-		if(!chunk.working)
-		{
-			pack_buffer(chunk.x, chunk.y, chunk.z);
-			update_vb(chunk.x, chunk.y, chunk.z);
-			chunk.working = true;
-			chunk.dirty = false;
-		}
-		else
-		{
-			nchunks.push(chunk);
-		}
+		pack_buffer(chunk.x, chunk.y, chunk.z);
+		send_vb(chunk.x, chunk.y, chunk.z, gen_vb());
+		chunk.dirty = false;
 	}
-	vb_pending_chunks = nchunks;
+	vb_pending_chunks = vb_pending_chunks.slice(i);
 }
 
 //Sets a block
@@ -363,8 +742,8 @@ function set_block(x, y, z, b)
 		c = Map.lookup_chunk(cx, cy, cz);		
 	if(!c)
 		return -1;
-		
-		
+
+
 	if(c.pending)
 	{
 		c.pending_blocks.push([bx,by,bz,b]);
@@ -378,13 +757,13 @@ function set_block(x, y, z, b)
 		c.data[idx] = b;
 		c.is_air = false;
 		c.set_block(bx, by, bz, b);
-		
+
 		set_dirty(cx, cy, cz, true);
-		
+
 		flags = [ [ bx==0, true, bx==(CHUNK_X-1)],
 				  [ by==0, true, by==(CHUNK_Y-1)],
 				  [ bz==0, true, bz==(CHUNK_Z-1)] ];
-				  
+
 		for(i=0; i<3; ++i)
 		for(j=0; j<3; ++j)
 		for(k=0; k<3; ++k)
@@ -403,7 +782,7 @@ function worker_start(key)
 	print("starting worker");
 
 	session_id.set(key);
-	
+
 	print("key = " 
 		+ session_id[0] + "," 
 		+ session_id[1] + "," 
@@ -413,13 +792,13 @@ function worker_start(key)
 		+ session_id[5] + "," 
 		+ session_id[6] + "," 
 		+ session_id[7]);
-	
+
 	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
 	fetch_interval = setInterval(grab_chunks, FETCH_RATE);
-	
+
 	for(var i=0; i<CHUNK_SIZE; ++i)
 	{
-		empty_data[i] = 1;
+		empty_data[i] = 0;
 	}
 }
 
@@ -434,41 +813,31 @@ self.onmessage = function(ev)
 		case EV_START:
 			worker_start(ev.data.key);
 		break;
-		
+
 		case EV_SET_BLOCK:
 			set_block(ev.data.x, ev.data.y, ev.data.z, ev.data.b);
 		break;
-		
+
 		case EV_FETCH_CHUNK:
 			fetch_chunk(ev.data.x, ev.data.y, ev.data.z);
 		break;
-		
+
 		case EV_SET_THROTTLE:
 			high_throughput = false;
-		break;
-		
-		case EV_VB_COMPLETE:
-			vb_gen_complete(ev.data.x, ev.data.y, ev.data.z);
 		break;
 	}
 
 };
 
-//Handle a completed vb generation round
-function vb_gen_complete(x, y, z)
-{
-	var chunk = Map.lookup_chunk(x, y, z);
-	chunk.working = false;
-	print("VB Gen complete");
-}
-			
 //Sends an updated set of vertex buffers to the client
-function update_vb(x, y, z)
+function send_vb(x, y, z, vbs)
 {
 	postMessage({ 
 		type: EV_VB_UPDATE, 
 		'x': x, 'y': y, 'z': z, 
-		'data': packed_buffer} );
+		verts: vbs[0],
+		ind: vbs[1],
+		tind: vbs[2]});
 }
 
 //Sends a new chunk to the client
@@ -485,13 +854,6 @@ function send_chunk(chunk)
 		data: tmp_data });
 }
 
-function set_non_pending(x, y, z)
-{
-	postMessage({
-		type:EV_SET_NON_PENDING,
-		'x':x, 'y':y, 'z':z});
-}
-
 //Removes a chunk from the database
 function forget_chunk(chunk)
 {
@@ -499,13 +861,12 @@ function forget_chunk(chunk)
 	if(str in Map.index)
 	{
 		print("Forgetting chunk: " + str);
-	
+
 		delete Map.index[str];
-	
+
 		postMessage({
 			type: EV_FORGET_CHUNK,
 			idx: str});
 			return;
 	}	
 }
-

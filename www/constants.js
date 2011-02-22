@@ -68,7 +68,5 @@ const EV_VB_COMPLETE		= 8;
 const EV_SET_NON_PENDING	= 9;
 
 const MAX_PENDING_CHUNKS	= 25;
-
-const NUM_VB_WORKERS	= 5;
-
+const MAX_VB_UPDATES		= 10;
 

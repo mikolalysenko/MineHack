@@ -58,7 +58,6 @@ function Chunk(x, y, z)
 	this.z = z;
 	
 	this.pending = true;
-	this.working = false;
 	this.dirty = false;
 	
 	this.vb = null;
