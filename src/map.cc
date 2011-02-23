@@ -108,6 +108,12 @@ bool Map::get_surface_chunk(ChunkID const& c, Chunk* chunk)
 		if(BLOCK_TRANSPARENCY[(int)b])
 		{
 			chunk->data[idx] = b;
+			
+			if(b != Block::Air)
+			{
+				empty = false;
+			}
+			
 			continue;
 		}
 	
@@ -290,25 +296,45 @@ uint64_t chunkid_to_vis_key(ChunkID const& c)
 }
 
 //Retrieves a buffer containing all visible chunks
-void Map::send_vis_buffer(uint64_t key, int socket)
+bool Map::send_vis_buffer(uint64_t key, int socket)
 {
-	MutexLock L(&vis_lock);
-	auto iter = vis_buffers.find(key);
+	VisBuffer buf;
 	
-	if(iter == vis_buffers.end() || 
-		(*iter).second.ptr == NULL)
+	cout << "Sending vis buffer" << endl;
+
 	{
-		gen_vis_buffer(key);
+		MutexLock L(&vis_lock);
+		auto iter = vis_buffers.find(key);
+	
+		if(iter == vis_buffers.end() || 
+			(*iter).second.ptr == NULL)
+		{
+			gen_vis_buffer(key, true);
+		}
+	
+		buf = vis_buffers[key];
 	}
 	
-	auto buf = vis_buffers[key];
-	send(socket, buf.ptr, buf.size, 0);
+	
+	return send(socket, buf.ptr, buf.size, 0) >= 0;
 }
 		
 //Generates a visibility buffer
-void Map::gen_vis_buffer(uint64_t key)
+void Map::gen_vis_buffer(uint64_t key, bool no_lock)
 {
 	//Check if buffer already exists
+	if(no_lock)
+	{
+		auto iter = vis_buffers.find(key);
+		if(iter != vis_buffers.end())
+		{
+			if((*iter).second.ptr == NULL)
+			{
+				vis_buffers.erase(iter);
+			}
+		}
+	}
+	else
 	{
 		MutexLock L(&vis_lock);
 		auto iter = vis_buffers.find(key);
@@ -325,42 +351,75 @@ void Map::gen_vis_buffer(uint64_t key)
 			}
 		}
 	}
+	
+	cout << "Generating vis buffer: " << key << endl;
 
 	//First compute the base chunk
 	ChunkID base_chunk(
-		(key&((1<<20)-1)) * CHUNK_X,
-		((key>>20)&((1<<20)-1)) * CHUNK_Y,
-		((key>>40)&((1<<20)-1)) * CHUNK_Z);
+		(key&((1<<20)-1)) * VIS_BUFFER_X,
+		((key>>20)&((1<<20)-1)) * VIS_BUFFER_Y,
+		((key>>40)&((1<<20)-1)) * VIS_BUFFER_Z);
+	
+	cout << "Base chunk = " << base_chunk.x << ',' << base_chunk.y << ',' << base_chunk.z << endl;
 	
 	//Next, allocate temporary buffer
-	ScopeFree buf(malloc(12 + (2 + 2*sizeof(Block)*CHUNK_X*CHUNK_Y*CHUNK_Z)*VIS_BUFFER_X*VIS_BUFFER_Y*VIS_BUFFER_Z));
+	ScopeFree buf(malloc(9 + (2 + 2*sizeof(Block)*CHUNK_X*CHUNK_Y*CHUNK_Z)*VIS_BUFFER_X*VIS_BUFFER_Y*VIS_BUFFER_Z));
 
 	//Loop through all chunks in block
-	uint8_t *chunk_ptr = ((uint8_t*)buf.ptr) + 12 + 2*VIS_BUFFER_X*VIS_BUFFER_Y*VIS_BUFFER_Z;
+	uint8_t *chunk_ptr = ((uint8_t*)buf.ptr) + 9 + 2*VIS_BUFFER_X*VIS_BUFFER_Y*VIS_BUFFER_Z;
 	uint8_t *coord_ptr = chunk_ptr;
+	int n_chunks = 0;
+	Chunk chunk;
 	for(int x=base_chunk.x; x<base_chunk.x + VIS_BUFFER_X; ++x)
 	for(int y=base_chunk.y; y<base_chunk.y + VIS_BUFFER_Y; ++y)
 	for(int z=base_chunk.z; z<base_chunk.z + VIS_BUFFER_Z; ++z)
 	{
-		Chunk* chunk = (Chunk*)(void*)chunk_ptr;
-		if(get_surface_chunk(ChunkID(x,y,z), chunk))
+		if(get_surface_chunk(ChunkID(x,y,z), &chunk))
 			continue;
 			
-		chunk_ptr += chunk->compress(chunk_ptr, sizeof(Chunk));
+		int c_size = chunk.compress(chunk_ptr, 2*sizeof(Chunk));
+		assert(c_size > 0);
+		chunk_ptr += c_size;
+		
 		
 		//Store coordinate offset
 		*(--coord_ptr) = 
 			(x-base_chunk.x) +
 			((y-base_chunk.y)<<3) +
-			((z-base_chunk.z)<<2);
+			((z-base_chunk.z)<<5);
+			
+		++n_chunks;
+			
+		cout << "Packing chunk: " << x << ',' << y << ',' << z << ", Coded offset = " << (int)*(coord_ptr) << ", compressed len = " << c_size << ", num chunks = " << n_chunks << endl;
 	}
 	
+	//Reverse offsets
+	for(int i=0; i<(n_chunks>>1); ++i)
+	{
+		uint8_t tmp = coord_ptr[i];
+		coord_ptr[i] = coord_ptr[n_chunks - 1 - i];
+		coord_ptr[n_chunks - 1 - i] = tmp;
+	}
+	
+	cout << "Contains: " << (int)n_chunks << " chunks" << endl;
+	
 	//Write base offset
-	*((uint64_t*)(coord_ptr)-1) = base_chunk.hash();
+	*(--coord_ptr) = n_chunks;
+	*((uint64_t*)(coord_ptr)-1) = key;
+	
+	cout << "base_chunk.hash = " << key << endl;
 	
 	//Compute offset of base pointer and length
-	void* base_ptr = (void*)(coord_ptr - 8);
+	void* base_ptr = (void*)(coord_ptr - sizeof(uint64_t));
 	int len = chunk_ptr - (uint8_t*)base_ptr;
+	
+	
+	cout << "base_ptr = ";
+	for(int i=0; i<10; ++i)
+	{
+		cout << (int)(((uint8_t*)base_ptr)[i]) << ',';
+	}
+	cout << endl;
 	
 	//Generate a compressed buffer
 	int sz;
@@ -378,28 +437,39 @@ void Map::gen_vis_buffer(uint64_t key)
 	  "\n", sz);
 
 	//Append result
-	memcpy(compressed_vis_buffer+delta, compressed_chunks.ptr, sz);
+	memcpy((uint8_t*)compressed_vis_buffer+delta, compressed_chunks.ptr, sz);
 	
 	//Create vis buffer
 	VisBuffer vb { compressed_vis_buffer, sz+delta };
 	
 	//Check if buffer changed
-	bool success = false;
+	if(no_lock)
 	{
-		MutexLock L(&vis_lock);
-		auto iter = vis_buffers.find(key);
-		if(iter == vis_buffers.end())
+		vis_buffers[key] = vb;
+	}
+	else
+	{
+		bool success = false;
+		cout << "Acquiring lock..." << endl;
 		{
-			success = true;
-			vis_buffers[key] = vb;
+			MutexLock L(&vis_lock);
+			auto iter = vis_buffers.find(key);
+			if(iter == vis_buffers.end())
+			{
+				success = true;
+				vis_buffers[key] = vb;
+			}
+		}
+		
+		//If we failed to generate the visibility buffer, then die
+		if(!success)
+		{
+			cout << "FAILED TO GENERATE VISIBILITY BUFFER" << endl;
+			free(compressed_vis_buffer);
 		}
 	}
 	
-	//If we failed to generate the visibility buffer, then die
-	if(!success)
-	{
-		free(compressed_vis_buffer);
-	}
+	cout << "Done" << endl;
 }
 
 //Invalidates a visibility buffer after a chunk changes

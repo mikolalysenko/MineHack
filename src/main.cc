@@ -439,11 +439,15 @@ void do_delete_player(HttpEvent& ev)
 
 void do_get_vis_chunks(HttpEvent& ev)
 {
-	HttpBlobReader blob(ev.conn);
+	cout << "Grabbing vis buffer" << endl;
+
+
+	HttpBlobReader blob(ev.conn);	
 	
 	//Read out the session id
-	if( blob.len <= sizeof(SessionID) )
+	if( blob.len != sizeof(SessionID) )
 	{
+		cout << "Error, missing session id" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
@@ -460,7 +464,11 @@ void do_get_vis_chunks(HttpEvent& ev)
 	}
 	
 	//Send visible chunk packet to player
-	game_instance->get_vis_chunks(session.player_id, mg_steal_socket(ev.conn));
+	if(!game_instance->get_vis_chunks(session.player_id, mg_steal_socket(ev.conn)))
+	{
+		cout << "Vis buffer failed" << endl;
+		ajax_printf(ev.conn, "");
+	}
 }
 
 #pragma pack(push,1)
@@ -806,6 +814,10 @@ static void *event_handler(mg_event event,
 			
 			case 'g':
 				do_get_chunk(ev);
+			break;
+			
+			case 'v':
+				do_get_vis_chunks(ev);
 			break;
 		
 		

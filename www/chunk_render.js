@@ -608,6 +608,12 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 Map.update_chunk = function(x, y, z, data)
 {
 	var chunk = Map.lookup_chunk(x, y, z);
+	
+	if(!chunk)
+	{
+		chunk = Map.add_chunk(x, y, z);
+	}
+	
 	chunk.data = data;
 }
 

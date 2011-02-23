@@ -17,6 +17,7 @@
 #include "misc.h"
 #include "entity.h"
 #include "mailbox.h"
+#include "map.h"
 
 using namespace std;
 using namespace Game;
@@ -92,6 +93,83 @@ void Mailbox::set_origin(EntityID const& player_id, int ox, int oy, int oz)
 	update_index(data, ox, oy, oz);
 }
 
+
+//---------------------------------------------------------------
+// Chunk tracking stuff
+//---------------------------------------------------------------
+uint64_t Mailbox::get_next_vis_set(EntityID const& player_id)
+{
+	PlayerLock G(this, player_id);
+	auto data = G.data();
+	if(data == NULL)
+		return 0;
+		
+		
+	struct VisitK
+	{
+		static uint64_t call(PlayerRecord* data, int dx, int dy, int dz)
+		{
+			cout << "Visiting key: " << dx << "," << dy << "," << dz << endl;
+		
+			uint64_t key = pos_to_vis_key(
+				data->ox+dx*CHUNK_X*VIS_BUFFER_X,
+				data->oy+dy*CHUNK_Y*VIS_BUFFER_Y,
+				data->oz+dz*CHUNK_Z*VIS_BUFFER_Z);
+			
+			if(data->known_regions.find(key) == data->known_regions.end())
+			{
+				return key;
+			}
+			
+			return 0;
+		}
+	};
+		
+	for(int d=0; d<=4; ++d)
+	for(int r=0; r<=d; ++r)
+	for(int c=0; c<=d-r; ++c)
+	{
+		int m = d - r - c;
+		
+		
+		uint64_t k = VisitK::call(data, c, r, m);
+		if(k) return k;
+		
+		k = VisitK::call(data, -c, r, m);
+		if(k) return k;
+		
+		k = VisitK::call(data, c, r, -m);
+		if(k) return k;
+
+		k = VisitK::call(data, -c, r, -m);
+		if(k) return k;
+		
+		k = VisitK::call(data, c, -r, m);
+		if(k) return k;
+		
+		k = VisitK::call(data, -c, -r, m);
+		if(k) return k;
+		
+		k = VisitK::call(data, c, -r, -m);
+		if(k) return k;
+
+		k = VisitK::call(data, -c, -r, -m);
+		if(k) return k;
+	}
+	
+	return 0;
+}
+
+
+void Mailbox::mark_vis_set(EntityID const& player_id, uint64_t vis_id)
+{
+	PlayerLock G(this, player_id);
+	auto data = G.data();
+	if(data == NULL)
+		return;
+		
+	data->known_regions.insert(vis_id);
+}
 
 //---------------------------------------------------------------
 // Single event posting
@@ -357,7 +435,7 @@ void Mailbox::foreach_region(
 	{
 		uint64_t bucket = BUCKET_IDX(bx, by, bz);
 		
-		cout << "VISITING BUCKET: " << bucket << endl;
+		//cout << "VISITING BUCKET: " << bucket << endl;
 		
 		auto iter=player_pos_index.find(bucket);
 		if(iter == player_pos_index.end())

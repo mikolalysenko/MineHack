@@ -488,6 +488,87 @@ function decompress_chunk(arr, data)
 }
 
 
+function unpack_vis_buffer(arr)
+{
+	wait_chunks = false;
+	if(arr.length == 0)
+		return;
+		
+	var cx = (arr[0] + (arr[1]<<8) + ((arr[2] & 15)<<16))*8,
+		cy = ((arr[2]>>4) + (arr[3]<<4) + ((arr[4]&63)<<12))*4,
+		cz = (arr[5] + (arr[6]<<8) + (arr[7]<<16))*8,
+		count = arr[8],
+		chunk_ids = arr.subarray(9),
+		chunk_data = arr.subarray(9+count);
+		
+	
+	print("Base chunk = " + cx + ',' + cy + ',' + cz);
+	
+	for(var i=0; i<count; ++i)
+	{
+		var offs = chunk_ids[i],
+			ox = cx + (offs&7),
+			oy = cy + ((offs>>3)&3),
+			oz = cz + (offs>>5),
+				
+			chunk = Map.add_chunk(ox, oy, oz),
+			res = -1;
+			
+			
+		//print("Got chunk: " + ox + "," + oy + "," + oz);
+			
+		if(chunk_data.length > 0)
+			res = decompress_chunk(chunk_data, chunk.data);
+			
+		if(res < 0)
+		{
+			print("Failure!  Could not read chunk");
+			return;
+		}
+			
+		//Handle any pending writes
+		chunk.pending = false;
+		chunk.is_air = false;
+
+		//Resize array
+		chunk_data = chunk_data.subarray(res);
+
+		//Set dirty flags on neighboring chunks
+		set_dirty(chunk.x, chunk.y, chunk.z);
+		set_dirty(chunk.x-1, chunk.y, chunk.z);
+		set_dirty(chunk.x+1, chunk.y, chunk.z);
+		set_dirty(chunk.x, chunk.y-1, chunk.z);
+		set_dirty(chunk.x, chunk.y+1, chunk.z);
+		set_dirty(chunk.x, chunk.y, chunk.z-1);
+		set_dirty(chunk.x, chunk.y, chunk.z+1);
+
+		//Send result to main thread
+		send_chunk(chunk);
+	}
+}
+
+function grab_vis_buffer()
+{
+	if(wait_chunks)
+		return;
+
+	print("Grabbing visible chunks");
+	
+	
+	var bb = new BlobBuilder();
+	bb.append(session_id.buffer);
+	wait_chunks = true;
+	
+	asyncGetBinary("v", unpack_vis_buffer,
+	function()
+	{
+		wait_chunks = false;
+		print("Error retreiving vis buffer");
+	},
+	bb.getBlob("application/octet-stream"));
+}
+
+
 //Retrieves chunks from the network
 function grab_chunks()
 {
@@ -788,7 +869,9 @@ function worker_start(key)
 		+ session_id[7]);
 
 	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
-	fetch_interval = setInterval(grab_chunks, FETCH_RATE);
+	//fetch_interval = setInterval(grab_chunks, FETCH_RATE);
+
+	fetch_interval = setInterval(grab_vis_buffer, 800);
 
 	for(var i=0; i<CHUNK_SIZE; ++i)
 	{
@@ -813,7 +896,7 @@ self.onmessage = function(ev)
 		break;
 
 		case EV_FETCH_CHUNK:
-			fetch_chunk(ev.data.x, ev.data.y, ev.data.z);
+			//fetch_chunk(ev.data.x, ev.data.y, ev.data.z);
 		break;
 
 		case EV_SET_THROTTLE:

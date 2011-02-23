@@ -2,7 +2,6 @@
 
 function print(str)
 {
-/*
 	if(typeof(console) == 'undefined')
 	{
 		postMessage({type:EV_PRINT, 'str':str});
@@ -11,7 +10,6 @@ function print(str)
 	{
 		console.log(str);
 	}
-*/
 }
 
 

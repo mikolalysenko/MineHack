@@ -36,7 +36,7 @@
 #define CHUNK_IDX_S				19ULL
 
 //Size of max chunk index
-#define CHUNK_IDX_MAX			(1<<CHUNK_IDX_S)
+#define CHUNK_IDX_MAX			(1ULL<<CHUNK_IDX_S)
 
 #define CHUNK_IDX_MASK			(CHUNK_IDX_MAX - 1)
 

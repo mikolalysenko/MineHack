@@ -484,10 +484,51 @@ bool World::get_vis_chunks(
 	}
 	
 	//Find next visible chunk region for player
-
-	//Try sending chunk to player
+	uint64_t vis_id = mailbox->get_next_vis_set(player_id);
+	cout << "next vis id = " << vis_id << endl;
+	if(vis_id == 0)
+		return false;
 	
-	//If successful, mark chunk and replicate entities	
+	//Try sending chunk to player
+	if(!game_map->send_vis_buffer(vis_id, socket))
+		return false;
+	
+	//If successful, mark chunk and replicate entities
+	mailbox->mark_vis_set(player_id, vis_id);
+	
+	/*
+	//Refresh all existing entities in the chunk region for the client
+	struct Visitor
+	{
+		EntityID player_id;
+		Mailbox* mailbox;
+		
+		static EntityUpdateControl call(Entity& entity, void* data)
+		{
+			Visitor* v = (Visitor*)data;
+			v->mailbox->send_entity(v->player_id, entity);
+			return EntityUpdateControl::Continue;
+		}
+	};
+	
+	ChunkID base_chunk(
+		(vis_id&((1<<20)-1)) * VIS_BUFFER_X,
+		((vis_id>>20)&((1<<20)-1)) * VIS_BUFFER_Y,
+		((vis_id>>40)&((1<<20)-1)) * VIS_BUFFER_Z);
+		
+	Region r(
+		base_chunk.x*CHUNK_X, 
+		base_chunk.y*CHUNK_Y, 
+		base_chunk.z*CHUNK_Z,
+		(base_chunk.x+VIS_BUFFER_X)*CHUNK_X, 
+		(base_chunk.y+VIS_BUFFER_Y)*CHUNK_Y, 
+		(base_chunk.z+VIS_BUFFER_Z)*CHUNK_Z,
+	
+	Visitor V = { player_id, mailbox };
+	entity_db->foreach(Visitor::call, &V, r, vector<EntityType>(), true);
+	*/
+	
+	return true;
 }
 
 
