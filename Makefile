@@ -15,25 +15,30 @@ CXX = g++ -std=c++0x
 # C compiler
 CC = gcc
 
+#Protocol buffer compiler
+PROTOC = protoc
+
+#Javascript protocol buffer compiler
+PROTOJS		= tools/pbj
+
 #URL for the server
 URL = http://127.0.0.1:8081/index.html
 
 #Chrome path
 BROWSER = $(CHROME) --enable-webgl
 
-# source files directory
+# Directories
 srcdir = src
-
-# build directory
+wwwdir = www
 builddir = obj
-
 datadir = data
+protodir = proto
 
 # preprocessor options to find all included files
-INC_PATH = -I$(srcdir) -I/usr/local/include -I$(CUDA_INSTALL_PATH)/include
+INC_PATH = -I$(srcdir) -I/usr/local/include
 
 # libraries link options ('-lm' is common to link with the math library)
-LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lz -lbz2 -lrt -pthread -ldl -lm -lc
+LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -pthread -ldl -ltcmalloc -lm -lc
 
 # other compilation options
 COMPILE_OPTS = -pthread -msse2 -Wno-deprecated
@@ -118,7 +123,18 @@ CXXOPTS = $(GOAL_OPTS) $(COMPILE_OPTS) $(WARN_OPTS) $(OPTIMISE_OPTS)
 LDOPTS = $(GOAL_OPTS) $(LNK_LIBS) -fPIC
 
 # source files in this project
-cppsources := $(wildcard $(srcdir)/*.cc)
+protosources := $(notdir $(wildcard $(protodir)/*.proto))
+
+protocpp := $(addprefix $(srcdir)/, $(protosources))
+protocpp := $(protocpp:.proto=.pb.cc)
+
+protoh := $(addprefix $(srcdir)/, $(protosources))
+protoh := $(protocpp:.proto=.pb.h)
+
+protojs := $(addprefix $(wwwdir)/, $(protosources))
+protojs := $(protojs:.proto=.pb.js)
+
+cppsources := $(wildcard $(srcdir)/*.cc) $(protocpp)
 csources := $(wildcard $(srcdir)/*.c)
 sources := $(cppsources) $(csources)
 
@@ -172,7 +188,7 @@ usage:
 # If source files exist then build the EXE file.
 .PHONY:	$(GOAL_EXE)
 ifneq "$(strip $(sources))" ""
-$(GOAL_EXE):	$(exe)
+$(GOAL_EXE):	$(exe) $(protojs)
 else
 $(GOAL_EXE):
 	@echo "No source file found."
@@ -180,10 +196,10 @@ endif
 
 # GOAL_DEBUG and GOAL_PROF targets use the same rules than GOAL_EXE.
 .PHONY:	$(GOAL_DEBUG)
-$(GOAL_DEBUG):	$(GOAL_EXE)
+$(GOAL_DEBUG):	$(GOAL_EXE) $(protojs)
 
 .PHONY:	$(GOAL_PROF)
-$(GOAL_PROF):	$(GOAL_EXE)
+$(GOAL_PROF):	$(GOAL_EXE) $(protojs)
 
 ###############################################################################
 # BUILDING
@@ -191,25 +207,25 @@ $(GOAL_PROF):	$(GOAL_EXE)
 # user at make invocation.
 ###############################################################################
 
-valgrind: $(exe) $(datadir)
+valgrind: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
 	valgrind --log-file=valgrind.log ./$(exe)
 
-test: $(exe) $(datadir)
+test: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)
 
 
-fftest: $(exe) $(datadir)
+fftest: $(exe) $(datadir)  $(protojs)
 	(sleep 2; /home/mikola/Apps/firefox/firefox-bin $(URL)) &
 	./$(exe)
 
 	
-gdb: $(exe) $(datadir)
+gdb: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
 	gdb ./$(exe)
 
-testmap: $(exe) $(datadir)
+testmap: $(exe) $(datadir)  $(protojs)
 	rm -f data/* *.log
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)
@@ -221,8 +237,18 @@ $(builddir):
 	mkdir $(builddir)
 
 # linking
-$(exe):	$(objs) 
+$(exe):	$(objs)
 	$(CXX) $^ -o $@ $(LDOPTS) $(LDFLAGS)
+
+
+$(srcdir)/%.pb.cc: $(protodir)/%.proto
+	$(PROTOC) --proto_path=$(protodir) --cpp_out=$(srcdir) $<
+
+$(srcdir)/%.pb.h: $(protodir)/%.proto
+	$(PROTOC) --proto_path=$(protodir) --cpp_out=$(srcdir) $<
+
+$(wwwdir)/%.pb.js: $(protodir)/%.proto
+	$(PROTOJS) $< $@
 
 # explicit definition of the implicit rule used to compile source files
 $(builddir)/%.o:	src/%.cc
@@ -278,4 +304,4 @@ list:
 # Remove all files that are normally created by building the program.
 .PHONY:	clean
 clean:
-	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps) data/* *.log
+	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps) data/* *.log $(protojs) $(protocpp) $(protoh) 

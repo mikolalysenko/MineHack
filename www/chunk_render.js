@@ -107,8 +107,6 @@ Map.init = function(gl)
 	}
 	Map.terrain_tex = res[1];
 	
-	//Start worker
-	Map.init_worker();
 
 	return "Ok";
 }

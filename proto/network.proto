@@ -1,0 +1,105 @@
+package Network;
+
+//A coordinate message
+message Coordinate {
+	required double x = 1;
+	required double y = 2;
+	required double z = 3;
+}
+
+//An orientation message
+message Orientation {
+	required float pitch = 1;
+	required float yaw = 2;
+	required float roll = 3;
+}
+
+//Entity state message
+message EntityState {
+
+	enum EntityType {
+		Player = 1;
+	}
+	
+	required uint64			entity_id	= 1;
+	required EntityType		type		= 2;
+
+	optional Coordinate		position	= 3;
+	optional Orientation	orientation = 4;
+}
+
+message Chat {
+	optional string msg = 1;
+}
+
+//A server update packet
+// These go from server -> client
+message ServerUpdate {
+	
+	required uint64 tick_count = 1;	//The game tick count
+	
+	message UpdateEvent {
+	
+		enum UpdateType {
+			Block = 1;
+			Entity = 2;
+			Chat = 3;
+		}
+	
+		required UpdateType type = 1;
+
+		//A block event		
+		message BlockEvent {
+			required int32	x = 1;
+			required int32	y = 2;
+			required int32	z = 3;
+			required uint32 b = 4;
+		}
+		
+		//Entity update event
+		message EntityEvent {
+			required EntityState entity_state = 1;
+		}
+		
+		
+		//Event contents
+		optional BlockEvent		block_event		= 2;
+		optional EntityEvent	entity_event	= 3;
+		optional Chat			chat_event		= 4;
+	}
+	
+	//Update events for the client
+	repeated UpdateEvent events = 2;
+}
+
+
+//A client input packet
+// These go from client -> server
+message ClientInput {
+
+	//Local updates to the player state
+	required Coordinate player_pos = 1;
+	required Orientation player_orient = 2;
+	
+	//The action types
+	message Action {
+		enum ActionType {
+			DigStart = 1;
+			DigStop = 2;
+			Chat = 3;
+		}
+				
+		required ActionType type = 1;
+		
+		message DigStartAction {
+			required int32	x = 1;
+			required int32	y = 2;
+			required int32	z = 3;
+		}
+		
+		optional DigStartAction		dig_start_action = 2;
+		optional Chat				chat_action = 3;
+	}
+	
+	repeated Action actions = 3;
+}

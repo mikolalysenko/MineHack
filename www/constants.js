@@ -35,6 +35,11 @@ const NET_HEADER_SIZE		= 30;
 const PLAYER_ENTITY		= 1;
 const MONSTER_ENTITY	= 2;
 
+//Rates for the different game intervals
+const GAME_TICK_RATE		= 80;
+const GAME_DRAW_RATE		= 40;
+const GAME_SHADOW_RATE		= 80;
+const GAME_HEARTBEAT_RATE	= 160;
 
 //A fixed delay on the ping, always added
 const PING_DELAY		= 5;

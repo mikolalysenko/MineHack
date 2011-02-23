@@ -2,8 +2,10 @@
 
 var Game = 
 {
+	//State variables
 	crashed : false,
 	running : false,
+	ready : false,
 	
 	//Clock stuff:
 	// Each tick is approximately 40ms (this is not very precise due to scheduling issues)
@@ -25,18 +27,20 @@ var Game =
 	//This is the amount of time we are behind the network counter (in ticks)
 	ping : 0,
 	
-	TICKS_PER_HEARTBEAT : 20,
-	FINE_TICKS_PER_HEARTBEAT : 2,
 	
-	update_rate : 40,
-
 	znear : 1.0,
 	zfar  : 512.0,
 	fov   : Math.PI / 4.0,
 	
 	wait_for_heartbeat : false,
+	heartbeat_interval : null,
 	
-	show_shadows : true,
+	tick_interval : null,
+	draw_interval : null,
+	shadow_interval : null,
+	
+	//Used for debugging
+	show_shadows : false,
 };
 
 Game.resize = function()
@@ -59,6 +63,9 @@ Game.resize = function()
 Game.init = function(canvas)
 {
 	Game.canvas = canvas;
+	Game.local_ticks = 0;
+	Game.crashed = false;
+	Game.ready = false;
 
 	var gl;
 	try
@@ -128,8 +135,8 @@ Game.init = function(canvas)
 	Game.resize();
 	
 	//Start running the game
-	Game.running = true;	
-	Game.interval = setInterval(Game.tick, Game.update_rate);
+	Game.running = true;
+	Game.heartbeat_interval = setInterval(Game.heartbeat, Game.heartbeat_rate);
 	
 	return 'Ok';
 }
@@ -174,30 +181,97 @@ Game.camera_matrix = function(width, height, fov, zfar, znear)
 		znear = Game.znear;
 	}
 	
-	return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.entity.pose_matrix());
+	return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.view_matrix());
 }
 
-Game.update_shadows = function()
-{
-	var gl = Game.gl, i;
 
-	for(i=0; i<Shadows.shadow_maps.length; ++i)
+//Stop all intervals
+Game.shutdown = function()
+{
+	Game.running = false;
+	if(Game.heartbeat_interval) clearInterval(Game.heartbeat_interval);
+	if(Game.tick_interval)		clearInterval(Game.tick_interval);
+	if(Game.draw_interval)		clearInterval(Game.draw_interval);
+	if(Game.shadow_interval)_	clearInterval(Game.shadow_interval);
+	Map.shutdown();
+}
+
+//Handles a heartbeat
+Game.handle_heartbeat = function(arr)
+{
+	if(!Game.ready)
 	{
-		Shadows.shadow_maps[i].begin(gl);
-		Map.draw_shadows(gl, Shadows.shadow_maps[i]);	
-		Shadows.shadow_maps[i].end(gl);
+		//Set intervals
+		Game.tick_interval = setInterval(Game.tick, GAME_TICK_RATE);
+		Game.draw_interval = setInterval(Game.draw, GAME_DRAW_RATE);
+		Game.shadow_interval = setInterval(Game.update_shadows, GAME_SHADOW_RATE);
+		
+		Map.init_worker();
+		Game.ready = true;
+	}
+	else
+	{
+		//Handle heartbeat as usual
 	}
 }
 
+//Serialize the game input
+Game.serialize_input = function()
+{
+	BlobBuilder bb;
+	return bb.getBlob("application/octet-stream");
+}
+
+//Polls the server for events
+Game.heartbeat = function()
+{
+	if(Game.wait_for_heartbeat)
+		return;
+
+	Game.wait_for_heartbeat = true;
+	
+	//Sends a binary message to the server
+	asyncGetBinary("/h?k="+Session.session_id, 
+		Game.handle_heartbeat(), 
+		function() { alert("heartbeat failed"); },
+		Game.serialize_input());
+}
+
+//Tick the game
+Game.tick = function()
+{
+	//Update network clock/local clock
+	++Game.local_ticks;
+	
+	//Goal: Try to interpolate local clock so that  = remote_clock - ping 
+	if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
+	{
+		Game.game_ticks = Math.floor(0.5 * (Game.net_ticks - Game.ping) + 0.5 * Game.game_ticks);
+	}
+	else if(Game.game_ticks >= Math.floor(Game.net_ticks - Game.ping))
+	{
+		//Whoops!  Too far ahead, do nothing for a few frames to catch up
+	}
+	else
+	{	
+		++Game.game_ticks;
+	}
+	
+	//Update player
+	Player.tick();
+	
+	//Update all entities
+}
+
+
+
+//Draw the game
 Game.draw = function()
 {
 	var gl = Game.gl,
 		cam = Game.camera_matrix();
 		
-	Game.update_shadows();
-	
 	gl.viewport(0, 0, Game.width, Game.height);
-	
 	gl.clear(gl.DEPTH_BUFFER_BIT);
 	
 	if(Game.wait_for_initial_chunks)
@@ -227,60 +301,15 @@ Game.draw = function()
 	gl.flush();
 }
 
-Game.shutdown = function()
+Game.update_shadows = function()
 {
-	Game.running = false;
-	clearInterval(Game.interval);
-	Map.shutdown();
-}
+	var gl = Game.gl, i;
 
-//Polls the server for events
-Game.heartbeat = function()
-{
-	Game.wait_for_heartbeat = true;
-	
-	//Sends a binary message to the server
-	asyncGetBinary("/h?k="+Session.session_id, 
-		UpdateHandler.handle_update_packet, 
-		function() { alert("heartbeat failed"); },
-		InputHandler.serialize());
-}
-
-Game.tick = function()
-{
-	if(	!Game.wait_for_heartbeat && 
-		(Game.local_ticks % Game.TICKS_PER_HEARTBEAT == 0 ||
-		(InputHandler.has_events && (Game.local_ticks % Game.FINE_TICKS_PER_HEARTBEAT == 0)) ) )
-		Game.heartbeat();
-
-	//Update network clock/local clock
-	++Game.local_ticks;
-
-	//Wait for player entity packet before starting game
-	if(!Player.entity)
-		return;
-	
-	
-	//Goal: Try to interpolate local clock so that  = remote_clock - ping 
-	if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
+	for(i=0; i<Shadows.shadow_maps.length; ++i)
 	{
-		Game.game_ticks = Math.floor(0.5 * (Game.net_ticks - Game.ping) + 0.5 * Game.game_ticks);
+		Shadows.shadow_maps[i].begin(gl);
+		Map.draw_shadows(gl, Shadows.shadow_maps[i]);	
+		Shadows.shadow_maps[i].end(gl);
 	}
-	else if(Game.game_ticks >= Math.floor(Game.net_ticks - Game.ping))
-	{
-		//Whoops!  Too far ahead, do nothing for a few frames to catch up
-	}
-	else
-	{	
-		++Game.game_ticks;
-	}
-	
-	//Tick entities
-	EntityDB.tick();
-
-	//Update game state
-	Player.tick();
-	
-	//Redraw
-	Game.draw();
 }
+

@@ -40,11 +40,7 @@ var Player =
 	dy : 0,
 	
 	//If set, player is chatting
-	in_chat : false,
-	
-	//If set, then player is digging
-	digging : false,
-	dig_target : [0, 0, 0]
+	in_chat : false
 };
 
 
@@ -132,7 +128,7 @@ Player.show_chat_input = function()
 			}
 			if(txt.length > 0)
 			{
-				InputHandler.push_event(["Chat", txt]);
+				//FIXME: Send chat event here
 			}
 			
 			Game.canvas.focus();
@@ -165,15 +161,18 @@ Player.tick = function()
 		return;
 	}
 	
-	var front = [ -Math.sin(Player.entity.yaw), 0, -Math.cos(Player.entity.yaw) ];
+	var orientation = Player.orientation(),
+		tpos = Player.position();
+	var front = [ -Math.sin(orientation[1]), 0, -Math.cos(orientation[1]) ];
 	var right = [ -front[2], 0, front[0]];
 	var up = [0, 1, 0];
 
 	var move = function(v, s)
 	{
-		Player.entity.x += v[0] * s;
-		Player.entity.y += v[1] * s;
-		Player.entity.z += v[2] * s;
+		for(var i=0; i<3; ++i)
+		{
+			tpos[i] += v[i] * s;
+		}
 	}
 
 	if(Player.input["forward"] == 1)
@@ -194,22 +193,25 @@ Player.tick = function()
 	if(Player.input["crouch"] == 1)
 		move(up, -Player.speed);
 
+	//Update position
+	Player.set_position(tpos);
 
+	//Update heading
+	orientation[1] -= Player.dx * Player.dx * Player.dx;
 
-	Player.entity.yaw -= Player.dx * Player.dx * Player.dx;
-
-	if(Player.entity.yaw > Math.PI)
-		Player.entity.yaw -= 2.0 * Math.PI;
-	if(Player.entity.yaw < -Math.PI)
-		Player.entity.yaw += 2.0 * Math.PI;
+	if(orientation[1] > Math.PI)
+		orientation[1] -= 2.0 * Math.PI;
+	if(orientation[1] < -Math.PI)
+		orientation[1] += 2.0 * Math.PI;
 	
-	Player.entity.pitch += Player.dy * Player.dy * Player.dy;
+	orientation[0] += Player.dy * Player.dy * Player.dy;
 
-	if(Player.entity.pitch < -Math.PI/2.0)
-		Player.entity.pitch = -Math.PI/2.0;
-	if(Player.entity.pitch > Math.PI/2.0)
-		Player.entity.pitch = Math.PI/2.0;
+	if(orientation[0] < -Math.PI/2.0)
+		orientation[0] = -Math.PI/2.0;
+	if(orientation[0] > Math.PI/2.0)
+		orientation[0] = Math.PI/2.0;
 
+	Player.set_orientation(orientation);
 
 	if(Player.input["dig"] == 1)
 	{
@@ -225,66 +227,103 @@ Player.tick = function()
 			var hit = [ Math.round(hit_rec[0]), 
 						Math.round(hit_rec[1]), 
 						Math.round(hit_rec[2]) ];
-		
-			if(!Player.digging)
-			{
-				InputHandler.push_event(["DigStart", hit ]);
-				Player.digging = true;
-				Player.dig_target = hit;
-			}
-			else if(
-				Player.dig_target[0] != hit[0] ||
-				Player.dig_target[1] != hit[1] ||
-				Player.dig_target[2] != hit[2] )
-			{
-				InputHandler.push_event(["DigStop"]);
-				InputHandler.push_event(["DigStart", hit ]);
-				Player.dig_target = hit;
-			}
-		}
-	}
-	else if(Player.digging)
-	{
-		InputHandler.push_event(["DigStop"]);
-		Player.digging = false;
-	}
 
-	//Check for dig conditions
-	if( Player.digging )
-	{
-		//Check if we walked away
-	 	if( Math.abs(Player.entity.x - Player.dig_target[0]) > DIG_RADIUS ||
-			Math.abs(Player.entity.y - Player.dig_target[1]) > DIG_RADIUS ||
-			Math.abs(Player.entity.z - Player.dig_target[2]) > DIG_RADIUS )
-		{
-			InputHandler.push_event(["DigStop"]);
-			Player.digging = false;
-		}
-		//Other possibility, block is gone
-		else if(Map.get_block(Player.dig_target[0], Player.dig_target[1], Player.dig_target[2]) == 0)
-		{
-			InputHandler.push_event(["DigStop"]);
-			Player.digging = false;
+			//FIXME:  This will need to get updated		
 		}
 	}
 }
 
+
+//Returns player's orientation
+// Pitch, yaw, roll
+Player.orientation = function()
+{
+	return [ 0, 0, 0 ];
+}
+
+//Returns player's position
+Player.position = function()
+{
+	return [ 0, 0, 0 ];
+}
+
+
+//Updates the player's orientation 
+Player.set_orientation = function()
+{
+	//FIXME: Implement this
+}
+
+//Updates the player's position
+Player.set_position = function()
+{
+	//FIXME: Implement this
+}
 
 //Returns the player's chunk
 Player.chunk = function()
 {
+	var pos = Player.position();
+
 	return [
-		Math.floor(Player.entity.x) >> CHUNK_X_S,
-		Math.floor(Player.entity.y) >> CHUNK_Y_S,
-		Math.floor(Player.entity.z) >> CHUNK_Z_S ];
+		Math.floor(pos[0]) >> CHUNK_X_S,
+		Math.floor(pos[1]) >> CHUNK_Y_S,
+		Math.floor(pos[2]) >> CHUNK_Z_S ];
 }
 
+//Retrieves the player's eye ray
 Player.eye_ray = function()
 {
-	var view_m = Player.entity.pose_matrix();
-	var d = [ -view_m[2], -view_m[6], -view_m[10] ];
-	return [ [Player.entity.x, Player.entity.y, Player.entity.z], d ];
+	var view_m = Player.view_matrix();
+	return [ Player.position(), [ -view_m[2], -view_m[6], -view_m[10] ] ];
 }
 
+//Retrieves the view matrix for the player
+Player.view_matrix = function()
+{
+	var orient	= Player.orientation(),
+		pos 	= Player.position(),
 
+	var cp = Math.cos(orient[0]);
+	var sp = Math.sin(orient[0]);
+	var cy = Math.cos(orient[1]);
+	var sy = Math.sin(orient[1]);
+	var cr = Math.cos(orient[2]);
+	var sr = Math.sin(orient[2]);
+	
+	var rotp = [
+		 1,   0,  0, 0,
+		 0,  cp, sp, 0,
+		 0, -sp, cp, 0,
+		 0,   0,  0, 1]; 
+		  
+	var roty = [
+		 cy, 0, sy, 0,
+		  0, 1,  0, 0,
+		-sy, 0, cy, 0,
+		  0, 0,  0, 1];
+		  
+	var rotr = [
+		cr, sr, 0, 0,
+		-sr, cr, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1];
+	
+	var rot = mmult(mmult(rotp, roty), rotr);
+	
+	//Need to shift by player chunk in order to avoid numerical problems
+	var c = Player.chunk();	
+	c[0] *= CHUNK_X;
+	c[1] *= CHUNK_Y;
+	c[2] *= CHUNK_Z;
+		
+	
+	var trans = [
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		c[0]-pos[0], c[1]-pos[1], c[2]-pos[2], 1]
+	
+	return mmult(rot, trans);
+}
 
