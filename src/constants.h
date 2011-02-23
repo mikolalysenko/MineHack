@@ -105,9 +105,9 @@
 //Maximum size for an event packet
 #define EVENT_PACKET_SIZE		(1<<16)
 
-//Grid bucket sizes for range searching
+//Grid bucket sizes for range searching in mailbox
 #define BUCKET_SHIFT_X			7ULL
-#define BUCKET_SHIFT_Y			7ULL
+#define BUCKET_SHIFT_Y			6ULL
 #define BUCKET_SHIFT_Z			7ULL
 
 #define BUCKET_X				(1ULL<<BUCKET_SHIFT_X)
@@ -139,6 +139,15 @@
 	((uint64_t)(Y) << BUCKET_BITS_X) | \
 	((uint64_t)(Z) << (BUCKET_BITS_X+BUCKET_BITS_Y)))
 
+//Dimensions of a visibility buffer (in chunks)
+#define VIS_BUFFER_X		8
+#define VIS_BUFFER_Y		4
+#define VIS_BUFFER_Z		8
+
+//Visibility radii
+#define VIS_RAD_X			4
+#define VIS_RAD_Y			5
+#define VIS_RAD_Z			4
 
 #endif
 

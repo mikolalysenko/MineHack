@@ -74,12 +74,6 @@ function calc_light(
 	return [ao, ao, ao];
 }
 
-
-
-
-
-
-
 //Construct vertex buffer for this chunk
 // This code makes me want to barf - Mik
 function gen_vb()
@@ -715,15 +709,15 @@ function generate_vbs()
 {
 	print("Generating vbs");
 
-	var i, chunk, vbs;
-
+	var i, chunk, vbs = [];
 	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
 	{
 		chunk = vb_pending_chunks[i];
 		pack_buffer(chunk.x, chunk.y, chunk.z);
-		send_vb(chunk.x, chunk.y, chunk.z, gen_vb());
+		vbs.push({'x':chunk.x, 'y':chunk.y, 'z':chunk.z, 'd':gen_vb()});
 		chunk.dirty = false;
-	}
+	}	
+	send_vb(vbs);
 	vb_pending_chunks = vb_pending_chunks.slice(i);
 }
 
@@ -830,14 +824,9 @@ self.onmessage = function(ev)
 };
 
 //Sends an updated set of vertex buffers to the client
-function send_vb(x, y, z, vbs)
+function send_vb(vbs)
 {
-	postMessage({ 
-		type: EV_VB_UPDATE, 
-		'x': x, 'y': y, 'z': z, 
-		verts: vbs[0],
-		ind: vbs[1],
-		tind: vbs[2]});
+	postMessage({ type: EV_VB_UPDATE, 'vbs':vbs });
 }
 
 //Sends a new chunk to the client

@@ -1,63 +1,6 @@
 
 
-Need to split up map.js
 
-	Need 3 separate modules
-	
-	1. Common data structures (shared between render and remote worker)
-		Code for maintaining a map database
-			
-	2. Render data structures
-		Code for rendering map
-		Determining visible chunks
-
-	3. Worker data structures
-		Worker tasks:
-			Fetch chunks from remote server
-			Generate vertex buffers
-			
-
-Lighting - How to do it?
-	Need to have a mixture of global/local illumination
-	Local stuff will be handled on client
-		Including AO, diffuse, some specular stuff (maybe)
-		
-	Global illumination - some form of radiosity
-		Possibilities:
-			Store a 6-directional light propagtion sphere at each map cell
-				+ O(n) update cost
-				
-				- May take multiple frames to propagate
-				
-			Store only surface data and recalculate lighting per voxel
-				+ < n update cost
-				
-				- Complicated
-				- More bugs...
-				
-		Need to figure out how to synchronize client with server
-			Strategy 1: Have client do dead reckoning
-				+ Low bandwidth
-				- Client needs to get enough data to properly compute
-				- Could cause bandwidth problems
-			Strategy 2: Replicate all data
-				+ easy client
-				- Expensive
-				
-			Maybe try replicating the incident radiance at the boundary of each
-			chunk to the client, use dead reckoning on the client to interpolate
-			light values within a chunk
-			
-			So client should know:
-				1. Lighting conditions within chunk (via torches, blocks, etc.), etc.
-				2. Lighting conditions at chunk boundary (sent from server)
-				3. Need to then replicate 16*16*6 light values to client per
-				 block
-				4. And update these values when they change.... (nasty)
-				5. Only need to do lighting for chunks that contain surface regions
-				
-			Another possibility:
-				Use GPU on client to update visibility map...
 
 Goal:
 	Make the client look like Minecraft HD: http://www.youtube.com/watch?v=qjhtjDnneLQ
@@ -65,12 +8,12 @@ Goal:
 	Ambient occlusion
 	Neat water effects
 		
-Shadows:
+Shadows: -- done
 	Need to do a global shadow mapping pass for the sun / most surface chunks
 	For torches, only calculate shadows in chunk/adjacent chunks
 		Also if we use hemicube for shadow map, could save some time
 		
-	Lava: This seems trickier
+	Lava: This seems trickier -- scrapped
 		Need to find a good way to fake area lights...
 		Fortunately light radius should be small, like torches
 			So only need to do local lighting calculations
@@ -118,6 +61,18 @@ Need to test code on other platforms:
 	(IE support is not going to happen, at least until MS commits to supporting webgl)
 
 
+Protocol buffers for entity replication
+
+Need a javascript based interface to protocol buffers too
+
+V8 integration for server side scripting
+	Want to minimize number of languages used
+	
+	
+Physics 
+	Cellular automata for water, lava, grass etc.
+	Need a way to deal with this efficiently
+
 Big issues:
 	How to conserve bandwidth?  Need some measurements to figure out how much we are using...
 
@@ -131,6 +86,66 @@ Add some fog to hide loading new chunks
 
 
 Complete:
+
+
+Need to split up map.js	-- done
+
+	Need 3 separate modules
+	
+	1. Common data structures (shared between render and remote worker)
+		Code for maintaining a map database
+			
+	2. Render data structures
+		Code for rendering map
+		Determining visible chunks
+
+	3. Worker data structures
+		Worker tasks:
+			Fetch chunks from remote server
+			Generate vertex buffers
+			
+
+Lighting - How to do it? -- done (partially)
+	Need to have a mixture of global/local illumination
+	Local stuff will be handled on client
+		Including AO, diffuse, some specular stuff (maybe)
+		
+	Global illumination - some form of radiosity
+		Possibilities:
+			Store a 6-directional light propagtion sphere at each map cell
+				+ O(n) update cost
+				
+				- May take multiple frames to propagate
+				
+			Store only surface data and recalculate lighting per voxel
+				+ < n update cost
+				
+				- Complicated
+				- More bugs...
+				
+		Need to figure out how to synchronize client with server
+			Strategy 1: Have client do dead reckoning
+				+ Low bandwidth
+				- Client needs to get enough data to properly compute
+				- Could cause bandwidth problems
+			Strategy 2: Replicate all data
+				+ easy client
+				- Expensive
+				
+			Maybe try replicating the incident radiance at the boundary of each
+			chunk to the client, use dead reckoning on the client to interpolate
+			light values within a chunk
+			
+			So client should know:
+				1. Lighting conditions within chunk (via torches, blocks, etc.), etc.
+				2. Lighting conditions at chunk boundary (sent from server)
+				3. Need to then replicate 16*16*6 light values to client per
+				 block
+				4. And update these values when they change.... (nasty)
+				5. Only need to do lighting for chunks that contain surface regions
+				
+			Another possibility:
+				Use GPU on client to update visibility map...
 
 Implement some form of occlusion query to accelerate map loading. (done)
 	Right now it uses the naive strategy of just grabbing all blocks in a radius

@@ -53,8 +53,6 @@ const TARGET_HAS_ITEM		= (1<<7);
 
 const DIG_RADIUS			= 5;
 
-const VB_GEN_RATE		 	= 40;
-const FETCH_RATE			= 100;
 
 const EV_START				= 0;
 const EV_SET_BLOCK			= 1;
@@ -67,6 +65,9 @@ const EV_SET_THROTTLE		= 7;
 const EV_VB_COMPLETE		= 8;
 const EV_SET_NON_PENDING	= 9;
 
+const VB_GEN_RATE		 	= 30;
+const FETCH_RATE			= 100;
+
 const MAX_PENDING_CHUNKS	= 25;
-const MAX_VB_UPDATES		= 10;
+const MAX_VB_UPDATES		= 3;
 

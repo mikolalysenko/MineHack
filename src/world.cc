@@ -468,6 +468,29 @@ int World::get_compressed_chunk(
 	return chunk.compress((void*)buf, buf_len);
 }
 
+
+//Retrieves all visibile chunks around player
+bool World::get_vis_chunks(
+	EntityID const& player_id,
+	int socket)
+{
+	//Do sanity check on chunk request
+	Entity entity;
+	if( !entity_db->get_entity(player_id, entity) ||
+		entity.base.type != EntityType::Player ||
+		(entity.base.flags & EntityFlags::Inactive) )
+	{
+		return false;
+	}
+	
+	//Find next visible chunk region for player
+
+	//Try sending chunk to player
+	
+	//If successful, mark chunk and replicate entities	
+}
+
+
 //---------------------------------------------------------------
 // Heartbeat
 //---------------------------------------------------------------

@@ -53,6 +53,10 @@ namespace Game
 		void broadcast_entity(Region const& r, Entity const& entity);
 		void broadcast_kill(Region const& r, EntityID const& casualty);
 		
+		//Chunk tracking stuff
+		uint64_t get_next_vis_set(EntityID const& player_id);
+		void mark_vis_set(EntityID const& player_id, uint64_t vis_id);
+		
 		//Entity replication management
 		void forget_all(EntityID const& player_id);
 		void forget_entity(EntityID const& player_id, EntityID const& forgotten);
@@ -81,6 +85,9 @@ namespace Game
 		{
 			//Player's known entities
 			std::set<uint64_t> known_entities;
+			
+			//Player's known regions
+			std::set<uint64_t> known_regions;
 			
 			//Player entity id
 			EntityID player_id;

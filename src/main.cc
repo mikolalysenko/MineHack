@@ -437,6 +437,32 @@ void do_delete_player(HttpEvent& ev)
 //    Game event handlers
 // --------------------------------------------------------------------------------
 
+void do_get_vis_chunks(HttpEvent& ev)
+{
+	HttpBlobReader blob(ev.conn);
+	
+	//Read out the session id
+	if( blob.len <= sizeof(SessionID) )
+	{
+		ajax_error(ev.conn);
+		return;
+	}
+	
+	SessionID	session_id = *((SessionID*)blob.data);
+	Session		session;
+	
+	if(!get_session_data(session_id, session) || 
+		session.state != SessionState::InGame)
+	{
+		cout << "Player is not logged in!" << endl;
+		ajax_error(ev.conn);
+		return;
+	}
+	
+	//Send visible chunk packet to player
+	game_instance->get_vis_chunks(session.player_id, mg_steal_socket(ev.conn));
+}
+
 #pragma pack(push,1)
 
 struct NetChunk

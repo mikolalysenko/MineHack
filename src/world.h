@@ -67,6 +67,9 @@ namespace Game
 			ChunkID const&,
 			uint8_t* buf,
 			int buf_len);
+			
+		//Retrieves all visible chunks around player
+		bool get_vis_chunks(EntityID const&, int socket);
 		
 		//Processes queued messages for a particular client, main network IO event
 		bool heartbeat(

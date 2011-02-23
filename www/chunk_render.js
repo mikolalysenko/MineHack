@@ -633,6 +633,8 @@ Map.forget_chunk = function(str)
 //Initialize the web worker
 Map.init_worker = function()
 {
+	var i, vb;
+	
 	Map.vb_worker = new Worker('chunk_worker.js');
 
 	//Set event handlers
@@ -641,11 +643,11 @@ Map.init_worker = function()
 		switch(ev.data.type)
 		{
 			case EV_VB_UPDATE:
-				Map.update_vb(
-					ev.data.x, ev.data.y, ev.data.z, 
-					ev.data.verts, 
-					ev.data.ind, 
-					ev.data.tind);
+				for(i=0; i<ev.data.vbs.length; ++i)
+				{
+					vb = ev.data.vbs[i];
+					Map.update_vb(vb.x, vb.y, vb.z, vb.d[0], vb.d[1], vb.d[2]);
+				}
 			break;
 
 			case EV_CHUNK_UPDATE:
