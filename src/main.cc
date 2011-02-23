@@ -147,8 +147,6 @@ bool ajax_send_binary(mg_connection *conn, const void* buf, size_t len)
 	int sz;
 	ScopeFree G((void*)tcdeflate((const char*)buf, len, &sz));
 	
-	cout << "Old size = " << len << ", Compressed size = " << sz << endl;
-
 	mg_printf(conn,
 	  "HTTP/1.1 200 OK\n"
 	  "Cache: no-cache\n"
@@ -260,8 +258,6 @@ void do_login(HttpEvent& ev)
 	if( verify_user_name(user_name, password_hash) &&
 		create_session(user_name, session_id) )
 	{
-		cout << "session id = " << session_id.id << endl;
-	
 		ajax_printf(ev.conn, 
 			"Ok\n"
 			"%016llx", (unsigned long long int)session_id.id);
@@ -278,8 +274,6 @@ void do_login(HttpEvent& ev)
 //Handle user log out
 void do_logout(HttpEvent& ev)
 {
-	cout << "Logout" << endl;
-
 	SessionID session_id;
 	if(get_session_id(ev.req, session_id))
 	{
@@ -306,8 +300,6 @@ void do_logout(HttpEvent& ev)
 
 void do_create_player(HttpEvent& ev)
 {
-	cout << "Creating player" << endl;
-
 	//Grab request variables
 	SessionID	session_id;
 	string		player_name;
@@ -344,7 +336,7 @@ void do_create_player(HttpEvent& ev)
 
 void do_join_game(HttpEvent& ev)
 {
-	cout << "Joining game" << endl;
+	printf("Joining game\n");
 
 	//Grab request variables
 	SessionID		session_id;
@@ -439,7 +431,7 @@ void do_delete_player(HttpEvent& ev)
 
 void do_get_vis_chunks(HttpEvent& ev)
 {
-	cout << "Grabbing vis buffer" << endl;
+	printf("Grabbing vis buffer");
 
 
 	HttpBlobReader blob(ev.conn);	
@@ -447,7 +439,6 @@ void do_get_vis_chunks(HttpEvent& ev)
 	//Read out the session id
 	if( blob.len != sizeof(SessionID) )
 	{
-		cout << "Error, missing session id" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
@@ -458,7 +449,6 @@ void do_get_vis_chunks(HttpEvent& ev)
 	if(!get_session_data(session_id, session) || 
 		session.state != SessionState::InGame)
 	{
-		cout << "Player is not logged in!" << endl;
 		ajax_error(ev.conn);
 		return;
 	}
@@ -466,7 +456,7 @@ void do_get_vis_chunks(HttpEvent& ev)
 	//Send visible chunk packet to player
 	if(!game_instance->get_vis_chunks(session.player_id, mg_steal_socket(ev.conn)))
 	{
-		cout << "Vis buffer failed" << endl;
+		printf("Send failed");
 		ajax_printf(ev.conn, "");
 	}
 }

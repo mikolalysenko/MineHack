@@ -294,14 +294,11 @@ void World::handle_player_tick(EntityID const& player_id,
 	
 	
 	Visitor V = { &input, tick_count, false, 0 };
-	//cout << "Updating player:" << V.tick_count << " -- " << input.tick << ';' << input.x << ',' << input.y << ',' << input.z << endl;
-
 	entity_db->update_entity(player_id, Visitor::call, &V);
 	
 	//Player is desynchronized
 	if(V.out_of_sync)
 	{
-		cout << "Player desyncrhonized" << endl;
 		mailbox->forget_entity(player_id, player_id);
 	}
 	
@@ -311,8 +308,6 @@ void World::handle_player_tick(EntityID const& player_id,
 
 void World::handle_chat(EntityID const& player_id, std::string const& msg)
 {
-	cout << "got chat" << endl;
-
 	//Sanity check chat message
 	Entity entity;
 	if( !entity_db->get_entity(player_id, entity) ||
@@ -323,8 +318,6 @@ void World::handle_chat(EntityID const& player_id, std::string const& msg)
 	//Construct chat string
 	stringstream ss;
 	ss << entity.player.player_name << ": " << msg;
-	
-	cout << ss.str() <<endl;
 	
 	//Construct region
 	Region r(	entity.base.x - CHAT_RADIUS,
@@ -365,15 +358,12 @@ void World::handle_action(EntityID const& player_id, Action const& action)
 					abs(entity.base.y - V->action.target_block.y) > DIG_RADIUS || 
 					abs(entity.base.z - V->action.target_block.z) > DIG_RADIUS )
 				{
-					cout << "Invalid dig event" << endl;
 					return EntityUpdateControl::Continue;
 				}
 				
 				if( entity.player.state == PlayerState::Neutral ||
 					entity.player.state == PlayerState::Digging )
 				{
-					cout << "Digging!" << endl;
-					
 					entity.player.state				= PlayerState::Digging;
 					entity.player.dig_state.start	= V->action.tick;
 					entity.player.dig_state.x 		= V->action.target_block.x;	
@@ -426,23 +416,8 @@ int World::get_compressed_chunk(
 		abs(entity.base.y - (chunk_id.y + .5) * CHUNK_Y) > CHUNK_RADIUS ||
 		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) > CHUNK_RADIUS )
 	{
-		cout << "Bad chunk request" << endl;
-		if(!entity_db->get_entity(player_id, entity))
-			printf("failed entity_db check\n");
-		if(entity.base.type != EntityType::Player)
-			printf("failed entity type check\n");
-		if(entity.base.flags & EntityFlags::Inactive)
-			printf("failed entity flags check\n");
-		if(abs(entity.base.x - (chunk_id.x + .5) * CHUNK_X) > CHUNK_RADIUS)
-			printf("failed x check\n");
-		/*if()
-			printf("failed y check\n");
-		if()
-			printf("failed z check\n"):*/
 		return 0;
 	}
-	
-	cout << "Got chunk request: " << chunk_id.x << ',' << chunk_id.y << ',' << chunk_id.z << endl;
 	
 	//Refresh all existing entities in the chunk region for the client
 	struct Visitor
@@ -484,14 +459,26 @@ bool World::get_vis_chunks(
 	}
 	
 	//Find next visible chunk region for player
-	uint64_t vis_id = mailbox->get_next_vis_set(player_id);
-	cout << "next vis id = " << vis_id << endl;
-	if(vis_id == 0)
-		return false;
+	int r = 0;
+	uint64_t vis_id;
+	while(r == 0)
+	{
+		vis_id = mailbox->get_next_vis_set(player_id);
+		if(vis_id == 0)
+			return false;     
 	
-	//Try sending chunk to player
-	if(!game_map->send_vis_buffer(vis_id, socket))
-		return false;
+		r = game_map->send_vis_buffer(vis_id, socket);
+		
+		printf("r = %d\n", r);
+	
+		if(r < 0)
+			return false;
+			
+		if(r == 0)
+		{
+			mailbox->mark_vis_set(player_id, vis_id);		
+		}
+	}
 	
 	//If successful, mark chunk and replicate entities
 	mailbox->mark_vis_set(player_id, vis_id);

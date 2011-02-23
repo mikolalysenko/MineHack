@@ -19,9 +19,7 @@ const PACK_Y_OFFSET		= CHUNK_Y;
 const PACK_Z_OFFSET		= CHUNK_Z;
 
 var 
-	net_pending_chunks = [],				 //Chunks we are waiting for on the network
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
-	high_throughput = true,					 //If set, try to maximize throughput at the expense of greater latency.
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
 	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
@@ -409,7 +407,7 @@ function gen_vb()
 
 function pack_buffer(cx, cy, cz)
 {
-	print("Packing buffer");
+	//print("Packing buffer");
 
 	var i, j, k, 
 		dx, dy, dz,
@@ -568,187 +566,6 @@ function grab_vis_buffer()
 	bb.getBlob("application/octet-stream"));
 }
 
-
-//Retrieves chunks from the network
-function grab_chunks()
-{
-	if(wait_chunks || net_pending_chunks.length == 0)
-		return;
-
-	var i, j, k = 0,
-		chunks = (net_pending_chunks.length > MAX_NET_CHUNKS) ? 
-				net_pending_chunks.slice(0,MAX_NET_CHUNKS) : net_pending_chunks,
-		base_chunk = chunks[0], 
-		base_chunk_id = [base_chunk.x, base_chunk.y, base_chunk.z],
-		bb = new BlobBuilder(),
-		arr = new Uint8Array(12),
-		delta = new Uint8Array(3);	
-
-	print("Grabbing chunks");
-
-	wait_chunks = true;
-
-	if(net_pending_chunks.length > MAX_NET_CHUNKS)
-	{
-		net_pending_chunks = net_pending_chunks.slice(MAX_NET_CHUNKS);
-	}
-	else
-	{
-		net_pending_chunks = [];
-	}
-
-	bb.append(session_id.buffer);
-
-	for(i=0; i<3; ++i)
-	{
-		arr[k++] = (base_chunk_id[i])		& 0xff;
-		arr[k++] = (base_chunk_id[i] >> 8)	& 0xff;
-		arr[k++] = (base_chunk_id[i] >> 16)	& 0xff;
-		arr[k++] = (base_chunk_id[i] >> 24)	& 0xff;
-
-	}
-	bb.append(arr.buffer);
-
-	//Encode chunk offsets
-	for(i=0; i<chunks.length; ++i)
-	{
-
-		delta[0] = chunks[i].x - base_chunk.x;
-		delta[1] = chunks[i].y - base_chunk.y;
-		delta[2] = chunks[i].z - base_chunk.z;
-
-		bb.append(delta.buffer);
-	}
-
-	print("Executing XHR");
-
-	asyncGetBinary("g", 
-	function(arr)
-	{
-		var i, j, chunk, block, res;
-
-		print("Got response: " + arr.length);
-
-		wait_chunks = false;
-		arr = arr.subarray(1);
-
-		for(i=0; i<chunks.length; i++)
-		{
-			chunk = chunks[i];
-
-			//print("Decompressing chunk: " + chunk.x + "," + chunk.y + "," + chunk.z);
-
-			//Decompress chunk
-			res = -1;			
-			if(arr.length > 0)
-				res = decompress_chunk(arr, chunk.data);
-
-			//print("Res = " + res);
-
-			//EOF, clear out remaining chunks
-			if(res < 0)
-			{
-				print("WARNING: FAILED TO DECODE CHUNK");
-				for(j=i; j<chunks.length; ++j)
-				{
-					forget_chunk(chunks[j]);
-				}
-				return;
-			}
-
-			//Handle any pending writes
-			chunk.pending = false;
-			for(j=0; j<chunk.pending_blocks.length; ++j)
-			{
-				block = chunk.pending_blocks[j];
-				chunk.set_block(block[0], block[1], block[2], block[3]);
-			}
-			delete chunk.pending_blocks;
-
-			//Check if chunk is air
-			chunk.is_air = true;
-
-			var all_stone = true,
-				all_air = true;
-
-
-			for(j=0; j<CHUNK_SIZE; ++j)
-			{
-				if(chunk.data[j] != 0)
-				{
-					all_air = false;
-				}
-				if(chunk.data[j] != 1)
-				{
-					all_stone = false;
-				}
-
-				if(!all_air && !all_stone)
-				{
-					break;
-				}
-			}
-
-			chunk.is_air = (all_air || all_stone);
-
-			//Resize array
-			arr = arr.subarray(res);
-
-			//Set dirty flags on neighboring chunks
-			set_dirty(chunk.x, chunk.y, chunk.z);
-			set_dirty(chunk.x-1, chunk.y, chunk.z);
-			set_dirty(chunk.x+1, chunk.y, chunk.z);
-			set_dirty(chunk.x, chunk.y-1, chunk.z);
-			set_dirty(chunk.x, chunk.y+1, chunk.z);
-			set_dirty(chunk.x, chunk.y, chunk.z-1);
-			set_dirty(chunk.x, chunk.y, chunk.z+1);
-
-			//Send result to main thread
-			send_chunk(chunk);
-		}
-
-		print("Response done");
-	}, 
-	function()
-	{
-		var i;
-
-		print("ERROR IN XMLHTTPREQUEST!  COULD NOT GET CHUNKS!");
-		for(i=0; i<chunks.length; ++i)
-		{
-			forget_chunk(chunks[i]);
-		}
-
-		wait_chunks = false;
-	},
-	bb.getBlob("application/octet-stream") );
-}
-
-//Fetches a chunk
-function fetch_chunk(x, y, z)
-{
-	var str = x + ":" + y + ":" + z, chunk;
-	//print("fetching chunk: " + str + ", waiting = " + wait_chunks);
-	if(str in Map.index)
-		return;
-
-	//Create temporary chunk
-	chunk = new Chunk(x, y, z);
-	chunk.pending = true;
-	chunk.dirty = false;
-	chunk.pending_blocks = [];
-
-	//Add to index
-	Map.index[str] = chunk;
-	net_pending_chunks.push(chunk);
-
-	if(net_pending_chunks.length >= MAX_PENDING_CHUNKS)
-	{
-		wait_chunks = false;
-	}
-}
-
-
 //Marks a chunk as dirty
 function set_dirty(x, y, z, priority)
 {
@@ -788,7 +605,7 @@ function set_dirty(x, y, z, priority)
 //Generates all vertex buffers
 function generate_vbs()
 {
-	print("Generating vbs");
+//	print("Generating vbs");
 
 	var i, chunk, vbs = [];
 	for(i=0; i < Math.min(vb_pending_chunks.length, MAX_VB_UPDATES); ++i)
@@ -869,8 +686,6 @@ function worker_start(key)
 		+ session_id[7]);
 
 	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
-	//fetch_interval = setInterval(grab_chunks, FETCH_RATE);
-
 	fetch_interval = setInterval(grab_vis_buffer, 800);
 
 	for(var i=0; i<CHUNK_SIZE; ++i)
@@ -893,14 +708,6 @@ self.onmessage = function(ev)
 
 		case EV_SET_BLOCK:
 			set_block(ev.data.x, ev.data.y, ev.data.z, ev.data.b);
-		break;
-
-		case EV_FETCH_CHUNK:
-			//fetch_chunk(ev.data.x, ev.data.y, ev.data.z);
-		break;
-
-		case EV_SET_THROTTLE:
-			high_throughput = false;
 		break;
 	}
 

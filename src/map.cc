@@ -42,11 +42,7 @@ Map::Map(WorldGen* gen, string const& filename) : world_gen(gen)
 	tchdbopen(map_db, filename.c_str(), HDBOWRITER | HDBOCREAT);
 	
 	//Create the lock for the visibility buffers
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init(&attr);
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-	pthread_mutex_init(&vis_lock, &attr);
-	pthread_mutexattr_destroy(&attr);
+	pthread_mutex_init(&vis_lock, NULL);
 }
 
 Map::~Map()
@@ -66,6 +62,8 @@ void Map::get_chunk(ChunkID const& idx, Chunk* chunk)
 	//If the value of l was not set correctly, need to regenerate the chunk
 	if(l != sizeof(Chunk))
 	{
+		printf("Generating chunk: %d, %d, %d\n", idx.x, idx.y, idx.z);
+	
 		//Generate the chunk
 		world_gen->generate_chunk(idx, chunk);
 		
@@ -290,18 +288,18 @@ uint64_t pos_to_vis_key(double x, double y, double z)
 //Converts a chunk ID to a key
 uint64_t chunkid_to_vis_key(ChunkID const& c)
 {
-	return (uint64_t)(c.x/VIS_BUFFER_X)    |
+	auto k =
+		 (uint64_t)(c.x/VIS_BUFFER_X)    |
 		((uint64_t)(c.y/VIS_BUFFER_Y)<<20ULL) |
 		((uint64_t)(c.z/VIS_BUFFER_Z)<<40ULL);
+	return k;
 }
 
 //Retrieves a buffer containing all visible chunks
-bool Map::send_vis_buffer(uint64_t key, int socket)
+int Map::send_vis_buffer(uint64_t key, int socket)
 {
 	VisBuffer buf;
 	
-	cout << "Sending vis buffer" << endl;
-
 	{
 		MutexLock L(&vis_lock);
 		auto iter = vis_buffers.find(key);
@@ -309,16 +307,23 @@ bool Map::send_vis_buffer(uint64_t key, int socket)
 		if(iter == vis_buffers.end() || 
 			(*iter).second.ptr == NULL)
 		{
+			printf("Generating buffer\n");
 			gen_vis_buffer(key, true);
+			printf("Gen complete\n");
 		}
-	
+		
+
 		buf = vis_buffers[key];
 	}
 	
+	if(buf.size == 0)
+	{
+		return 0;
+	}
 	
-	return send(socket, buf.ptr, buf.size, 0) >= 0;
+	return send(socket, buf.ptr, buf.size, 0);
 }
-		
+	
 //Generates a visibility buffer
 void Map::gen_vis_buffer(uint64_t key, bool no_lock)
 {
@@ -351,16 +356,12 @@ void Map::gen_vis_buffer(uint64_t key, bool no_lock)
 			}
 		}
 	}
-	
-	cout << "Generating vis buffer: " << key << endl;
 
 	//First compute the base chunk
 	ChunkID base_chunk(
 		(key&((1<<20)-1)) * VIS_BUFFER_X,
 		((key>>20)&((1<<20)-1)) * VIS_BUFFER_Y,
 		((key>>40)&((1<<20)-1)) * VIS_BUFFER_Z);
-	
-	cout << "Base chunk = " << base_chunk.x << ',' << base_chunk.y << ',' << base_chunk.z << endl;
 	
 	//Next, allocate temporary buffer
 	ScopeFree buf(malloc(9 + (2 + 2*sizeof(Block)*CHUNK_X*CHUNK_Y*CHUNK_Z)*VIS_BUFFER_X*VIS_BUFFER_Y*VIS_BUFFER_Z));
@@ -389,8 +390,26 @@ void Map::gen_vis_buffer(uint64_t key, bool no_lock)
 			((z-base_chunk.z)<<5);
 			
 		++n_chunks;
-			
-		cout << "Packing chunk: " << x << ',' << y << ',' << z << ", Coded offset = " << (int)*(coord_ptr) << ", compressed len = " << c_size << ", num chunks = " << n_chunks << endl;
+	}
+	
+	//Special case: No chunks in buffer
+	if(n_chunks == 0)
+	{
+		if(no_lock)
+		{
+			vis_buffers[key] = VisBuffer{ malloc(1), 0 };
+		}
+		else
+		{
+			MutexLock L(&vis_lock);
+			auto iter = vis_buffers.find(key);
+			if(iter == vis_buffers.end())
+			{
+				vis_buffers[key] = VisBuffer{ malloc(1), 0 };
+			}
+		}
+		
+		return;
 	}
 	
 	//Reverse offsets
@@ -401,25 +420,14 @@ void Map::gen_vis_buffer(uint64_t key, bool no_lock)
 		coord_ptr[n_chunks - 1 - i] = tmp;
 	}
 	
-	cout << "Contains: " << (int)n_chunks << " chunks" << endl;
-	
 	//Write base offset
 	*(--coord_ptr) = n_chunks;
 	*((uint64_t*)(coord_ptr)-1) = key;
-	
-	cout << "base_chunk.hash = " << key << endl;
 	
 	//Compute offset of base pointer and length
 	void* base_ptr = (void*)(coord_ptr - sizeof(uint64_t));
 	int len = chunk_ptr - (uint8_t*)base_ptr;
 	
-	
-	cout << "base_ptr = ";
-	for(int i=0; i<10; ++i)
-	{
-		cout << (int)(((uint8_t*)base_ptr)[i]) << ',';
-	}
-	cout << endl;
 	
 	//Generate a compressed buffer
 	int sz;
@@ -450,7 +458,6 @@ void Map::gen_vis_buffer(uint64_t key, bool no_lock)
 	else
 	{
 		bool success = false;
-		cout << "Acquiring lock..." << endl;
 		{
 			MutexLock L(&vis_lock);
 			auto iter = vis_buffers.find(key);
@@ -464,12 +471,9 @@ void Map::gen_vis_buffer(uint64_t key, bool no_lock)
 		//If we failed to generate the visibility buffer, then die
 		if(!success)
 		{
-			cout << "FAILED TO GENERATE VISIBILITY BUFFER" << endl;
 			free(compressed_vis_buffer);
 		}
 	}
-	
-	cout << "Done" << endl;
 }
 
 //Invalidates a visibility buffer after a chunk changes

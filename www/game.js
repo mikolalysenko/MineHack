@@ -37,11 +37,6 @@ var Game =
 	wait_for_heartbeat : false,
 	
 	show_shadows : true,
-	
-	preload : false,
-	
-	initial_login : true,
-	wait_for_initial_chunks : true
 };
 
 Game.resize = function()
@@ -135,18 +130,6 @@ Game.init = function(canvas)
 	//Start running the game
 	Game.running = true;	
 	Game.interval = setInterval(Game.tick, Game.update_rate);
-	
-	if(Game.preload)
-	{
-		Game.initial_login = true;
-		Game.wait_for_initial_chunks = true;
-	}
-	else
-	{
-		Game.initial_login = false;
-		Game.wait_for_initial_chunks = false;
-		Map.set_throttle();
-	}
 	
 	return 'Ok';
 }
@@ -277,37 +260,6 @@ Game.tick = function()
 	if(!Player.entity)
 		return;
 	
-	//Grab the initial chunks
-	if(Game.initial_login)
-	{
-		Map.get_initial_chunks();
-		Game.initial_login = false;
-		
-		var prog_bar = document.getElementById("progress");
-		prog_bar.style.display = "block";
-		
-		prog_bar.innerHTML = "Preloading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
-		
-		return;
-	}
-	
-	//Wait for the chunks to load
-	if(Game.wait_for_initial_chunks)
-	{
-		var prog_bar = document.getElementById("progress");
-		
-		if(Map.num_pending_chunks == 0)
-		{
-			Game.wait_for_initial_chunks = false;
-			prog_bar.style.display = "none";
-			Map.set_throttle();
-		}
-		else
-		{
-			prog_bar.innerHTML = "Preloading chunks...<br/>Chunks left: " + Map.num_pending_chunks;
-		}
-		return;
-	}
 	
 	//Goal: Try to interpolate local clock so that  = remote_clock - ping 
 	if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
@@ -328,9 +280,6 @@ Game.tick = function()
 
 	//Update game state
 	Player.tick();
-
-	//Update cache
-	Map.update_cache();
 	
 	//Redraw
 	Game.draw();

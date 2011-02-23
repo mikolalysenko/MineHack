@@ -8,30 +8,22 @@ function print(str)
 	}
 	else
 	{
-		console.log(str);
+		//console.log(str);
 	}
 }
 
 
 function asyncGetBinary(url, handler, err_handler, body)
 {
-	var XHR = new XMLHttpRequest(),
-		timer = setTimeout(function()
-		{
-			if(XHR.readyState != 4)
-			{
-				XHR.abort();
-				err_handler();
-			}
-		}, 5000);
+	var XHR = new XMLHttpRequest();
 	
 	XHR.open("POST", url, true);
 	XHR.onreadystatechange = function()
 	{
+		print("ready state = " + XHR.readyState);
+	
 		if(XHR.readyState == 4)
 		{
-			clearTimeout(timer);
-		
 			if(XHR.status == 200)
 			{
 				var str = XHR.responseText;

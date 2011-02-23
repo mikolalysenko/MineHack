@@ -52,7 +52,7 @@ namespace Game
 		Block get_block(int x, int y, int z);
 		
 		//Sends a visibility buffer over a socket
-		bool send_vis_buffer(uint64_t key, int socket);
+		int send_vis_buffer(uint64_t key, int socket);
 		
 		//Generates a visibility buffer
 		void gen_vis_buffer(uint64_t key, bool no_lock = false);

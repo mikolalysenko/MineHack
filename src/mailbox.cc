@@ -109,18 +109,17 @@ uint64_t Mailbox::get_next_vis_set(EntityID const& player_id)
 	{
 		static uint64_t call(PlayerRecord* data, int dx, int dy, int dz)
 		{
-			cout << "Visiting key: " << dx << "," << dy << "," << dz << endl;
-		
 			uint64_t key = pos_to_vis_key(
 				data->ox+dx*CHUNK_X*VIS_BUFFER_X,
 				data->oy+dy*CHUNK_Y*VIS_BUFFER_Y,
 				data->oz+dz*CHUNK_Z*VIS_BUFFER_Z);
+				
+			auto iter = data->known_regions.find(key);
 			
-			if(data->known_regions.find(key) == data->known_regions.end())
+			if(iter == data->known_regions.end())
 			{
 				return key;
 			}
-			
 			return 0;
 		}
 	};
@@ -130,7 +129,6 @@ uint64_t Mailbox::get_next_vis_set(EntityID const& player_id)
 	for(int c=0; c<=d-r; ++c)
 	{
 		int m = d - r - c;
-		
 		
 		uint64_t k = VisitK::call(data, c, r, m);
 		if(k) return k;
@@ -366,8 +364,6 @@ void Mailbox::update_index(PlayerRecord* data, int ox, int oy, int oz)
 		pbucket = TO_BUCKET(data->ox, data->oy, data->oz);
 		
 		
-	//cout << "Updating bucket: " << pbucket << endl;
-		
 	if(pbucket == nbucket)
 		return;
 
@@ -383,7 +379,6 @@ void Mailbox::remove_index(PlayerRecord* data)
 	auto iter = player_pos_index.find(bucket);
 	if(iter == player_pos_index.end())
 	{
-		cout << "This should never happen" << endl;
 		return;
 	}
 
@@ -434,8 +429,6 @@ void Mailbox::foreach_region(
 	for(int bz=bmin_z; bz<=bmax_z; bz++)
 	{
 		uint64_t bucket = BUCKET_IDX(bx, by, bz);
-		
-		//cout << "VISITING BUCKET: " << bucket << endl;
 		
 		auto iter=player_pos_index.find(bucket);
 		if(iter == player_pos_index.end())
@@ -501,8 +494,6 @@ int Mailbox::PlayerRecord::packet_len() const
 //Serialize the packet into binary form on the socket
 void Mailbox::PlayerRecord::net_serialize(int socket) const
 {
-	//cout << "Serializing packet, socket = " << socket << endl;
-
 	//Send HTTP header
 	{	char header_buf[1024];
 		int len = snprintf(header_buf, sizeof(header_buf),
@@ -514,8 +505,6 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 			"\n", packet_len());
 	
 		int rc = send(socket, header_buf, len, 0);
-		
-		//cout << "Wrote header, " << rc << endl;
 	}
 
 	//Send header
@@ -534,16 +523,6 @@ void Mailbox::PlayerRecord::net_serialize(int socket) const
 		
 		send(socket, &header, sizeof(NetHeader), 0);
 	}
-	
-	/*
-	cout << "tick_count = " << tick_count << endl
-		 << "origin = " << ox << ',' << oy << ',' << oz <<endl
-		 << "block_size = " << block_events.size() << endl
-		 << "chat_size  = " << chat_log.size() << endl
-		 << "coord_size = " << coords.size() << endl
-		 << "eblob_size = " << eblob.size() << endl
-		 << "kill_size  = " << dead_entities.size() << endl;
-	*/
 	
 	//Send block events
 	for(auto iter = block_events.begin(); iter != block_events.end(); ++iter)
