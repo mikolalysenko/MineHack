@@ -1,17 +1,54 @@
 package Network;
 
+//A ChunkID
+message ChunkID {
+	optional uint32 x = 1;
+	optional uint32 y = 2;
+	optional uint32 z = 3;
+}
+
+//A chunk
+message Chunk {
+
+	//A chunk id
+	optional ChunkID chunk_id = 1;
+	
+	//If set, this chunk was updated for physics / editing purposes
+	optional uint64 tick_count = 2;
+	
+	//RLE encoded chunk data
+	optional bytes data = 3;
+}
+
+//A network block type
+message Block {
+	optional uint8 type;
+}
+
+//A block update
+message BlockUpdate {
+	optional uint64 tick;
+
+	optional uint32 x;
+	optional uint32 y;
+	optional uint32 z;
+	
+	optional Block b;
+}
+
+
 //A coordinate message
 message Coordinate {
-	required double x = 1;
-	required double y = 2;
-	required double z = 3;
+	optional double x = 1;
+	optional double y = 2;
+	optional double z = 3;
 }
 
 //An orientation message
 message Orientation {
-	required float pitch = 1;
-	required float yaw = 2;
-	required float roll = 3;
+	optional float pitch = 1;
+	optional float yaw = 2;
+	optional float roll = 3;
 }
 
 //Entity state message
@@ -21,51 +58,67 @@ message EntityState {
 		Player = 1;
 	}
 	
-	required uint64			entity_id	= 1;
-	required EntityType		type		= 2;
+	optional uint64			entity_id	= 1;
+	optional EntityType		type		= 2;
 
 	optional Coordinate		position	= 3;
 	optional Orientation	orientation = 4;
+	
+	//Entity type information
+	message PlayerState {
+		optional string player_name = 1;
+	}
+	
+	optional PlayerState	player_state = 5;
 }
 
+//A chat message
 message Chat {
 	optional string msg = 1;
 }
 
+
+//A chunk update packet
+// These go from server -> client
+//Are handled separately by the chunk worker thread.
+message ChunkPacket {
+	repeated Chunk			chunks = 1;
+	repeated BlockUpdate	block_updates = 2;
+}
+
 //A server update packet
 // These go from server -> client
-message ServerUpdate {
+message UpdatePacket {
 	
-	required uint64 tick_count = 1;	//The game tick count
+	optional uint64 tick_count = 1;	//The game tick count
 	
 	message UpdateEvent {
 	
+		//Update type
 		enum UpdateType {
-			Block = 1;
-			Entity = 2;
+			Entity = 1;
+			EntityDestroy = 2;
 			Chat = 3;
 		}
-	
 		required UpdateType type = 1;
-
-		//A block event		
-		message BlockEvent {
-			required int32	x = 1;
-			required int32	y = 2;
-			required int32	z = 3;
-			required uint32 b = 4;
-		}
+		
+		//Time update occured (in game ticks)
+		optional uint64		tick = 2;
 		
 		//Entity update event
 		message EntityEvent {
 			required EntityState entity_state = 1;
 		}
 		
+		//Entity destruction event
+		message EntityDestroyEvent {
+			required uint64 entity_id = 1;
+		}
 		
 		//Event contents
-		optional BlockEvent		block_event		= 2;
-		optional EntityEvent	entity_event	= 3;
-		optional Chat			chat_event		= 4;
+		optional EntityEvent			entity_event	= 4;
+		optional Chat					chat_event		= 5;
+		optional EntityDestroyEvent		destroy_event	= 6;
 	}
 	
 	//Update events for the client
@@ -75,11 +128,11 @@ message ServerUpdate {
 
 //A client input packet
 // These go from client -> server
-message ClientInput {
+message InputPacket {
 
 	//Local updates to the player state
-	required Coordinate player_pos = 1;
-	required Orientation player_orient = 2;
+	optional Coordinate player_pos = 1;
+	optional Orientation player_orient = 2;
 	
 	//The action types
 	message Action {
@@ -88,8 +141,9 @@ message ClientInput {
 			DigStop = 2;
 			Chat = 3;
 		}
-				
+		
 		required ActionType type = 1;
+		optional uint64	tick = 2;
 		
 		message DigStartAction {
 			required int32	x = 1;
@@ -97,9 +151,14 @@ message ClientInput {
 			required int32	z = 3;
 		}
 		
-		optional DigStartAction		dig_start_action = 2;
-		optional Chat				chat_action = 3;
+		optional DigStartAction		dig_start_action = 3;
+		optional Chat				chat_action = 4;
 	}
 	
 	repeated Action actions = 3;
+}
+
+
+message ClientPacket {
+
 }

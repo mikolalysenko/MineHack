@@ -10,6 +10,15 @@
 
 namespace Game
 {
+	struct Coord
+	{
+		double x, y, z;
+		
+		Coord();
+		Coord(double x_, double y_, double z_);
+	};
+
+
 	//The block type
 	enum class Block : std::uint8_t
 	{

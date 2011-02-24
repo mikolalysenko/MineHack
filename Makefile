@@ -10,10 +10,10 @@
 EXE = a.out
 
 # C++ compiler
-CXX = g++ -std=c++0x
+CXX = llvm-g++ -std=c++0x
 
 # C compiler
-CC = gcc
+CC = llvm-gcc
 
 #Protocol buffer compiler
 PROTOC = protoc

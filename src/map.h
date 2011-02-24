@@ -2,6 +2,8 @@
 #define MAP_H
 
 #include <string>
+#include <map>
+
 #include <cstdint>
 #include <cstdlib>
 
@@ -10,27 +12,42 @@
 #include <tcutil.h>
 #include <tchdb.h>
 
-#include <map>
+#include "constants.h"
 #include "chunk.h"
 #include "worldgen.h"
+
+#include "network.pb.h"
 
 namespace Game
 {
 
-	#define MAX_MAP_X	(1<<27)
-	#define MAX_MAP_Y	(1<<27)
-	#define MAX_MAP_Z	(1<<27)
-
-
-	struct VisBuffer
+	//A visibility buffer index
+	struct VisID
 	{
-		void*	ptr;
-		int		size;
+		uint32_t x, y, z;
+		
+		VisID();
+		VisID(uint64_t hash);
+		VisID(Network::Coordinate const&);
+		VisID(Network::ChunkID const&);
+		VisID(VisID const&)
+		VisID(Coord const&);
+		VisID(ChunkID const&);
+
+		VisID& operator=(const VisID& other)
+		{
+			x = other.x;
+			y = other.y;
+			z = other.z;
+			return *this;
+		}
+		
+		uint64_t hash() const
+		{
+			return (uint64_t)x + ((uint64_t)y<<20ULL) + ((uint64_t)z<<40ULL);
+		}
 	};
-	
-	//Calculates a key for a visibility buffer
-	uint64_t pos_to_vis_key(double x, double y, double z);
-	uint64_t chunkid_to_vis_key(ChunkID const&);
+
 
 	//This is basically a data structure which implements a caching/indexing system for chunks
 	struct Map
@@ -42,8 +59,9 @@ namespace Game
 		//Retrieves the specific chunk
 		void get_chunk(ChunkID const&, Chunk* res);
 		
-		//Returns a chunk with only visible cells labeled
-		bool get_surface_chunk(ChunkID const&, Chunk* res);
+		//Returns a chunk with only surface cells
+		//Interior cells are converted to special unknown type to prevent players from cheating
+		bool get_surface_chunk(ChunkID const&, Network::Chunk& res);
 		
 		//Sets a block
 		void set_block(int x, int y, int z, Block t);
@@ -51,22 +69,23 @@ namespace Game
 		//Gets a block from a chunk
 		Block get_block(int x, int y, int z);
 		
-		//Sends a visibility buffer over a socket
-		int send_vis_buffer(uint64_t key, int socket);
+		//Adds a set of visible chunks to the given network packet
+		void add_vis_chunks_to_packet(VisID const& vis_id, Network::ChunkPacket& packet);
 		
 		//Generates a visibility buffer
-		void gen_vis_buffer(uint64_t key, bool no_lock = false);
+		void gen_vis_buffer(VisID const& vis_id, bool no_lock = false);
+
+		//Invalidates a visibility buffer
+		void invalidate_vis_buffer(VisID vis_id);
 		
 	private:
 		TCHDB* map_db;
 		
 		//A set of precalculated visibility buffers (these are regenerated constantly)
 		pthread_mutex_t	vis_lock;
-		std::map< uint64_t, VisBuffer >	vis_buffers;
+		std::map< uint64_t, std::vector< Network::Chunk* > >	vis_buffers;
 		
-		//Invalidates a visibility buffer
-		void invalidate_vis_buffer(uint64_t);
-		
+		//The world generator
 		WorldGen* world_gen;
 	};
 	
