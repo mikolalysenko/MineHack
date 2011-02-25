@@ -159,4 +159,15 @@ message InputPacket {
 
 message ClientPacket {
 
+	message TestPacket {
+		optional int32 test = 1;
+	}
+
+	message LoginPacket {
+		optional string username = 1;	//Username for login
+		optional string password = 2;	//Sent in SHA256 encryption
+	}
+	
+	optional TestPacket test_packet = 1;
 }
+

@@ -59,10 +59,15 @@ namespace Game {
 	//The external interface to the HttpEvent server
 	struct HttpEvent
 	{
-		HttpEvent();
+		HttpEvent(Network::ClientPacket* packet, SocketEvent* s_event, HttpServer* server);
 		~HttpEvent();
 		
-		void reply(void* buf, int len);
+		//Sends a reply
+		bool reply(void* buf, int len, bool free_on_send_complete = true);
+		bool reply(google::protobuf::Message* message);
+		
+		//The client packet data
+		Network::ClientPacket* client_packet;
 		
 	private:
 		SocketEvent*	socket_event;
@@ -82,6 +87,10 @@ namespace Game {
 		bool start();
 		void stop();
 		
+		//DO NOT CALL THESE METHODS.  They are used internally
+		void dispose_event(SocketEvent* event);
+		bool initiate_send(SocketEvent* event);
+		
 	private:
 
 		//Configuration stuff
@@ -97,7 +106,6 @@ namespace Game {
 		pthread_spinlock_t event_map_lock;
 		TCMAP* event_map;
 		SocketEvent* create_event(int fd, bool listener = false);
-		void dispose_event(SocketEvent* event);
 		void cleanup_events();
 		
 		//Event handlers

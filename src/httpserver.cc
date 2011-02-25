@@ -18,6 +18,12 @@
 
 #include <tcutil.h>
 
+#include <google/protobuf/message.h>
+#include <google/protobuf/io/zero_copy_stream.h>
+#include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <google/protobuf/io/gzip_stream.h>
+#include <google/protobuf/io/coded_stream.h>
+
 #include "constants.h"
 #include "config.h"
 #include "httpserver.h"
@@ -36,6 +42,87 @@ const char DEFAULT_HTTP_HEADER[] =
 	"Cache-Control: max-age=300\n"
 	"Content-Encoding: gzip\n"
 	"Content-Length: %d\n\n";
+	
+const char DEFAULT_PROTOBUF_HEADER[] =
+	"HTTP/1.1 200 OK\n"
+	"Cache: no-cache\n"
+	"Content-Type: application/octet-stream; charset=x-user-defined\n"
+	"Content-Transfer-Encoding: binary\n"
+	"Content-Encoding: gzip\n"
+	"Content-Length: %8d\n"
+	"\n";
+
+HttpEvent::HttpEvent(Network::ClientPacket* packet, SocketEvent* s_event, HttpServer* serv) :
+	client_packet(packet),
+	socket_event(s_event),
+	server(serv)
+{
+}
+
+//Clean up http event resources
+HttpEvent::~HttpEvent()
+{
+	delete client_packet;
+	if(socket_event != NULL)
+	{
+		server->dispose_event(socket_event);
+	}
+}
+		
+//Sends a reply
+bool HttpEvent::reply(void* buf, int len, bool free_on_send_complete)
+{
+	//Limit one reply per event
+	if(socket_event == NULL)
+	{
+		if(free_on_send_complete)
+			free(buf);
+		return false;
+	}
+	
+	//Set up socket data pointers
+	socket_event->free_send_buffer = free_on_send_complete;
+	socket_event->pending_bytes = len;
+	socket_event->send_buf_start = (char*)buf;
+	socket_event->send_buf_cur = (char*)buf;
+
+	//Pass socket off to server
+	bool res = server->initiate_send(socket_event);
+	socket_event = NULL;
+	
+	//Return result
+	return res;
+}
+
+//Serializes, compresses and adds an http header to a protocol buffer
+bool HttpEvent::reply(google::protobuf::Message* message)
+{
+
+	int buffer_len = sizeof(DEFAULT_PROTOBUF_HEADER) + message->ByteSize() + 64;
+	char* buffer = (char*)malloc(buffer_len);
+	
+	//Compress the object first
+	int packet_offset = sizeof(DEFAULT_PROTOBUF_HEADER) + 5;
+	char* packet_start = buffer + packet_offset;
+	
+	auto base_stream = new google::protobuf::io::ArrayOutputStream(packet_start, buffer_len - packet_offset);
+	auto gzip_filter = new google::protobuf::io::GzipOutputStream(base_stream);
+	auto coded_output = new google::protobuf::io::CodedOutputStream(gzip_filter);
+	
+	message->SerializeWithCachedSizes(coded_output);
+	
+	gzip_filter->Flush();
+	int compressed_size = gzip_filter->ByteCount();
+	
+	delete coded_output;
+	delete gzip_filter;
+	delete base_stream;
+	
+	//Write header
+	sprintf(buffer, DEFAULT_PROTOBUF_HEADER, compressed_size);
+	
+	return reply(buffer, compressed_size + packet_offset, true);
+}
 
 
 //Initialize SocketEvent fields
@@ -449,6 +536,7 @@ void HttpServer::dispose_event(SocketEvent* event)
 	delete event;
 }
 
+
 //Clean up all events in the server
 // (This is always called after epoll has stopped)
 void HttpServer::cleanup_events()
@@ -583,11 +671,6 @@ void HttpServer::stop()
 			perror("pthread_join");
 		}
 		
-		if(pthread_detach(workers[i]) != 0)
-		{
-			perror("pthread_detach");
-		}
-		
 		printf("HTTP Worker %d killed\n", i);
 	}
 	living_threads = 0;
@@ -679,8 +762,42 @@ void HttpServer::process_cached_request(SocketEvent* event, char* req, int req_l
 //Process the pending request
 void HttpServer::process_command(SocketEvent* event)
 {
-	printf("Got a command -- not implemented yet\n");
-	dispose_event(event);
+	//First, unpack the client input protocol buffer
+	auto base_stream = new google::protobuf::io::ArrayInputStream(event->recv_buf_start, event->content_length);
+	auto gzip_filter = new google::protobuf::io::GzipInputStream(base_stream);
+	auto coded_input = new 	google::protobuf::io::CodedInputStream(gzip_filter);
+
+	//Deserialize packet
+	Network::ClientPacket* packet = new Network::ClientPacket();
+	bool result = packet->MergePartialFromCodedStream(coded_input);
+
+	//Free streams
+	delete coded_input;
+	delete gzip_filter;
+	delete base_stream;
+	
+	//Failed to handle packet, kill socket
+	if(!result)
+	{
+		delete packet;
+		dispose_event(event);
+		return;
+	}
+	
+	//Adjust pointers in socket event for http pipelining
+	int extra_bytes = (int)(event->recv_buf_cur - event->recv_buf_start);
+	memmove(event->recv_buf_start, event->recv_buf_start+event->content_length, extra_bytes);
+	event->recv_buf_cur = event->recv_buf_start + extra_bytes;
+	
+	//Update state
+	event->state = Processing;
+	
+	//Call user event
+	HttpEvent* user_event = new HttpEvent(packet, event, this);
+	if((*callback)(user_event) == false)
+	{
+		delete user_event;
+	}
 }
 
 //Process a header request
@@ -888,6 +1005,26 @@ void HttpServer::process_send(SocketEvent* event)
 		process_header(event, false);
 	}
 }
+
+//This is a hacky method, used to basically add the socket back to the epoll set
+bool HttpServer::initiate_send(SocketEvent* event)
+{
+	epoll_event ev;
+	ev.events = EPOLLOUT | EPOLLET | EPOLLONESHOT;
+	ev.data.fd = event->socket_fd;
+	ev.data.ptr = event;
+	
+	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev) == -1)
+	{
+		perror("epoll_ctl");
+		dispose_event(event);
+		return false;
+	}
+
+	return true;
+}
+
+
 
 //Worker boot strap
 void* HttpServer::worker_start(void* arg)
