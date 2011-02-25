@@ -12,23 +12,33 @@
 
 namespace Game
 {
+	//The configuration database
 	struct Config
 	{
 		Config(std::string const& filename);
-		
-		//closes the database
 		~Config();
 		
-		//reading functions to get values from the database
+		//Accessor methods
+		std::string readString(std::string const& key);
+		void storeString(std::string const& key, std::string const& value);
+		
 		int64_t readInt(std::string const& key);
+		void storeInt(std::string const& key, int64_t value);
 		
-		//storing functions to store into the database
-		void storeInt(int64_t i, std::string const& key);
+		long double readFloat(std::string const& key);
+		void storeFloat(std::string const& key, long double value);
 		
-		private:
+				
+		//Resets the server with the default options
+		void resetDefaults();
 		
-			//main config database
-			TCHDB* config_db;
+	private:
+		
+		//main config database
+		TCHDB* config_db;
+		
+		//Loads the default config options
+		void loadDefaults();
 	};
 };
 

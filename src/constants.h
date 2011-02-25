@@ -3,6 +3,11 @@
 
 //Application wide constants go here
 
+//Server stuff
+#define NUM_HTTP_WORKERS		5
+#define MAX_EPOLL_EVENTS		10
+#define LISTEN_BACKLOG			3
+
 //Constants for different buffer sizes
 #define PASSWORD_HASH_LEN		64
 #define USER_NAME_MAX_LEN		20

@@ -1,10 +1,14 @@
+
+#include <sstream>
+
+#include "constants.h"
 #include "config.h"
+#include "misc.h"
 
 using namespace std;
 
 namespace Game
 {
-
 
 Config::Config(std::string const& filename)
 {
@@ -14,9 +18,12 @@ Config::Config(std::string const& filename)
 	tchdbtune(config_db, 0, 4, 10, HDBTBZIP);
 	
 	//Open the map database
-	tchdbopen(config_db, filename.c_str(), HDBOWRITER | HDBOCREAT);
+	if(!tchdbopen(config_db, filename.c_str(), HDBOWRITER))
+	{
+		tchdbopen(config_db, filename.c_str(), HDBOWRITER | HDBOCREAT);
+		resetDefaults();
+	}
 }
-
 
 Config::~Config()
 {
@@ -24,23 +31,59 @@ Config::~Config()
 	tchdbdel(config_db);
 }
 
-int64_t Config::readInt(std::string const& key)
+std::string Config::readString(std::string const& key)
 {
-	int64_t retval = 0;
-	int l = tchdbget3(config_db, (const void*)key.data(), key.size(), (void*)&retval, sizeof(int64_t));
+	char* str = tchdbget2(config_db, key.c_str());
+	if(str == NULL)
+		return "";
 	
-	if(l != sizeof(int64_t))
-		return 0;
-	
-	return retval;
+	auto G = ScopeFree(str);
+	return str;
 }
 
-void Config::storeInt(int64_t i, std::string const& key)
+void Config::storeString(std::string const& key, std::string const& value)
 {
-	tchdbput(config_db,
-		(const void*)key.data(), key.size(),
-		(void*)&i, sizeof(int64_t));
+	tchdbput2(config_db, key.c_str(), value.c_str());
 }
 
+int64_t Config::readInt(string const& key)
+{
+	stringstream ss(readString(key));
+	int64_t res;
+	ss >> res;
+	return res;
+}
+
+void Config::storeInt(string const& key, int64_t value)
+{
+	stringstream ss;
+	ss << value;
+	storeString(key, ss.str());
+}
+
+long double Config::readFloat(string const& key)
+{
+	stringstream ss(readString(key));
+	long double res;
+	ss >> res;
+	return res;
+}
+
+void Config::storeFloat(string const& key, long double value)
+{
+	stringstream ss;
+	ss << value;
+	storeString(key, ss.str());
+}
+
+		
+//Set default values for the config database
+void Config::resetDefaults()
+{
+	tchdbvanish(config_db);
+	
+	storeString("wwwroot", "www");
+	storeInt("listenport", 8081);
+}
 
 };

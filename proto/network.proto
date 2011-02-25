@@ -22,18 +22,18 @@ message Chunk {
 
 //A network block type
 message Block {
-	optional uint8 type;
+	optional uint32 type = 1;
 }
 
 //A block update
 message BlockUpdate {
-	optional uint64 tick;
+	optional uint64 tick = 1;
 
-	optional uint32 x;
-	optional uint32 y;
-	optional uint32 z;
+	optional uint32 x = 2;
+	optional uint32 y = 3;
+	optional uint32 z = 4;
 	
-	optional Block b;
+	optional Block b = 5;
 }
 
 
@@ -90,8 +90,6 @@ message ChunkPacket {
 // These go from server -> client
 message UpdatePacket {
 	
-	optional uint64 tick_count = 1;	//The game tick count
-	
 	message UpdateEvent {
 	
 		//Update type
@@ -122,7 +120,7 @@ message UpdatePacket {
 	}
 	
 	//Update events for the client
-	repeated UpdateEvent events = 2;
+	repeated UpdateEvent events = 1;
 }
 
 
