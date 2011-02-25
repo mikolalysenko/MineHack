@@ -33,24 +33,35 @@ const char DEFAULT_ERROR_RESPONSE[] =
 
 const char DEFAULT_HTTP_HEADER[] =  
 	"HTTP/1.1 200 OK\n"
+	"Cache-Control: max-age=300\n"
 	"Content-Encoding: gzip\n"
 	"Content-Length: %d\n\n";
 
 
-
-//Initialize HttpEvent fields
-HttpEvent::HttpEvent() : 
-	socket_fd(-1), 
-	state(WaitForHeader),
-	no_delete(false),
-	buf_size(RECV_BUFFER_SIZE),
-	buf_start((char*)malloc(RECV_BUFFER_SIZE))
+//Initialize SocketEvent fields
+SocketEvent::SocketEvent(int fd, bool listener) : 
+	socket_fd(fd), 
+	free_send_buffer(false),
+	send_buf_start(NULL),
+	send_buf_cur(NULL)
 {
-	buf_cur = buf_start;
+	if(listener)
+	{
+		state = Listening;
+		recv_buf_cur = recv_buf_start = NULL;
+		recv_buf_size = 0;
+	}
+	else
+	{
+		state = WaitForHeader;
+		recv_buf_size = RECV_BUFFER_SIZE;
+		recv_buf_start = (char*)malloc(RECV_BUFFER_SIZE);
+		recv_buf_cur = recv_buf_start;
+	}
 }
 
 //Destroy http event
-HttpEvent::~HttpEvent()
+SocketEvent::~SocketEvent()
 {
 	if(socket_fd != -1)
 	{
@@ -58,12 +69,16 @@ HttpEvent::~HttpEvent()
 		close(socket_fd);
 	}
 	
-	if(buf_start != NULL && !no_delete)
+	if(recv_buf_start != NULL)
 	{
-		free(buf_start);
+		free(recv_buf_start);
+	}
+	
+	if(free_send_buffer)
+	{
+		free(send_buf_start);
 	}
 }
-
 
 
 // HTTP Header parsing philosophy:
@@ -76,54 +91,74 @@ HttpEvent::~HttpEvent()
 //   0 = error
 //  -1 = incomplete
 //
-int HttpEvent::try_parse(char** request, int* request_len, char** content_start, int* content_length)
+int SocketEvent::try_parse(char** request, int* request_len, char** content_start, int* content_length)
 {
 	//FIXME: Put a cap on the end_ptr length to limit ddos attacks
-	char *ptr     = (char*)buf_start,
-		 *end_ptr = (char*)buf_cur;
+	char *ptr     = (char*)recv_buf_start,
+		 *end_ptr = (char*)recv_buf_cur,
+		 c;
+		  
+	//Check for no data case
+	if(ptr == end_ptr)
+		return -1;
+		  
+	//Eat leading whitespace
+	c = *ptr;
+	while(
+		(c == ' ' || c == '\r' || c == 'n' || c == '\t') &&
+		ptr < end_ptr)
+	{
+		c = *(ptr++);
+	}
 		  
 	int len = (int)(end_ptr - ptr);
-	if(len < 7)
+	if(len < 12)
 		return -1;
 	
+	//Check for get or post
 	bool post = false;
 	if(ptr[0] == 'G')
 	{
-		ptr += 5;
+		ptr += 4;
 	}
 	else if(ptr[0] == 'P')
 	{
-		ptr += 6;
+		ptr += 5;
 		post = true;
 	}
 	else
 	{
-		printf("UNKOWN MESSAGE TYPE\n");
+		printf("Unkown HTTP request type\n");
 		return 0;
 	}
 	
-	//Set request
-	*request = ptr;
-	
-	//Read to end of request
-	char c;
-	while(ptr < end_ptr)
+	//Skip leading slash
+	if(*ptr == '/')
 	{
-		c = *(ptr++);
-		if(c == ' ' || c == '\0')
-			break;
+		ptr++;	
 	}
-	
-	//Set end of request
-	if(ptr == end_ptr)
-		return -1;
-	*(ptr-1) = '\0';
-	*request_len = (int)(ptr - 1 - *request);
 	
 	//For get stuff, we are done
 	if(!post)
 	{
+		//Handle get request
 		*content_length = 0;
+		*request = ptr;
+	
+		//Read to end of request
+		while(ptr < end_ptr)
+		{
+			c = *(ptr++);
+			if(c == ' ' || c == '\0')
+				break;
+		}
+	
+		//Set end of request
+		if(ptr == end_ptr)
+			return -1;
+		*(ptr-1) = '\0';
+		*request_len = (int)(ptr - 1 - *request);
+		
 		return 1;
 	}
 	
@@ -161,6 +196,10 @@ int HttpEvent::try_parse(char** request, int* request_len, char** content_start,
 		return -1;
 	*(--ptr) = '\0';	
 	*content_length = atoi(content_str);
+	
+	//Error: must specify content length > 0
+	if(*content_length == 0)
+		return 0;
 	
 	//Restore last character
 	*ptr = c;
@@ -301,6 +340,17 @@ void HttpServer::init_cache()
 		int header_len = sprintf((char*)response.ptr, DEFAULT_HTTP_HEADER, compressed_size);
 		int response_len = header_len + compressed_size;
 		memcpy((char*)response.ptr+header_len, compressed_data.ptr, compressed_size);
+
+
+		//Strip off leading path
+		for(int j=0; j<files[i].size(); ++j)
+		{
+			if(files[i][j] == '/')
+			{
+				files[i] = files[i].substr(j+1, files[i].size());
+				break;
+			}
+		}
 		
 		//Store in cache
 		tcmapput(cached_response, files[i].c_str(), files[i].size(), response.ptr, response_len);
@@ -328,9 +378,9 @@ const char* HttpServer::get_cached_response(const char* filename, int filename_l
 }
 
 //Creates an http event
-HttpEvent* HttpServer::create_event(int fd, bool add_epoll)
+SocketEvent* HttpServer::create_event(int fd, bool listener)
 {
-	HttpEvent* result = new HttpEvent();
+	SocketEvent* result = new SocketEvent(fd, listener);
 	result->socket_fd = fd;
 	
 	//Store pointer in map
@@ -340,20 +390,46 @@ HttpEvent* HttpServer::create_event(int fd, bool add_epoll)
 	
 	if(success)
 	{
-		if(add_epoll)
+		if(listener)
+		{
+			epoll_event ev;
+			ev.events = EPOLLIN | EPOLLPRI;
+			ev.data.fd = fd;
+			ev.data.ptr = result;
+
+			if(epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1)
+			{
+				perror("epoll_add");
+				delete result;
+				return NULL;
+			}
+		}
+		else
 		{
 			//Set socket to non blocking
 			int flags = fcntl(fd, F_GETFL, 0);
  			if (flags == -1)
         		flags = 0;
-        	fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        	if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+        	{
+        		perror("fcntl");
+        		delete result;
+        		return NULL;
+        	}
         	
+        	//Add to epoll
 			epoll_event ev;
 			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
 			ev.data.fd = fd;
 			ev.data.ptr = result;
-			epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev);
+			if(epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1)
+			{
+				perror("epoll_ctl");
+				delete result;
+				return NULL;
+			}
 		}
+		
 		
 		return result;
 	}
@@ -363,9 +439,10 @@ HttpEvent* HttpServer::create_event(int fd, bool add_epoll)
 }
 
 //Disposes of an http event
-void HttpServer::dispose_event(HttpEvent* event)
+void HttpServer::dispose_event(SocketEvent* event)
 {
-	epoll_ctl(epollfd, EPOLL_CTL_DEL, event->socket_fd, NULL);
+	printf("Disposing socket\n");
+	epoll_ctl(epollfd, EPOLL_CTL_DEL, event->socket_fd, NULL);	
 	pthread_spin_lock(&event_map_lock);
 	tcmapout(event_map, &event->socket_fd, sizeof(int));
 	pthread_spin_unlock(&event_map_lock);
@@ -373,6 +450,7 @@ void HttpServer::dispose_event(HttpEvent* event)
 }
 
 //Clean up all events in the server
+// (This is always called after epoll has stopped)
 void HttpServer::cleanup_events()
 {
 	TCLIST* events = tcmapvals(event_map);
@@ -383,7 +461,7 @@ void HttpServer::cleanup_events()
 		if(ptr == NULL)
 			break;
 			
-		HttpEvent* event = *((HttpEvent**)ptr);
+		SocketEvent* event = *((SocketEvent**)ptr);
 		delete event;
 		free(ptr);
 	}
@@ -451,16 +529,9 @@ bool HttpServer::start()
 	}
 
 	//Add listen socket event
-	auto listen_event = create_event(listen_socket, false);
-	listen_event->state = Listening;
-	
-	epoll_event event;
-	event.events = EPOLLIN | EPOLLPRI;
-	event.data.ptr = listen_event;
-
-	if(epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_socket, &event) == -1)
+	auto listen_event = create_event(listen_socket, true);
+	if(listen_event == NULL)
 	{
-		perror("epoll_add");
 		stop();
 		return false;
 	}
@@ -505,8 +576,18 @@ void HttpServer::stop()
 	printf("Killing workers\n");
 	for(int i=0; i<living_threads; ++i)
 	{
-		pthread_join(workers[i], NULL);
-		pthread_detach(workers[i]);	
+		printf("Stopping worker %d\n", i);
+	
+		if(pthread_join(workers[i], NULL) != 0)
+		{
+			perror("pthread_join");
+		}
+		
+		if(pthread_detach(workers[i]) != 0)
+		{
+			perror("pthread_detach");
+		}
+		
 		printf("HTTP Worker %d killed\n", i);
 	}
 	living_threads = 0;
@@ -518,15 +599,11 @@ void HttpServer::stop()
 	cleanup_events();
 }
 
-void HttpServer::accept_event(HttpEvent* event)
+void HttpServer::accept_event(SocketEvent* event)
 {
-	printf("GOT CONNECTION\n");
 
-	sockaddr_storage addr;
-	int addr_size = sizeof(addr);
-	int conn_fd = accept(event->socket_fd, (sockaddr*)&addr, (socklen_t*)&addr_size);
-	
-	//FIXME: Check if address is black listed
+	int addr_size = sizeof(event->addr);
+	int conn_fd = accept(event->socket_fd, (sockaddr*)&(event->addr), (socklen_t*)&addr_size);
 	
 	if(conn_fd == -1)
 	{
@@ -534,39 +611,87 @@ void HttpServer::accept_event(HttpEvent* event)
 	}
 	else
 	{
-		create_event(conn_fd);
+		printf("Got connection from address: ");
+
+		sa_family_t fam = event->addr.ss_family;
+		if(fam == AF_INET)
+		{
+			sockaddr_in *in_addr = (sockaddr_in*)(void*)&(event->addr);
+			
+			uint8_t* ip = (uint8_t*)(void*)&in_addr->sin_addr.s_addr;
+			uint16_t port = in_addr->sin_port;
+			
+			for(int i=0; i<4; ++i)
+			{
+				if(i != 0)
+					printf(".");
+				printf("%d", ip[i]);
+			}
+			printf(":%d\n", port);
+		}
+		else if(fam == AF_INET6)
+		{
+			sockaddr_in6 *in_addr = (sockaddr_in6*)(void*)&(event->addr);
+			
+			uint8_t* ip = in_addr->sin6_addr.s6_addr;
+			uint16_t port = in_addr->sin6_port;
+			
+			for(int i=0; i<8; ++i)
+			{
+				if(i != 0)
+					printf(".");
+				printf("%d", ip[i]);
+			}
+			printf(":%d\n", port);
+		}
+
+		//FIXME: Maybe check black list here, deny connections from ahole ip addresses
+	
+		if(create_event(conn_fd) == NULL)
+		{
+			printf("Error accepting connection\n");
+		}
 	}
 }
 
-void HttpServer::process_cached_request(HttpEvent* event, char* req, int req_len)
+void HttpServer::process_cached_request(SocketEvent* event, char* req, int req_len)
 {
 	printf("Got request: %s\n", req);
 
-	//Pull the cached response out
-	free(event->buf_start);
-	event->no_delete = true;
-	event->buf_start = const_cast<char*>(get_cached_response(req, req_len, &event->pending_bytes));
-	
-	//Update state
+	//Set the socket event properties
 	event->state = Sending;
-	event->buf_cur = event->buf_start;
+	event->free_send_buffer = false;
+	event->send_buf_start = const_cast<char*>(get_cached_response(req, req_len, &event->pending_bytes));
+	event->send_buf_cur = event->send_buf_start;
 	
 	//Add back to IO queue
 	epoll_event ev;
 	ev.events = EPOLLOUT | EPOLLET | EPOLLONESHOT;
 	ev.data.fd = event->socket_fd;
 	ev.data.ptr = event;
-	epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev);
+	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev) == -1)
+	{
+		perror("epoll_ctl");
+		dispose_event(event);
+	}
 }
 
-void HttpServer::process_header(HttpEvent* event)
+//Process the pending request
+void HttpServer::process_command(SocketEvent* event)
+{
+	printf("Got a command -- not implemented yet\n");
+	dispose_event(event);
+}
+
+//Process a header request
+void HttpServer::process_header(SocketEvent* event, bool do_recv)
 {
 	printf("Processing header\n");
 
-	do
+	if(do_recv) do
 	{
-		int buf_len = event->buf_size - (int)(event->buf_cur - event->buf_start);
-		int len = recv(event->socket_fd, event->buf_cur, buf_len, 0);
+		int buf_len = event->recv_buf_size - (int)(event->recv_buf_cur - event->recv_buf_start);
+		int len = recv(event->socket_fd, event->recv_buf_cur, buf_len, 0);
 	
 		if(len < 0)
 		{
@@ -576,85 +701,191 @@ void HttpServer::process_header(HttpEvent* event)
 			dispose_event(event);
 			return;
 		}
+		else if(len == 0)
+		{
+			dispose_event(event);
+			return;
+		}
 	
-		event->buf_cur += len;
+		event->recv_buf_cur += len;
 		
 	} while(errno != EAGAIN);
 		
 	//Try parsing http header
-	char *req;
+	char *req, *content_ptr;
 	int req_len;
-	int res = event->try_parse(&req, &req_len, &event->content_ptr, &event->content_length);
+	int res = event->try_parse(&req, &req_len, &content_ptr, &event->content_length);
 	
 	if(res == 1)	//Case: successful parse
 	{
 		if(event->content_length > 0)
 		{
-			if(event->content_length + (int)(event->buf_cur - event->buf_start) > RECV_BUFFER_SIZE)
+			//Number of extra bytes read into the post section
+			int extra_data = (int)(event->recv_buf_cur - content_ptr);
+
+		
+			if(event->content_length + (int)(event->recv_buf_cur - event->recv_buf_start) > event->recv_buf_size)
 			{
+				//FIXME: Maybe resize the buffer here if the request is not too big?
+			
 				dispose_event(event);
 				return;
 			}
-		
-			//Resize the buffer to clip out the header
-			int extra_data = (int)(event->buf_cur - event->content_ptr);
-			event->pending_bytes = event->content_length - extra_data;
+			else
+			{
+				//Shift buffer backwards to overwrite http header
+				memmove(event->recv_buf_start, content_ptr, extra_data);
+				event->recv_buf_cur = event->recv_buf_start + extra_data;
+			}
+
+			//Need to do a send request
+			event->pending_bytes = max(event->content_length - extra_data, 0);
 			
-			//Update state
-			event->state = Receiving;
+			if(event->pending_bytes == 0)
+			{
+				process_command(event);
+			}
+			else
+			{
+				//Need to recieve more events			
+				event->state = Receiving;
 			
-			//Add epoll event
-			epoll_event ev;
-			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
-			ev.data.fd = event->socket_fd;
-			ev.data.ptr = event;
-			epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev);
+				//Add epoll event
+				epoll_event ev;
+				ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+				ev.data.fd = event->socket_fd;
+				ev.data.ptr = event;
+				if(epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev) == -1)
+				{
+					perror("epoll_ctl");
+					dispose_event(event);
+				}
+			}
 		}
 		else
 		{
-			//Process the event
-			event->state = Processing;
 			process_cached_request(event, req, req_len);
 		}
 	}
 	else if(res == -1)
 	{
+		//Header not yet complete, keep reading
 		epoll_event ev;
 		ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
 		ev.data.fd = event->socket_fd;
 		ev.data.ptr = event;
-		epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev);
+		if(epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev) == -1)
+		{
+			perror("epoll_ctl");
+			dispose_event(event);
+		}
 	}
 	else 
 	{
+		printf("Bad header\n");
 		dispose_event(event);
 	}
 }
 
-void HttpServer::process_recv(HttpEvent* event)
+void HttpServer::process_recv(SocketEvent* event)
 {
-	//Not implemented yet
-	dispose_event(event);
+	printf("Recieving bytes...\n");
+	
+	do
+	{
+		int len = recv(event->socket_fd, event->recv_buf_cur, event->pending_bytes, 0);
+	
+		if(len < 0)
+		{
+			if(errno == EAGAIN)
+				continue;
+			perror("recv");
+			dispose_event(event);
+			return;
+		}
+		else if(len == 0)
+		{
+			dispose_event(event);
+			return;
+		}
+	
+		event->pending_bytes -= len;
+		event->recv_buf_cur += len;
+		
+	} while(errno != EAGAIN);
+	
+	if(event->pending_bytes == 0)
+	{
+		process_command(event);
+	}
+	else
+	{
+		//Not done reading, continue
+		epoll_event ev;
+		ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+		ev.data.fd = event->socket_fd;
+		ev.data.ptr = event;
+		if(epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev) == -1)
+		{
+			perror("epoll_ctl");
+			dispose_event(event);
+		}
+	}
 }
 
 //Process a send event
-void HttpServer::process_send(HttpEvent* event)
+void HttpServer::process_send(SocketEvent* event)
 {
-	int len = send(event->socket_fd, event->buf_cur, event->pending_bytes, 0);
-	event->buf_cur += len;
-	event->pending_bytes -= len;
-
-	if(event->pending_bytes <= 0 || len <= 0)
+	do
 	{
-		dispose_event(event);
-	}
-	else
+		int len = send(event->socket_fd, event->send_buf_cur, event->pending_bytes, 0);
+		
+		if(len < 0)
+		{
+			if(errno == EAGAIN);
+				continue;
+			perror("send");
+			dispose_event(event);
+			return;
+		}
+		else if(len == 0)
+		{
+			dispose_event(event);
+			return;
+		}
+		
+		event->pending_bytes -= len;
+		event->send_buf_cur += len;
+	} while(errno == EAGAIN);
+
+
+	if(event->pending_bytes > 0)
 	{
 		epoll_event ev;
 		ev.events = EPOLLOUT | EPOLLET | EPOLLONESHOT;
 		ev.data.fd = event->socket_fd;
 		ev.data.ptr = event;
-		epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev);
+		
+		if(epoll_ctl(epollfd, EPOLL_CTL_MOD, event->socket_fd, &ev) == -1)
+		{
+			dispose_event(event);
+			return;
+		}
+	}
+	else
+	{
+		//Send complete
+	
+		//Clean up send buffer
+		if(event->free_send_buffer)
+		{
+			free(event->send_buf_start);
+		}		
+		event->free_send_buffer = false;
+		event->send_buf_start = event->send_buf_cur = NULL;
+	
+		//Otherwise, start processing the next request
+		process_header(event, false);
 	}
 }
 
@@ -663,7 +894,7 @@ void* HttpServer::worker_start(void* arg)
 {
 	((HttpServer*)arg)->worker_loop();
 	
-	printf("WORKER DEAD\n");
+	printf("Worker stopped\n");
 	
 	pthread_exit(0);
 	return NULL;
@@ -688,10 +919,11 @@ void HttpServer::worker_loop()
 	
 		for(int i=0; i<nfds; ++i)
 		{
-			HttpEvent* event = (HttpEvent*)events[i].data.ptr;
+			SocketEvent* event = (SocketEvent*)events[i].data.ptr;
 			
 			if( (events[i].events & EPOLLHUP) ||
-				(events[i].events & EPOLLERR) )
+				(events[i].events & EPOLLERR) ||
+				(events[i].events & EPOLLRDHUP) )
 			{
 				dispose_event(event);
 			}

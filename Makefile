@@ -38,7 +38,7 @@ protodir = proto
 INC_PATH = -I$(srcdir) -I/usr/local/include
 
 # libraries link options ('-lm' is common to link with the math library)
-LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -pthread -ldl -ltcmalloc -lm -lc
+LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -pthread -ldl -lm -lc
 
 # other compilation options
 COMPILE_OPTS = -pthread -msse2 -Wno-deprecated
@@ -96,6 +96,7 @@ else
   # build options for GOAL_EXE (optimized executable) goal
   ifeq "$(MAKECMDGOALS)" "$(GOAL_EXE)"
 
+   LNK_LIBS = $(LNK_LIBS) -ltcmalloc
    # specific options for optimized executable
    GOAL_OPTS = -s
    # compilation verification options

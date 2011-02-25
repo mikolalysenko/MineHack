@@ -2,6 +2,7 @@
 #define HTTP_SERVER_H
 
 #include <pthread.h>
+#include <netinet/in.h>
 
 #include <string>
 #include <map>
@@ -15,7 +16,9 @@
 
 namespace Game {
 
-	enum HttpEventState
+	class HttpServer;
+
+	enum SocketEventState
 	{
 		Listening,
 		WaitForHeader,
@@ -24,28 +27,48 @@ namespace Game {
 		Sending
 	};
 
-	//An HTTP client event packet
-	struct HttpEvent
+	//The internal HTTP client event packet structure
+	//Generally speaking, this is only used inside the http server.  Users interact with
+	// HttpEvent
+	struct SocketEvent
 	{
-		//Don't ever call these
-		HttpEvent();
-		~HttpEvent();
+		SocketEvent(int fd, bool listener);
+		~SocketEvent();
 	
 		//The internal socket file descriptor
 		int socket_fd;
 		
-		//State for the event
-		HttpEventState state;
+		//Socket address
+		sockaddr_storage addr;
 		
-		//Memory buffers
-		bool no_delete;
-		int buf_size, content_length, pending_bytes;
-		char *buf_start, *buf_cur, *content_ptr;
+		//State for the event
+		SocketEventState state;
+		
+		//Recv buffer stuff
+		int recv_buf_size, content_length, pending_bytes;
+		char *recv_buf_start, *recv_buf_cur, *content_ptr;
+		
+		//Send buffer stuff
+		bool free_send_buffer;		//If set, dispose of send buffer on send completion
+		char *send_buf_start, *send_buf_cur;
 		
 		//Try parsing the request
 		int try_parse(char** request, int* request_len, char** content_start, int* content_length);
 	};
-
+	
+	//The external interface to the HttpEvent server
+	struct HttpEvent
+	{
+		HttpEvent();
+		~HttpEvent();
+		
+		void reply(void* buf, int len);
+		
+	private:
+		SocketEvent*	socket_event;
+		HttpServer*		server;
+	};
+	
 	//The callback function type
 	typedef bool (*http_func)(HttpEvent*);
 
@@ -73,16 +96,17 @@ namespace Game {
 		int epollfd;
 		pthread_spinlock_t event_map_lock;
 		TCMAP* event_map;
-		HttpEvent* create_event(int fd, bool add_epoll = true);
-		void dispose_event(HttpEvent* event);
+		SocketEvent* create_event(int fd, bool listener = false);
+		void dispose_event(SocketEvent* event);
 		void cleanup_events();
 		
 		//Event handlers
-		void accept_event(HttpEvent* event);
-		void process_header(HttpEvent* event);
-		void process_cached_request(HttpEvent* event, char* req, int req_len);
-		void process_recv(HttpEvent* event);
-		void process_send(HttpEvent* event);
+		void accept_event(SocketEvent* event);
+		void process_header(SocketEvent* event, bool do_recv = true);
+		void process_cached_request(SocketEvent* event, char* req, int req_len);
+		void process_command(SocketEvent* event);
+		void process_recv(SocketEvent* event);
+		void process_send(SocketEvent* event);
 		
 		//Worker stuff
 		pthread_t workers[NUM_HTTP_WORKERS];
