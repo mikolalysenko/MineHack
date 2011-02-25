@@ -15,22 +15,35 @@
 
 namespace Game {
 
-
-	//The network event wrapper
-	enum HttpEventType
+	enum HttpEventState
 	{
-		Connect,
-		Send,
-		Recv
+		Listening,
+		WaitForHeader,
+		Receiving,
+		Processing,
+		Sending
 	};
-	
+
 	//An HTTP client event packet
 	struct HttpEvent
 	{
-		HttpEventType type;
-		Network::ClientPacket client_packet;
+		//Don't ever call these
+		HttpEvent();
+		~HttpEvent();
+	
+		//The internal socket file descriptor
+		int socket_fd;
 		
-		void reply(google::protobuf::Message& message);
+		//State for the event
+		HttpEventState state;
+		
+		//Memory buffers
+		bool no_delete;
+		int buf_size, content_length, pending_bytes;
+		char *buf_start, *buf_cur, *content_ptr;
+		
+		//Try parsing the request
+		int try_parse(char** request, int* request_len, char** content_start, int* content_length);
 	};
 
 	//The callback function type
@@ -51,11 +64,25 @@ namespace Game {
 		//Configuration stuff
 		Config* config;
 		http_func callback;
-		
-		//Server parameters
+
+		//Basic server stuff
 		volatile bool running;
-		int epollfd, listen_socket, living_threads;
-		HttpEvent* listen_event;
+		int living_threads;
+		
+		//Event stuff
+		int epollfd;
+		pthread_spinlock_t event_map_lock;
+		TCMAP* event_map;
+		HttpEvent* create_event(int fd, bool add_epoll = true);
+		void dispose_event(HttpEvent* event);
+		void cleanup_events();
+		
+		//Event handlers
+		void accept_event(HttpEvent* event);
+		void process_header(HttpEvent* event);
+		void process_cached_request(HttpEvent* event, char* req, int req_len);
+		void process_recv(HttpEvent* event);
+		void process_send(HttpEvent* event);
 		
 		//Worker stuff
 		pthread_t workers[NUM_HTTP_WORKERS];

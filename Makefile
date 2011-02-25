@@ -10,10 +10,10 @@
 EXE = a.out
 
 # C++ compiler
-CXX = llvm-g++ -std=c++0x
+CXX = g++ -std=c++0x
 
 # C compiler
-CC = llvm-gcc
+CC = gcc
 
 #Protocol buffer compiler
 PROTOC = protoc
@@ -83,6 +83,7 @@ else
 
   # specific options for profiling
   GOAL_OPTS = -pg
+   
   # compilation verification options
   WARN_OPTS = $(BWARN_OPTS)
   # optimization options
@@ -100,9 +101,12 @@ else
    # compilation verification options
    WARN_OPTS = $(BWARN_OPTS)
    # optimization options
-   OPTIMISE_OPTS = -O3 -fomit-frame-pointer
+   OPTIMISE_OPTS = -O4 -fomit-frame-pointer
    # dependencies must be up to date
    CHECK_DEPS = yes
+   
+   CXX = llvm-g++ -std=c++0x
+   CC = llvm-gcc
 
   else
 

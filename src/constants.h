@@ -7,6 +7,8 @@
 #define NUM_HTTP_WORKERS		5
 #define MAX_EPOLL_EVENTS		10
 #define LISTEN_BACKLOG			3
+#define RECV_BUFFER_SIZE		0x10000
+#define EPOLL_TIMEOUT			400
 
 //Constants for different buffer sizes
 #define PASSWORD_HASH_LEN		64

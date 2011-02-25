@@ -41,7 +41,12 @@ void init_app()
 	}
 
 	printf("Starting app\n");
-	server->start();
+	if(!server->start())
+	{
+		server->stop();
+		printf("Failed to start server\n");
+		return;
+	}
 	
 	app_running = true;
 }
