@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <iostream>
 
+#include <tcutil.h>
+
 #include "network.pb.h"
 #include "login.pb.h"
 
@@ -28,6 +30,15 @@ HttpServer* server;
 //Handles an http event
 bool callback(HttpEvent* event)
 {
+	Network::ServerPacket response_packet;
+	
+	response_packet.set_test_number(42);
+	
+	printf("got input from client: %d\n", event->client_packet->test_packet().test());
+	
+	event->reply(response_packet);
+
+	delete event;
 	return true;
 }
 
@@ -120,6 +131,19 @@ void console_loop()
 //Program start point
 int main(int argc, char** argv)
 {
+	uint8_t test_buffer[] = { 18, 5, 8, 181, 149, 149, 48 };
+	
+	int sz;
+	uint8_t* buf = (uint8_t*)tcdeflate((const char*)test_buffer, sizeof(test_buffer), &sz);
+
+	printf("deflate stream, sz = %d, data = ", sz);
+	for(int i=0; i<sz; ++i)
+	{
+		printf("%d,", buf[i]);
+	}
+	printf("\n");
+
+
 	//Verify protocol buffers are working correctly
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 

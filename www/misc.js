@@ -1,6 +1,6 @@
 "use strict";
 
-function print(str)
+function printf(str)
 {
 	if(typeof(console) == 'undefined')
 	{
@@ -8,49 +8,57 @@ function print(str)
 	}
 	else
 	{
-		//console.log(str);
+		console.log(str);
 	}
 }
 
 
-function asyncGetBinary(url, handler, err_handler, body)
+function sendProtoBuf(pbuf, oncomplete, onerror, timeout)
 {
-	var XHR = new XMLHttpRequest();
+	//Encode protocol buffer
+	var data = new PROTO.ByteArrayStream;
+	pbuf.SerializeToStream(data);
 	
-	XHR.open("POST", url, true);
+	//Compress data
+	
+	var compressed = RawDeflate.deflate(data.array_),
+		arr = new Uint8Array(compressed),
+		bb = new BlobBuilder;
+	bb.append(arr.buffer);
+	
+	//Build request
+	var XHR = new XMLHttpRequest;
+	
+	XHR.open("POST", "/", true);
 	XHR.onreadystatechange = function()
 	{
-		print("ready state = " + XHR.readyState);
-	
 		if(XHR.readyState == 4)
 		{
 			if(XHR.status == 200)
 			{
-				var str = XHR.responseText;
-				var arr = new Uint8Array(str.length);
-				
-				for(var i=0; i<str.length; i++)
+				var str = XHR.responseText,
+					arr = new Array(str.length),
+					i;
+					
+				for(i=0; i<str.length; i++)
 				{
 					arr[i] = str.charCodeAt(i) & 0xff;
 				}
-			
-				handler(arr);
+
+				var msg = new Network.ServerPacket;
+				msg.ParseFromStream(new PROTO.ByteArrayStream(arr));
+				
+				//Call handler
+				oncomplete(msg);
 			}
 			else
 			{
-				err_handler();
+				//Call error handler
+				onerror();
 			}
 		}
 	}
-	XHR.send(body);
-}
-
-function arr2str(arr)
-{
-	var str = "";
-	for(var i=0; i<arr.length; i++)
-	{
-		str += String.fromCharCode(arr[i] + 0xB0);
-	}
-	return str;
+	
+	//Encode blob
+	XHR.send(bb.getBlob("application/octet-stream"));
 }

@@ -44,16 +44,23 @@ namespace Game {
 		//State for the event
 		SocketEventState state;
 		
+		//Amount of pending bytes for current send/recv
+		int pending_bytes;
+		
+		//Pointer to packet contents		
+		int content_length;
+		char* content_ptr;
+		
 		//Recv buffer stuff
-		int recv_buf_size, content_length, pending_bytes;
-		char *recv_buf_start, *recv_buf_cur, *content_ptr;
+		int recv_buf_size;
+		char *recv_buf_start, *recv_buf_cur;
 		
 		//Send buffer stuff
-		bool free_send_buffer;		//If set, dispose of send buffer on send completion
+		bool free_send_buffer;
 		char *send_buf_start, *send_buf_cur;
 		
 		//Try parsing the request
-		int try_parse(char** request, int* request_len, char** content_start, int* content_length);
+		int try_parse(char** request, int* request_len);
 	};
 	
 	//The external interface to the HttpEvent server
@@ -63,8 +70,8 @@ namespace Game {
 		~HttpEvent();
 		
 		//Sends a reply
-		bool reply(void* buf, int len, bool free_on_send_complete = true);
-		bool reply(google::protobuf::Message* message);
+		bool reply(void* buf, int len, bool release);
+		bool reply(Network::ServerPacket& message);
 		
 		//The client packet data
 		Network::ClientPacket* client_packet;
@@ -89,7 +96,7 @@ namespace Game {
 		
 		//DO NOT CALL THESE METHODS.  They are used internally
 		void dispose_event(SocketEvent* event);
-		bool initiate_send(SocketEvent* event);
+		bool initiate_send(SocketEvent* event, void* buf, int len, bool release);
 		
 	private:
 

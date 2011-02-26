@@ -363,8 +363,7 @@ var zip_SMALLER = function(tree, n, m) {
 var zip_read_buff = function(buff, offset, n) {
     var i;
     for(i = 0; i < n && zip_deflate_pos < zip_deflate_data.length; i++)
-	buff[offset + i] =
-	    zip_deflate_data.charCodeAt(zip_deflate_pos++) & 0xff;
+	buff[offset + i] = zip_deflate_data[zip_deflate_pos++];
     return i;
 }
 
@@ -1652,17 +1651,20 @@ var zip_deflate = function(str, level) {
 	level = zip_DEFAULT_LEVEL;
     zip_deflate_start(level);
 
-    var buff = new Array(1024);
-    var aout = [];
-    while((i = zip_deflate_internal(buff, 0, buff.length)) > 0) {
-	var cbuf = new Array(i);
-	for(j = 0; j < i; j++){
-	    cbuf[j] = String.fromCharCode(buff[j]);
-	}
-	aout[aout.length] = cbuf.join("");
+    var aout = new Array(str.length + 1024);
+    i = 0;
+    
+    while(true)
+    {
+    	j = zip_deflate_internal(aout, i, 1024);
+    	i += j;    	
+    	if( j == 0 )
+    		break;
     }
+    
+    aout.length = i;
     zip_deflate_data = null; // G.C.
-    return aout.join("");
+    return aout;
 }
 
 if (! window.RawDeflate) RawDeflate = {};
