@@ -1642,25 +1642,45 @@ var zip_qoutbuf = function() {
     }
 }
 
-var zip_deflate = function(str, level) {
-    var i, j;
+var zip_deflate = function(str) {
+    var i, j, k;
 
     zip_deflate_data = str;
     zip_deflate_pos = 0;
-    if(typeof level == "undefined")
-	level = zip_DEFAULT_LEVEL;
-    zip_deflate_start(level);
+    zip_deflate_start(9);
 
-    var aout = new Array(str.length + 1024);
+    var aout = new Array(2*str.length + 1024);
     i = 0;
+    
+    //Write header
+    aout[0] = 120;
+    aout[1] = 156;
+    
+    var s1 = 1, s2 = 0;    
+	for(k=0;k<2;++k)
+	{
+		s1 = (s1 + aout[i++])%65521;
+		s2 = (s2 + s1)%65521;
+	}
     
     while(true)
     {
-    	j = zip_deflate_internal(aout, i, 1024);
-    	i += j;    	
+    	j = zip_deflate_internal(aout, i, 1024);    	
     	if( j == 0 )
     		break;
+    		
+    	for(k=0;k<j;++k)
+    	{
+    		s1 = (s1 + aout[i++])%65521;
+    		s2 = (s2 + s1)%65521;
+    	}
     }
+    
+    //Write check sum
+    aout[i] = s1 >> 8;
+    aout[i+1] = s1 & 0xff;
+    aout[i++] = s2 >> 8;
+    aout[i++] = s2 & 0xff;
     
     aout.length = i;
     zip_deflate_data = null; // G.C.

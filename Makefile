@@ -214,7 +214,7 @@ $(GOAL_PROF):	$(GOAL_EXE) $(protojs)
 
 valgrind: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
-	valgrind --leak-check=full --log-file=valgrind.log ./$(exe) > run.log
+	valgrind -v --track-origins=yes --leak-check=full --log-file=valgrind.log ./$(exe)
 
 test: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &

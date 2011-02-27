@@ -16,13 +16,11 @@
 #include <vector>
 #include <string>
 
-#include <tcutil.h>
-
-#include <google/protobuf/message.h>
 #include <google/protobuf/io/zero_copy_stream.h>
-#include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <google/protobuf/io/gzip_stream.h>
-#include <google/protobuf/io/coded_stream.h>
+
+#include <tcutil.h>
 
 #include "constants.h"
 #include "config.h"
@@ -33,6 +31,7 @@
 
 using namespace std;
 using namespace Game;
+using namespace google::protobuf::io;
 
 const char DEFAULT_ERROR_RESPONSE[] = 
 	"HTTP/1.1 403 Forbidden\n\n";
@@ -790,6 +789,7 @@ extern char* (*_tc_inflate)(const char *ptr, int size, int *sp, int mode);
 
 void HttpServer::process_command(SocketEvent* event)
 {
+	/*
 	int remaining_bytes = (int)(event->recv_buf_cur - event->content_ptr);
 	printf("Remaining bytes = %d\n", remaining_bytes);
 	fflush(stdout);
@@ -810,6 +810,30 @@ void HttpServer::process_command(SocketEvent* event)
 	{
 		delete packet;
 		dispose_event(event);
+		return;
+	}
+	*/
+	
+	
+	printf("UNPACKING\n");
+	ZeroCopyInputStream *input = new ArrayInputStream(event->content_ptr, event->content_length);
+	ZeroCopyInputStream *zinput = new GzipInputStream(input);
+	CodedInputStream *coded_input = new CodedInputStream(zinput);
+	
+	printf("READING PACKET-------------\n");
+	auto packet = new Network::ClientPacket();
+	bool success = packet->MergePartialFromCodedStream(coded_input);
+	
+	printf("SUCCESS = %d---------------------\n", success);
+	
+	delete coded_input;
+	delete zinput;
+	delete input;
+	
+	if(!success)
+	{
+		printf("Merge partial failed\n");
+		delete packet;
 		return;
 	}
 	

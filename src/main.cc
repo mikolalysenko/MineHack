@@ -28,7 +28,7 @@ Config* config;
 HttpServer* server;
 
 //Handles an http event
-bool callback(HttpEvent* event)
+void callback(HttpEvent* event)
 {
 	Network::ServerPacket response_packet;
 	
@@ -37,9 +37,7 @@ bool callback(HttpEvent* event)
 	printf("got input from client: %d\n", event->client_packet->test_packet().test());
 	
 	event->reply(response_packet);
-
 	delete event;
-	return true;
 }
 
 //Server initialization
@@ -131,18 +129,33 @@ void console_loop()
 //Program start point
 int main(int argc, char** argv)
 {
-	uint8_t test_buffer[] = { 18, 5, 8, 181, 149, 149, 48 };
-	
-	int sz;
-	uint8_t* buf = (uint8_t*)tcdeflate((const char*)test_buffer, sizeof(test_buffer), &sz);
-
-	printf("deflate stream, sz = %d, data = ", sz);
-	for(int i=0; i<sz; ++i)
 	{
-		printf("%d,", buf[i]);
+		uint8_t test_buffer[] = { 18, 4, 8, 183, 211, 61 };
+		uint8_t test_deflate[] = { 120, 156, 19, 98, 225, 216, 126, 217, 3, 134, 10, 68 };
+		int sz1, sz2;
+		uint8_t* buf1 = (uint8_t*)tcdeflate((const char*)test_buffer, sizeof(test_buffer), &sz1);
+		uint8_t* buf2 = (uint8_t*)tcinflate((const char*)test_deflate, sizeof(test_deflate), &sz2);
+		
+		for(int i=0; i<sz1; ++i)
+		{
+			printf("%d,", buf1[i]);
+		}
+		printf("\n");
+		
+		if(buf2)
+		{
+			for(int i=0; i<sz2; ++i)
+			{
+				printf("%d,", buf2[i]);
+			}
+			printf("\n");
+		}
+		else
+			printf("Failed to deflate\n");
+			
+		free(buf1);
+		free(buf2);
 	}
-	printf("\n");
-
 
 	//Verify protocol buffers are working correctly
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
