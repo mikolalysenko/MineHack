@@ -1659,9 +1659,11 @@ var zip_deflate = function(str) {
     var s1 = 1, s2 = 0;    
 	for(k=0;k<2;++k)
 	{
-		s1 = (s1 + aout[i++])%65521;
-		s2 = (s2 + s1)%65521;
+    		s1 = s1 + aout[i++];
+    		s2 = s2 + s1;
 	}
+	s1 = s1 % 65521;
+	s2 = s2 % 65521;
     
     while(true)
     {
@@ -1671,14 +1673,16 @@ var zip_deflate = function(str) {
     		
     	for(k=0;k<j;++k)
     	{
-    		s1 = (s1 + aout[i++])%65521;
-    		s2 = (s2 + s1)%65521;
+    		s1 = s1 + aout[i++];
+    		s2 += s1;
     	}
+    	s1 = s1 % 65521;
+    	s2 = s2 % 65521;
     }
     
     //Write check sum
-    aout[i] = s1 >> 8;
-    aout[i+1] = s1 & 0xff;
+    aout[i++] = s1 >> 8;
+    aout[i++] = s1 & 0xff;
     aout[i++] = s2 >> 8;
     aout[i++] = s2 & 0xff;
     

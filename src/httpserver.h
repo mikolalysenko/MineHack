@@ -84,57 +84,6 @@ namespace Game {
 		HttpServer*		server;
 	};
 	
-	//A thread safe event queue
-	//User is responsible for removing all pending events
-	struct HttpEventQueue
-	{
-		HttpEventQueue();
-		~HttpEventQueue();
-		
-		HttpEvent* pop()
-		{
-			HttpEvent* res;
-			pthread_spin_lock(&lock);
-			res = head;
-			if(res)
-			{
-				head = res->next;
-				if(res == tail)
-					tail = NULL;
-			}
-			pthread_spin_unlock(&lock);
-			res->next = NULL;
-			return res;
-		}
-		
-		void push(HttpEvent* event)
-		{
-			event->next = NULL;
-			pthread_spin_lock(&lock);
-			if(tail)
-			{
-				tail->next = event;
-				tail = event;
-			}
-			else
-			{
-				head = event;
-			}	
-			pthread_spin_unlock(&lock);
-		}
-		
-		bool empty()
-		{
-			bool res;
-			pthread_spin_lock(&lock);
-			res = (head == NULL);
-			pthread_spin_unlock(&lock);
-		}
-
-	private:
-		HttpEvent *head, *tail;
-		pthread_spinlock_t lock;
-	};
 	
 	//The callback function type
 	typedef void (*http_func)(HttpEvent*);

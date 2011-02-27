@@ -101,5 +101,55 @@ struct ScopeTCMap
 	}
 };
 
+//A thread safe queue
+// T must have a field called next with type T*
+template<typename T> struct SpinQueue
+{
+	SpinQueue();
+	~SpinQueue();
+	
+	T* pop()
+	{
+		T* res;
+		pthread_spin_lock(&lock);
+		res = head;
+		if(res)
+		{
+			head = res->next;
+			if(res == tail)
+				tail = NULL;
+		}
+		pthread_spin_unlock(&lock);
+		res->next = NULL;
+		return res;
+	}
+	
+	void push(T* event)
+	{
+		event->next = NULL;
+		pthread_spin_lock(&lock);
+		if(tail)
+		{
+			tail->next = event;
+			tail = event;
+		}
+		else
+		{
+			head = event;
+		}	
+		pthread_spin_unlock(&lock);
+	}
+	
+	bool empty()
+	{
+		return head == NULL;
+	}
+
+private:
+	T *head, *tail;
+	pthread_spinlock_t lock;
+};
+	
+
 
 #endif

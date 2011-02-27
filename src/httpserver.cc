@@ -510,12 +510,23 @@ SocketEvent* HttpServer::create_event(int fd, bool listener)
 	bool success = tcmapputkeep(event_map, &fd, sizeof(fd), &result, sizeof(result));
 	pthread_spin_unlock(&event_map_lock);
 	
+	//Set socket to non blocking
+	int flags = fcntl(fd, F_GETFL, 0);
+	if (flags == -1)
+		flags = 0;
+	if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+	{
+		perror("fcntl");
+		delete result;
+		return NULL;
+	}
+	
 	if(success)
 	{
 		if(listener)
 		{
 			epoll_event ev;
-			ev.events = EPOLLIN | EPOLLPRI;
+			ev.events = EPOLLIN;
 			ev.data.fd = fd;
 			ev.data.ptr = result;
 
@@ -528,17 +539,7 @@ SocketEvent* HttpServer::create_event(int fd, bool listener)
 		}
 		else
 		{
-			//Set socket to non blocking
-			int flags = fcntl(fd, F_GETFL, 0);
- 			if (flags == -1)
-        		flags = 0;
-        	if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
-        	{
-        		perror("fcntl");
-        		delete result;
-        		return NULL;
-        	}
-        	
+			
         	//Add to epoll
 			epoll_event ev;
 			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
@@ -719,56 +720,54 @@ void HttpServer::stop()
 
 void HttpServer::accept_event(SocketEvent* event)
 {
-
 	int addr_size = sizeof(event->addr);
 	int conn_fd = accept(event->socket_fd, (sockaddr*)&(event->addr), (socklen_t*)&addr_size);
 	
 	if(conn_fd == -1)
 	{
+		printf("ERROR ACCEPTING!!!!!!!!!!!!\n");
 		perror("accept");
+		return;
 	}
-	else
-	{
-		printf("Got connection from address: ");
-
-		sa_family_t fam = event->addr.ss_family;
-		if(fam == AF_INET)
-		{
-			sockaddr_in *in_addr = (sockaddr_in*)(void*)&(event->addr);
-			
-			uint8_t* ip = (uint8_t*)(void*)&in_addr->sin_addr.s_addr;
-			uint16_t port = in_addr->sin_port;
-			
-			for(int i=0; i<4; ++i)
-			{
-				if(i != 0)
-					printf(".");
-				printf("%d", ip[i]);
-			}
-			printf(":%d\n", port);
-		}
-		else if(fam == AF_INET6)
-		{
-			sockaddr_in6 *in_addr = (sockaddr_in6*)(void*)&(event->addr);
-			
-			uint8_t* ip = in_addr->sin6_addr.s6_addr;
-			uint16_t port = in_addr->sin6_port;
-			
-			for(int i=0; i<8; ++i)
-			{
-				if(i != 0)
-					printf(".");
-				printf("%d", ip[i]);
-			}
-			printf(":%d\n", port);
-		}
-
-		//FIXME: Maybe check black list here, deny connections from ahole ip addresses
 	
-		if(create_event(conn_fd) == NULL)
+	printf("Got connection from address: ");
+	sa_family_t fam = event->addr.ss_family;
+	if(fam == AF_INET)
+	{
+		sockaddr_in *in_addr = (sockaddr_in*)(void*)&(event->addr);
+		
+		uint8_t* ip = (uint8_t*)(void*)&in_addr->sin_addr.s_addr;
+		uint16_t port = in_addr->sin_port;
+		
+		for(int i=0; i<4; ++i)
 		{
-			printf("Error accepting connection\n");
+			if(i != 0)
+				printf(".");
+			printf("%d", ip[i]);
 		}
+		printf(":%d\n", port);
+	}
+	else if(fam == AF_INET6)
+	{
+		sockaddr_in6 *in_addr = (sockaddr_in6*)(void*)&(event->addr);
+		
+		uint8_t* ip = in_addr->sin6_addr.s6_addr;
+		uint16_t port = in_addr->sin6_port;
+		
+		for(int i=0; i<8; ++i)
+		{
+			if(i != 0)
+				printf(".");
+			printf("%d", ip[i]);
+		}
+		printf(":%d\n", port);
+	}
+
+	//FIXME: Maybe check black list here, deny connections from ahole ip addresses
+
+	if(create_event(conn_fd) == NULL)
+	{
+		printf("Error accepting connection\n");
 	}
 }
 
@@ -783,57 +782,13 @@ void HttpServer::process_cached_request(SocketEvent* event, char* req, int req_l
 }
 
 //Process the pending request
-
-//This is evil,  but needed since we are sending only the raw zlib data.
-extern char* (*_tc_inflate)(const char *ptr, int size, int *sp, int mode);
-
 void HttpServer::process_command(SocketEvent* event)
 {
-	/*
-	int remaining_bytes = (int)(event->recv_buf_cur - event->content_ptr);
-	printf("Remaining bytes = %d\n", remaining_bytes);
-	fflush(stdout);
-	assert(remaining_bytes >= event->content_length);
-
-	//First, unpack the client input protocol buffer
-	int sz = event->content_length;
-	ScopeFree G((*_tc_inflate)(event->content_ptr, event->content_length, &sz, 1));
-	
-	if(G.ptr == NULL)
-	{
-		dispose_event(event);
-		return;
-	}
-	
 	auto packet = new Network::ClientPacket();
-	if(!packet->ParseFromArray(G.ptr, sz))
+	if(!packet->ParseFromArray(event->content_ptr, event->content_length))
 	{
 		delete packet;
 		dispose_event(event);
-		return;
-	}
-	*/
-	
-	
-	printf("UNPACKING\n");
-	ZeroCopyInputStream *input = new ArrayInputStream(event->content_ptr, event->content_length);
-	ZeroCopyInputStream *zinput = new GzipInputStream(input);
-	CodedInputStream *coded_input = new CodedInputStream(zinput);
-	
-	printf("READING PACKET-------------\n");
-	auto packet = new Network::ClientPacket();
-	bool success = packet->MergePartialFromCodedStream(coded_input);
-	
-	printf("SUCCESS = %d---------------------\n", success);
-	
-	delete coded_input;
-	delete zinput;
-	delete input;
-	
-	if(!success)
-	{
-		printf("Merge partial failed\n");
-		delete packet;
 		return;
 	}
 	
@@ -855,7 +810,7 @@ void HttpServer::process_header(SocketEvent* event, bool do_recv)
 		int buf_len = event->recv_buf_size - (int)(event->recv_buf_cur - event->recv_buf_start);
 		int len = recv(event->socket_fd, event->recv_buf_cur, buf_len, 0);
 	
-		if(len < 0)
+		if(len < 0 )
 		{
 			if(errno == EAGAIN)
 				continue;
@@ -871,7 +826,13 @@ void HttpServer::process_header(SocketEvent* event, bool do_recv)
 	
 		event->recv_buf_cur += len;
 		
-	} while(errno != EAGAIN);
+	} while(running && errno != EAGAIN);
+	
+	if(!running)
+	{
+		dispose_event(event);
+		return;
+	}
 		
 	//Try parsing http header
 	char *req;
@@ -981,7 +942,13 @@ void HttpServer::process_recv(SocketEvent* event)
 		event->pending_bytes -= len;
 		event->recv_buf_cur += len;
 		
-	} while(errno != EAGAIN);
+	} while(running && errno != EAGAIN);
+	
+	if(!running)
+	{
+		dispose_event(event);
+		return;
+	}
 	
 	if(event->pending_bytes <= 0)
 	{
@@ -1027,7 +994,13 @@ void HttpServer::process_send(SocketEvent* event)
 		
 		event->pending_bytes -= len;
 		event->send_buf_cur += len;
-	} while(errno == EAGAIN);
+	} while(running && errno == EAGAIN);
+
+	if(!running)
+	{
+		dispose_event(event);
+		return;
+	}
 
 
 	if(event->pending_bytes <= 0)

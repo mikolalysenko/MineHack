@@ -19,10 +19,8 @@ function sendProtoBuf(pbuf, oncomplete, onerror, timeout)
 	var data = new PROTO.ByteArrayStream;
 	pbuf.SerializeToStream(data);
 	
-	//Compress data
-	
-	var compressed = RawDeflate.deflate(data.array_),
-		arr = new Uint8Array(compressed),
+	//Encode as binary
+	var arr = new Uint8Array(data.array_),
 		bb = new BlobBuilder;
 	bb.append(arr.buffer);
 	
