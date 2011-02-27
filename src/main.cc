@@ -13,6 +13,7 @@
 
 #include "constants.h"
 #include "config.h"
+#include "login.h"
 #include "httpserver.h"
 #include "misc.h"
 
@@ -24,20 +25,116 @@ bool app_running = false;
 //The global config file
 Config* config;
 
+//Login database
+LoginDB* login_db;
+
 //The HttpServer
 HttpServer* server;
+
+//Sends a nice error message to the client
+void reply_error(HttpEvent* event, string& message)
+{
+	Network::ErrorResponse err_response;
+	err_response.set_error_message(message);
+	
+	Network::ServerPacket response;
+	response.set_err_response(err_response);
+	
+	event->reply(response);
+}
+
+//Handles a login request
+void handle_login(HttpEvent* event, Network::LoginRequest& login_req)
+{
+	if(!login_req.has_user_name())
+	{
+		reply_error(event, "Missing user name");
+		return;
+	}
+	else if(!login_req.has_password_hash())
+	{
+		reply_error(event, "Missing password hash");
+		return;
+	}
+	else if(!login_req.has_action())
+	{
+		reply_error(event, "Missing login action");
+		return;
+	}
+	
+	Network::LoginResponse response;
+	
+	switch(login_req.action())
+	{
+	case Network::LoginRequest::LoginAction::LoginAccount:
+	{
+		Login::Account account;
+		if(!login_db->get_account(login_req.user_name(), account) ||
+			account.password_hash != login_req.password_hash)
+		{
+			reply_error(event, "Invalid user name/password");
+			return;
+		}
+		
+		response.set_success(true);
+		
+		//FIXME: Create session here
+	}
+	break;
+	
+	case Network::LoginRequest::LoginAction::CreateAccount:
+	{
+		if(!login_db->create_account(login_req.user_name(), login_req.password_hash())
+		{
+			reply_error(event, "User name is already in user");
+			return;
+		}
+		
+		response.set_success(true);
+		
+		Login::Account account;
+		login_db->get_account(login_req.user_name(), account);
+		
+		//FIXME: Create session here
+	}
+	break;
+
+	case Network::LoginRequest::LoginAction::DeleteAccount:
+	{
+		Login::Account account;
+		if(!login_db->get_account(login_req.user_name(), account) ||
+			account.password_hash != login_req.password_hash ||
+			!login_db->delete_account(login_req.user_name()) )
+		{
+			reply_error(event, "Invalid user name/password");
+			return;
+		}
+		
+		response.set_success(true);
+	}
+	break;
+	}
+	
+	//Reply with response packet
+	Network::ServerPacket packet;
+	packet.set_login_packet(response);
+	event->reply(packet);
+}
 
 //Handles an http event
 void callback(HttpEvent* event)
 {
-	Network::ServerPacket response_packet;
-	
-	response_packet.set_test_number(42);
-	
-	printf("got input from client: %d\n", event->client_packet->test_packet().test());
-	
-	event->reply(response_packet);
-	delete event;
+	if(event->client_packet->has_login_packet())
+	{
+		handle_login(event, event->client_packet->login_packet());
+		delete event;
+	}
+	else
+	{
+		//Client is fucking with us.  Send them a nasty error message.
+		event->error();
+		delete event;
+	}
 }
 
 //Server initialization
@@ -50,10 +147,18 @@ void init_app()
 	}
 
 	printf("Starting app\n");
+	
+	if(!login_db->start())
+	{
+		login_db->stop();
+		printf("Failed to start login database\n");
+		return;
+	}
+	
 	if(!server->start())
 	{
 		server->stop();
-		printf("Failed to start server\n");
+		printf("Failed to start http server\n");
 		return;
 	}
 	
@@ -71,9 +176,27 @@ void shutdown_app()
 	}
 
 	printf("Stopping app\n");
+	
+	printf("Stopping http server\n");
 	server->stop();
 	
+	printf("Stopping login database\n");
+	login_db->stop();
+	
 	app_running = false;
+}
+
+//Saves the state of the entire game to the database
+void sync()
+{
+	if(!app_running)
+	{
+		printf("App is not running\n");
+		return;
+	}
+	
+	printf("Synchronizing login\n");
+	login_db->sync();
 }
 
 //This loop runs in the main thread.  Implements the admin console
@@ -100,6 +223,10 @@ void console_loop()
 			{
 				printf("App not running");
 			}
+		}
+		else if(command == "s" || command == "sync")
+		{
+			sync();
 		}
 		else if(command == "stop")
 		{
@@ -148,8 +275,9 @@ int main(int argc, char** argv)
 	srand(time(NULL));
 
 	printf("Allocating objects\n");
-	auto G1 = ScopeDelete<Config>(config = new Config("data/config.tc"));
-	auto G2 = ScopeDelete<HttpServer>(server = new HttpServer(config, callback));
+	auto GC = ScopeDelete<Config>(config = new Config("data/config.tc"));
+	auto GL = ScopeDelete<LoginDB>(login_db = new LoginDB(config));
+	auto GS = ScopeDelete<HttpServer>(server = new HttpServer(config, callback));
 
 	init_app();
 	console_loop();

@@ -82,8 +82,12 @@ void Config::resetDefaults()
 {
 	tchdbvanish(config_db);
 	
+	//HttpServer defaults
 	storeString("wwwroot", "www");
 	storeInt("listenport", 8081);
+	
+	//Login database defaults
+	storeString("login_db_path", "data/login.tc");
 }
 
 };

@@ -73,6 +73,9 @@ namespace Game {
 		bool reply(void* buf, int len, bool release);
 		bool reply(Network::ServerPacket& message);
 		
+		//Sends a 403 forbidden
+		bool error();
+		
 		//The client packet data
 		Network::ClientPacket* client_packet;
 		

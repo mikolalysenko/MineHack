@@ -1,179 +1,50 @@
 package Network;
 
-//A ChunkID
-message ChunkID {
-	optional uint32 x = 1;
-	optional uint32 y = 2;
-	optional uint32 z = 3;
+//--------------------------------------------------------
+// An error response
+//--------------------------------------------------------
+message ErrorResponse {
+	optional int32	error_number = 1;
+	optional string error_message = 2;
 }
 
-//A chunk
-message Chunk {
+//--------------------------------------------------------
+// Login messages
+//--------------------------------------------------------
+message LoginResponse {
+	optional bool success = 1;
+	optional uint64	session_id = 2;
+}
 
-	//A chunk id
-	optional ChunkID chunk_id = 1;
+message LoginRequest {
+	optional string user_name = 1;
+	optional string password_hash = 2;  // SHA256 hash of user password
 	
-	//If set, this chunk was updated for physics / editing purposes
-	optional uint64 tick_count = 2;
-	
-	//RLE encoded chunk data
-	optional bytes data = 3;
-}
-
-//A network block type
-message Block {
-	optional uint32 type = 1;
-}
-
-//A block update
-message BlockUpdate {
-	optional uint64 tick = 1;
-
-	optional uint32 x = 2;
-	optional uint32 y = 3;
-	optional uint32 z = 4;
-	
-	optional Block b = 5;
-}
-
-
-//A coordinate message
-message Coordinate {
-	optional double x = 1;
-	optional double y = 2;
-	optional double z = 3;
-}
-
-//An orientation message
-message Orientation {
-	optional float pitch = 1;
-	optional float yaw = 2;
-	optional float roll = 3;
-}
-
-//Entity state message
-message EntityState {
-
-	enum EntityType {
-		Player = 1;
+	enum LoginAction {
+		LoginAccount = 1;
+		CreateAccount = 2;
+		DeleteAccount = 3;
 	}
 	
-	optional uint64			entity_id	= 1;
-	optional EntityType		type		= 2;
-
-	optional Coordinate		position	= 3;
-	optional Orientation	orientation = 4;
-	
-	//Entity type information
-	message PlayerState {
-		optional string player_name = 1;
-	}
-	
-	optional PlayerState	player_state = 5;
-}
-
-//A chat message
-message Chat {
-	optional string msg = 1;
+	optional LoginAction action = 3;
 }
 
 
-
-//A chunk update packet
-// These go from server -> client
-//Are handled separately by the chunk worker thread.
-message ChunkPacket {
-	repeated Chunk			chunks = 1;
-	repeated BlockUpdate	block_updates = 2;
-}
-
-//A server update packet
-// These go from server -> client
-message UpdatePacket {
-
-	message UpdateEvent {
-
-		//Update type
-		enum UpdateType {
-			Entity = 1;
-			EntityDestroy = 2;
-			Chat = 3;
-		}
-		required UpdateType type = 1;
-	
-		//Time update occured (in game ticks)
-		optional uint64		tick = 2;
-	
-		//Entity update event
-		message EntityEvent {
-			required EntityState entity_state = 1;
-		}
-	
-		//Entity destruction event
-		message EntityDestroyEvent {
-			required uint64 entity_id = 1;
-		}
-	
-		//Event contents
-		optional EntityEvent			entity_event	= 4;
-		optional Chat					chat_event		= 5;
-		optional EntityDestroyEvent		destroy_event	= 6;
-	}
-
-	//Update events for the client
-	repeated UpdateEvent events = 1;
-}
-
-
-//The overall structure
+//--------------------------------------------------------
+// Server Response Packet
+//--------------------------------------------------------
 message ServerPacket {
-	optional int32 test_number = 1;
-}
 
-message TestPacket {
-	optional int32 test = 1;
-}
-
-message LoginPacket {
-	optional string username = 1;	//Username for login
-	optional string password = 2;	//Sent in SHA256 encryption
-}
-
-message InputPacket {
-
-	//Local updates to the player state
-	optional Coordinate player_pos = 1;
-	optional Orientation player_orient = 2;
-
-	//The action types
-	message Action {
-		enum ActionType {
-			DigStart = 1;
-			DigStop = 2;
-			Chat = 3;
-		}
+	optional LoginResponse login_response = 1;
 	
-		required ActionType type = 1;
-		optional uint64	tick = 2;
-	
-		message DigStartAction {
-			required int32	x = 1;
-			required int32	y = 2;
-			required int32	z = 3;
-		}
-	
-		optional DigStartAction		dig_start_action = 3;
-		optional Chat				chat_action = 4;
-	}
-
-	repeated Action actions = 3;
+	optional ErrorResponse error_response = 100;
 }
 
-
+//--------------------------------------------------------
+// Client Request Packet
+//--------------------------------------------------------
 message ClientPacket {
-	
-
-	optional uint64 session_id = 1;
-	optional TestPacket test_packet = 2;
+	optional uint64	session_id = 1;
+	optional LoginRequest login_packet = 2;
 }
 

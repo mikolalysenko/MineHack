@@ -138,6 +138,12 @@ bool HttpEvent::reply(Network::ServerPacket& message)
 	return reply(buffer, compressed_size + packet_offset, true);
 }
 
+//Sends a 403 error to the client
+bool HttpEvent::error()
+{
+	return reply(DEFAULT_ERROR_RESPONSE, sizeof(DEFAULT_ERROR_RESPONSE), false);
+}
+
 
 //Initialize SocketEvent fields
 SocketEvent::SocketEvent(int fd, bool listener) : 
@@ -1082,7 +1088,6 @@ void* HttpServer::worker_start(void* arg)
 	DEBUG_PRINTF("Worker started\n");
 	((HttpServer*)arg)->worker_loop();
 	DEBUG_PRINTF("Worker stopped\n");
-	
 	pthread_exit(0);
 	return NULL;
 }
