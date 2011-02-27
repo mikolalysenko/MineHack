@@ -98,7 +98,12 @@ namespace Game {
 		bool start();
 		void stop();
 		
-		//DO NOT CALL THESE METHODS.  They are used internally
+		//Recaches all pages
+		void recache();
+		
+		//DO NOT CALL THESE METHODS.  They are used internally by the HttpEvent class to manage sockets.
+		//C++'s stupid scoping rules make it very difficult to let HttpEvent access these things in some
+		//non-obfuscated, efficient way.
 		void dispose_event(SocketEvent* event);
 		bool initiate_send(SocketEvent* event, void* buf, int len, bool release);
 		
@@ -133,10 +138,10 @@ namespace Game {
 		void worker_loop();
 		
 		//Cache functions
+		pthread_spinlock_t cache_lock;
 		TCMAP*	cached_response;
-		void init_cache();
+		TCLIST*	old_cache;
 		const char* get_cached_response(const char* filename, int filename_len, int* cache_len);
-		void clear_cache();
 	};
 };
 

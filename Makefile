@@ -96,7 +96,7 @@ else
   # build options for GOAL_EXE (optimized executable) goal
   ifeq "$(MAKECMDGOALS)" "$(GOAL_EXE)"
 
-   LNK_LIBS = $(LNK_LIBS) -ltcmalloc
+   LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -pthread -ldl -lm  -lc  -ltcmalloc 
    # specific options for optimized executable
    GOAL_OPTS = -s
    # compilation verification options

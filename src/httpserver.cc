@@ -33,6 +33,16 @@ using namespace std;
 using namespace Game;
 using namespace google::protobuf::io;
 
+
+//Uncomment this line to get dense logging for the web server
+//#define SERVER_DEBUG 1
+
+#ifndef SERVER_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
 const char DEFAULT_ERROR_RESPONSE[] = 
 	"HTTP/1.1 403 Forbidden\n\n";
 
@@ -50,6 +60,7 @@ const char DEFAULT_PROTOBUF_HEADER[] =
 	"Content-Length: %d\n"
 	"\n";
 
+//The http user land event
 HttpEvent::HttpEvent(Network::ClientPacket* packet, SocketEvent* s_event, HttpServer* serv) :
 	client_packet(packet),
 	socket_event(s_event),
@@ -97,7 +108,7 @@ bool HttpEvent::reply(Network::ServerPacket& message)
 	char* buffer = (char*)malloc(buffer_len);
 	if(!message.SerializeToArray(buffer, buffer_len))
 	{
-		fprintf(stderr, "Protocol buffer serialize failed\n");
+		DEBUG_PRINTF("Protocol buffer serialize failed\n");
 		free(buffer);
 		return false;
 	}
@@ -107,7 +118,7 @@ bool HttpEvent::reply(Network::ServerPacket& message)
 	ScopeFree compressed_buffer(tcgzipencode(buffer, message.ByteSize(), &compressed_size));
 	if(compressed_buffer.ptr == NULL)
 	{
-		fprintf(stderr, "Protocol buffer GZIP compression failed\n");
+		DEBUG_PRINTF("Protocol buffer GZIP compression failed\n");
 		free(buffer);
 		return false;
 	}
@@ -116,7 +127,7 @@ bool HttpEvent::reply(Network::ServerPacket& message)
 	int packet_offset = snprintf(buffer, buffer_len, DEFAULT_PROTOBUF_HEADER, compressed_size);
 	if(packet_offset + compressed_size > buffer_len)
 	{
-		fprintf(stderr, "Send packet is too big\n");
+		DEBUG_PRINTF("Send packet is too big\n");
 		free(buffer);
 		return false;
 	}
@@ -155,7 +166,7 @@ SocketEvent::~SocketEvent()
 {
 	if(socket_fd != -1)
 	{
-		printf("Closing socket: %d\n", socket_fd);
+		DEBUG_PRINTF("Closing socket: %d\n", socket_fd);
 		close(socket_fd);
 	}
 	
@@ -188,8 +199,7 @@ int SocketEvent::try_parse(char** request, int* request_len)
 		 *end_ptr = (char*)recv_buf_cur,
 		 c;
 		  
-		  
-	printf("parsing header\n");
+	DEBUG_PRINTF("parsing header\n");
 	
 	//Check for no data case
 	if(ptr == end_ptr)
@@ -221,7 +231,7 @@ int SocketEvent::try_parse(char** request, int* request_len)
 	}
 	else
 	{
-		printf("Unkown HTTP request type\n");
+		DEBUG_PRINTF("Unkown HTTP request type\n");
 		return 0;
 	}
 	
@@ -257,7 +267,7 @@ int SocketEvent::try_parse(char** request, int* request_len)
 		return 1;
 	}
 
-	printf("Got post header, scanning for content-length\n");
+	DEBUG_PRINTF("Got post header, scanning for content-length\n");
 
 	//Seek to content length field
 	while(ptr < end_ptr)
@@ -292,7 +302,7 @@ int SocketEvent::try_parse(char** request, int* request_len)
 	if(ptr == end_ptr)
 		return -1;
 
-	printf("Found content length\n");
+	DEBUG_PRINTF("Found content length\n");
 
 	//Seek to end of line
 	char* content_str = ptr;
@@ -308,7 +318,7 @@ int SocketEvent::try_parse(char** request, int* request_len)
 	*(--ptr) = '\0';	
 	content_length = atoi(content_str);
 
-	printf("Content length = %d\n", content_length);
+	DEBUG_PRINTF("Content length = %d\n", content_length);
 
 	//Error: must specify content length > 0
 	if(content_length <= 0)
@@ -343,7 +353,7 @@ int SocketEvent::try_parse(char** request, int* request_len)
 	{
 		*(ptr-1) = '\0';
 		
-		printf("Successfully parsed header: %s\n", recv_buf_start);
+		DEBUG_PRINTF("Successfully parsed header: %s\n", recv_buf_start);
 	
 		content_ptr = ptr;
 		
@@ -357,17 +367,19 @@ int SocketEvent::try_parse(char** request, int* request_len)
 HttpServer::HttpServer(Config* cfg, http_func cback) :
 	config(cfg), 
 	callback(cback), 
-	cached_response(tcmapnew()),
-	event_map(tcmapnew())
+	event_map(tcmapnew()),
+	old_cache(tclistnew())
 {
 	pthread_spin_init(&event_map_lock, PTHREAD_PROCESS_PRIVATE);
+	pthread_spin_init(&cache_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
 HttpServer::~HttpServer()
 {
-	clear_cache();
-	tcmapdel(cached_response);
+	pthread_spin_destroy(&event_map_lock);
+	pthread_spin_destroy(&cache_lock);
 	tcmapdel(event_map);
+	tclistdel(old_cache);
 }
 
 
@@ -430,13 +442,14 @@ void* read_file(string filename, int* length)
 }
 
 //Initialize the http response cache
-void HttpServer::init_cache()
+void HttpServer::recache()
 {
 
-	printf("Initializing cache\n");
+	DEBUG_PRINTF("Initializing cache\n");
 	
 	vector<string> files;
 	list_files(config->readString("wwwroot"), files);
+	TCMAP* cache = tcmapnew();
 
 	for(int i=0; i<files.size(); ++i)
 	{
@@ -446,10 +459,10 @@ void HttpServer::init_cache()
 		
 		if(raw_data.ptr == NULL)
 		{
-			printf("\tError reading file: %s\n", files[i].c_str());
+			DEBUG_PRINTF("\tError reading file: %s\n", files[i].c_str());
 			continue;
 		}
-		printf("\tCaching file: %s\n", files[i].c_str());
+		DEBUG_PRINTF("\tCaching file: %s\n", files[i].c_str());
 		
 		//Compress
 		int compressed_size;
@@ -473,8 +486,14 @@ void HttpServer::init_cache()
 		}
 		
 		//Store in cache
-		tcmapput(cached_response, files[i].c_str(), files[i].size(), response.ptr, response_len);
+		tcmapput(cache, files[i].c_str(), files[i].size(), response.ptr, response_len);
 	}
+	
+	//Update cache pointers
+	pthread_spin_lock(&cache_lock);
+	tclistpush(old_cache, &cache, sizeof(cache));
+	cached_response = cache;
+	pthread_spin_unlock(&cache_lock);
 }
 
 //Retrieves a cached response
@@ -490,13 +509,6 @@ const char* HttpServer::get_cached_response(const char* filename, int filename_l
 	
 	return result;
 }
-
-//Clear out the cache
-void HttpServer::clear_cache()
-{
-	tcmapclear(cached_response);
-}
-
 
 
 //Creates an http event
@@ -564,7 +576,7 @@ SocketEvent* HttpServer::create_event(int fd, bool listener)
 //Disposes of an http event
 void HttpServer::dispose_event(SocketEvent* event)
 {
-	printf("Disposing socket\n");
+	DEBUG_PRINTF("Disposing socket\n");
 	epoll_ctl(epollfd, EPOLL_CTL_DEL, event->socket_fd, NULL);	
 	pthread_spin_lock(&event_map_lock);
 	tcmapout(event_map, &event->socket_fd, sizeof(int));
@@ -597,14 +609,16 @@ void HttpServer::cleanup_events()
 //Start the server
 bool HttpServer::start()
 {
-	printf("Starting http server...\n");
+	DEBUG_PRINTF("Starting http server...\n");
 	
 	epollfd = -1;
 	living_threads = 0;
-	init_cache();	
+	
+	//Initialize cache
+	recache();	
 	
 	//Create listen socket
-	printf("Creating listen socket\n");
+	DEBUG_PRINTF("Creating listen socket\n");
 	int listen_socket = socket(PF_INET, SOCK_STREAM, 0);
 	if(listen_socket == -1)
 	{
@@ -643,7 +657,7 @@ bool HttpServer::start()
 	
 
 	//Create epoll object
-	printf("Creating epoll object\n");
+	DEBUG_PRINTF("Creating epoll object\n");
 	epollfd = epoll_create(1000);
 	if(epollfd == -1)
 	{
@@ -673,7 +687,7 @@ bool HttpServer::start()
 		}
 		
 		living_threads++;
-		printf("HTTP Worker %d started\n", i);
+		DEBUG_PRINTF("HTTP Worker %d started\n", i);
 	}
 	
 	return true;
@@ -682,8 +696,7 @@ bool HttpServer::start()
 //Stop the server
 void HttpServer::stop()
 {
-	printf("Stopping http server...\n");
-	clear_cache();
+	DEBUG_PRINTF("Stopping http server...\n");
 	
 	//Stop running flag
 	running = false;
@@ -692,30 +705,39 @@ void HttpServer::stop()
 	if(epollfd != -1)
 	{
 		//FIXME: Purge old sockets here
-		printf("Closing epoll\n");
+		DEBUG_PRINTF("Closing epoll\n");
 		close(epollfd);
 	}
 
 	//Join with remaining worker threads
-	printf("Killing workers\n");
+	DEBUG_PRINTF("Killing workers\n");
 	for(int i=0; i<living_threads; ++i)
 	{
-		printf("Stopping worker %d\n", i);
+		DEBUG_PRINTF("Stopping worker %d\n", i);
 	
 		if(pthread_join(workers[i], NULL) != 0)
 		{
 			perror("pthread_join");
 		}
 		
-		printf("HTTP Worker %d killed\n", i);
+		DEBUG_PRINTF("HTTP Worker %d killed\n", i);
 	}
 	living_threads = 0;
-		
-	
 	
 	//Clean up any stray http events
-	printf("Cleaning up stray connections\n");
+	DEBUG_PRINTF("Cleaning up stray connections\n");
 	cleanup_events();
+		
+	//Clean up any old caches
+	DEBUG_PRINTF("Cleaning up extra cache stuff\n");
+	while(true)
+	{
+		TCMAP** ptr = (TCMAP**)((void*)tclistpop2(old_cache));
+		if(ptr == NULL)
+			break;
+		tcmapdel(*ptr);
+		free(ptr);
+	}
 }
 
 void HttpServer::accept_event(SocketEvent* event)
@@ -725,12 +747,11 @@ void HttpServer::accept_event(SocketEvent* event)
 	
 	if(conn_fd == -1)
 	{
-		printf("ERROR ACCEPTING!!!!!!!!!!!!\n");
-		perror("accept");
+		DEBUG_PRINTF("Accept error, errno = %d\n", errno);
 		return;
 	}
 	
-	printf("Got connection from address: ");
+	DEBUG_PRINTF("Got connection from address: ");
 	sa_family_t fam = event->addr.ss_family;
 	if(fam == AF_INET)
 	{
@@ -742,10 +763,10 @@ void HttpServer::accept_event(SocketEvent* event)
 		for(int i=0; i<4; ++i)
 		{
 			if(i != 0)
-				printf(".");
-			printf("%d", ip[i]);
+				DEBUG_PRINTF(".");
+			DEBUG_PRINTF("%d", ip[i]);
 		}
-		printf(":%d\n", port);
+		DEBUG_PRINTF(":%d\n", port);
 	}
 	else if(fam == AF_INET6)
 	{
@@ -757,23 +778,24 @@ void HttpServer::accept_event(SocketEvent* event)
 		for(int i=0; i<8; ++i)
 		{
 			if(i != 0)
-				printf(".");
-			printf("%d", ip[i]);
+				DEBUG_PRINTF(".");
+			DEBUG_PRINTF("%d", ip[i]);
 		}
-		printf(":%d\n", port);
+		DEBUG_PRINTF(":%d\n", port);
 	}
 
 	//FIXME: Maybe check black list here, deny connections from ahole ip addresses
 
 	if(create_event(conn_fd) == NULL)
 	{
-		printf("Error accepting connection\n");
+		DEBUG_PRINTF("Error accepting connection\n");
 	}
 }
 
+//Process a cached http request
 void HttpServer::process_cached_request(SocketEvent* event, char* req, int req_len)
 {
-	printf("Got request: %s\n", req);
+	DEBUG_PRINTF("Got request: %s\n", req);
 	
 	int len;
 	char* buf = const_cast<char*>(get_cached_response(req, req_len, &len));
@@ -784,9 +806,12 @@ void HttpServer::process_cached_request(SocketEvent* event, char* req, int req_l
 //Process the pending request
 void HttpServer::process_command(SocketEvent* event)
 {
+	DEBUG_PRINTF("Got command, len = %d\n", event->content_length);
+
 	auto packet = new Network::ClientPacket();
 	if(!packet->ParseFromArray(event->content_ptr, event->content_length))
 	{
+		DEBUG_PRINTF("Failed to parse command\n");
 		delete packet;
 		dispose_event(event);
 		return;
@@ -803,7 +828,7 @@ void HttpServer::process_command(SocketEvent* event)
 //Process a header request
 void HttpServer::process_header(SocketEvent* event, bool do_recv)
 {
-	printf("Processing header\n");
+	DEBUG_PRINTF("Processing header\n");
 
 	if(do_recv) do
 	{
@@ -843,30 +868,30 @@ void HttpServer::process_header(SocketEvent* event, bool do_recv)
 	{
 		if(event->content_length > 0)
 		{
-			printf("Content length = %d\n", event->content_length);
+			DEBUG_PRINTF("Content length = %d\n", event->content_length);
 			int packet_size = event->content_length + (int)(event->content_ptr - event->recv_buf_start);
 			
-			printf("Packet size = %d\n", packet_size);
+			DEBUG_PRINTF("Packet size = %d\n", packet_size);
 
 			if(packet_size > event->recv_buf_size)
 			{
 				//FIXME: Maybe resize the buffer here if the request is not too big?
-				printf("Client packet is too big\n");			
+				DEBUG_PRINTF("Client packet is too big\n");			
 				dispose_event(event);
 				return;
 			}
 
 			//Need to do a send request
 			int bytes_read = (int)(event->recv_buf_cur - event->recv_buf_start);
-			printf("Bytes read = %d\n", bytes_read);
+			DEBUG_PRINTF("Bytes read = %d\n", bytes_read);
 			
 			event->pending_bytes = packet_size - bytes_read;
 			
-			printf("Pending bytes = %d\n", event->pending_bytes);
+			DEBUG_PRINTF("Pending bytes = %d\n", event->pending_bytes);
 			
 			if(event->pending_bytes <= 0)
 			{
-				printf("Buffer filled, no more to read\n");
+				DEBUG_PRINTF("Buffer filled, no more to read\n");
 				process_command(event);
 				return;
 			}
@@ -889,7 +914,7 @@ void HttpServer::process_header(SocketEvent* event, bool do_recv)
 		}
 		else
 		{
-			printf("processing cached request\n");
+			DEBUG_PRINTF("processing cached request\n");
 			process_cached_request(event, req, req_len);
 			return;
 		}
@@ -897,7 +922,7 @@ void HttpServer::process_header(SocketEvent* event, bool do_recv)
 	else if(res == -1)
 	{
 		//Header not yet complete, keep reading
-		printf("Header not finished\n");
+		DEBUG_PRINTF("Header not finished\n");
 		epoll_event ev;
 		ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
 		ev.data.fd = event->socket_fd;
@@ -911,7 +936,7 @@ void HttpServer::process_header(SocketEvent* event, bool do_recv)
 	}
 	else 
 	{
-		printf("Bad header\n");
+		DEBUG_PRINTF("Bad header\n");
 		dispose_event(event);
 		return;
 	}
@@ -919,7 +944,7 @@ void HttpServer::process_header(SocketEvent* event, bool do_recv)
 
 void HttpServer::process_recv(SocketEvent* event)
 {
-	printf("Receiving bytes, pending = %d:\n", event->pending_bytes);
+	DEBUG_PRINTF("Receiving bytes, pending = %d:\n", event->pending_bytes);
 	
 	do
 	{
@@ -952,7 +977,7 @@ void HttpServer::process_recv(SocketEvent* event)
 	
 	if(event->pending_bytes <= 0)
 	{
-		printf("Recv complete\n");
+		DEBUG_PRINTF("Recv complete\n");
 		process_command(event);
 	}
 	else
@@ -973,7 +998,7 @@ void HttpServer::process_recv(SocketEvent* event)
 //Process a send event
 void HttpServer::process_send(SocketEvent* event)
 {
-	printf("Sending, pending_bytes = %d\n", event->pending_bytes);
+	DEBUG_PRINTF("Sending, pending_bytes = %d\n", event->pending_bytes);
 	do
 	{
 		int len = send(event->socket_fd, event->send_buf_cur, event->pending_bytes, 0);
@@ -1005,7 +1030,7 @@ void HttpServer::process_send(SocketEvent* event)
 
 	if(event->pending_bytes <= 0)
 	{
-		printf("Send complete\n");
+		DEBUG_PRINTF("Send complete\n");
 		dispose_event(event);	
 	}
 	else if(event->pending_bytes > 0)
@@ -1054,9 +1079,9 @@ bool HttpServer::initiate_send(SocketEvent* event, void* buf, int len, bool rele
 //Worker boot strap
 void* HttpServer::worker_start(void* arg)
 {
+	DEBUG_PRINTF("Worker started\n");
 	((HttpServer*)arg)->worker_loop();
-	
-	printf("Worker stopped\n");
+	DEBUG_PRINTF("Worker stopped\n");
 	
 	pthread_exit(0);
 	return NULL;
