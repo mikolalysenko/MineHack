@@ -75,53 +75,71 @@ void LoginDB::delete_account(std::string const& user_name)
 }
 
 //Retrieves an account
-bool LoginDB::get_account(std::string const& user_name, Login::Account& account)
+bool LoginDB::get_account(string const& user_name, string const& password_hash, Login::Account& account)
 {
 	int sz;
 	ScopeFree buf(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &sz));
 	if(buf.ptr == NULL)
 		return false;
-	return account.ParseFromArray(buf.ptr, sz);
+	if(!account.ParseFromArray(buf.ptr, sz))
+		return false;
+	return account.password_hash() == password_hash;
 }
 
 //Updates an account
-bool LoginDB::update_account(std::string const& user_name, Login::Account& next)
+bool LoginDB::update_account(
+	string const& user_name, 
+	Login::Account const& prev, 
+	Login::Account const& next)
 {
+	//Serialize previous buffer
+	int prev_len = prev.ByteSize();
+	ScopeFree prev_buf(malloc(prev_len));
+	prev.SerializeToArray(prev_buf.ptr, prev_len);
+	
+	//Serialize updated buffer
+	int next_len = next.ByteSize();
+	ScopeFree next_buf(malloc(next_len));
+	next.SerializeToArray(next_buf.ptr, next_len);
+
 	while(true)
 	{
+		//Start transaction
 		if(!tchdbtranbegin(login_db))
 		{
 			return false;
 		}
-
+		
+		//Retrieve current pointer
 		int len;
 		ScopeFree buf(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
-		if(buf.ptr == NULL)
+		if(buf.ptr == NULL ||
+			prev_len != len)
 		{
 			tchdbtranabort(login_db);
 			return false;
 		}
 		
-		Login::Account cur;
-		if(!cur.ParseFromArray(buf.ptr, len))
+		//Check that the buffer has not changed
+		for(int i=0; i<len; ++i)
 		{
-			tchdbtranabort(login_db);
-			return false;
+			if(((uint8_t*)prev_buf.ptr)[i] != ((uint8_t*)buf.ptr)[i])
+			{
+				tchdbtranabort(login_db);
+				return false;
+			}
 		}
-		cur.MergeFrom(next);
 		
-		int n_len = next.ByteSize();
-		ScopeFree n_buf(malloc(n_len));
-		cur.SerializeToArray(n_buf.ptr, n_len);
-		
+		//Try writing updated record
 		if(!tchdbput(login_db, 
 			(const void*)user_name.c_str(), user_name.size(), 
-			n_buf.ptr, n_len))
+			next_buf.ptr, next_len))
 		{
 			tchdbtranabort(login_db);
 			continue;
 		}
 		
+		//Commit transaction
 		if(tchdbtrancommit(login_db))
 			return true;
 	}

@@ -13,7 +13,7 @@ var LoginState = {
 	shutdown : function()
 	{
 		document.getElementById('loginPane').style.display = 'none';
-		document.getElementById('password').pass_txt.value = "";
+		document.getElementById('password').value = "";
 		document.getElementById('loginError').innerHTML = "";
 	},
 
@@ -65,6 +65,97 @@ var LoginState = {
 		document.getElementById('loginError').innerHTML = msg;
 	}
 };
+
+
+//Character select state
+var CharacterSelectState = {
+
+	init : function()
+	{
+		document.getElementById("selectPane").style.display = "block";	
+		document.getElementById("createCharacter").onclick = CharacterSelectState.do_create_character;
+		CharacterSelectState.generate_list();
+	},
+
+	shutdown : function()
+	{
+		set_select_error("");
+		document.getElementById("selectPane").style.display = "none";
+	},
+	
+	set_select_error : function(msg)
+	{
+		msg = msg.replace(/\&/g, "&amp;")
+				 .replace(/\</g, "&lt;")
+				 .replace(/\>/g, "&gt;")
+				 .replace(/\n/g, "\<br\/\>");
+	
+		document.getElementById('selectError').innerHTML = msg;
+	},
+
+	do_join_game : function(character_name)
+	{
+		set_select_error("");
+		var result = Session.join_game(character_name);
+	
+		if(result == "Ok")
+		{
+			App.set_state(LoadState);
+		}
+		else
+		{
+			CharacterSelectState.set_select_error(result);
+		}
+	},
+
+	do_delete_character : function(character_name)
+	{
+		set_select_error("");
+		var result = Session.delete_character(character_name);
+	
+		if(result == "Ok")
+		{
+			CharacterSelectState.generate_list();
+		}
+		else
+		{
+			CharacterSelectState.set_select_error(result);
+		}
+	},
+
+	do_create_character : function()
+	{
+		set_select_error("");
+		var character_name	= document.getElementById("characterName");
+		var result		= Session.create_character(character_name.value);
+	
+		if(result == "Ok")
+		{
+			CharacterSelectState.generate_list();
+			character_name.value = "";
+		}
+		else
+		{
+			CharacterSelectState.set_select_error(result);
+		}
+	},
+
+	generate_list : function()
+	{
+		var listElem = document.getElementById("characterList"), i;
+		listElem.innerHTML = "";
+
+		for(i=0; i<Session.character_names.length; ++i)
+		{
+			var character_name = Session.character_names[i];
+			listElem.innerHTML += 
+				'<a class="avatarSelect" href="javascript:App.state.do_join_game(\'' + character_name + '\');">' + character_name + '</a>' + 
+				'<input class="avatarDel" onclick="javascript:App.state.do_delete_character(\'' + character_name + '\');" type="button" value = "X" />' +
+				'<br/>';
+		}
+	}
+};
+
 
 //Application crash state
 var ErrorState = {

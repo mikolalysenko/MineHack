@@ -25,8 +25,12 @@ namespace Game {
 		void delete_account(std::string const& user_name);
 	
 		//Record retrieval/update
-		bool get_account(std::string const& user_name, Login::Account& account);
-		bool update_account(std::string const& user_name, Login::Account& next);
+		bool get_account(std::string const& user_name, std::string const& password_hash, Login::Account& account);
+		
+		bool update_account(std::string const& user_name, 
+			Login::Account const& prev_state,
+			Login::Account const& next_state);
+			
 	
 	private:
 		Config* config;

@@ -71,11 +71,11 @@ HttpEvent::HttpEvent(Network::ClientPacket* packet, SocketEvent* s_event, HttpSe
 //Clean up http event resources
 HttpEvent::~HttpEvent()
 {
-	delete client_packet;
 	if(socket_event != NULL)
 	{
-		server->dispose_event(socket_event);
+		error();
 	}
+	delete client_packet;
 }
 		
 //Sends a reply

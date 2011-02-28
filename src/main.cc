@@ -20,6 +20,17 @@
 using namespace std;
 using namespace Game;
 
+
+//Uncomment this line to get dense logging for the web server
+#define APP_DEBUG 1
+
+#ifndef APP_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
+
 bool app_running = false;
 
 //The global config file
@@ -39,9 +50,24 @@ void reply_error(HttpEvent* event, string const& message)
 	event->reply(response);
 }
 
+//Validates a user name
+bool valid_user_name(string const& user_name)
+{
+	//FIXME: Add stuff here to prevent client side javascript injection
+	return true;
+}
+
+bool valid_character_name(string const& character_name)
+{
+	//FIXME: Do validation stuff here
+	return true;
+}
+
 //Handles a login request
 void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 {
+	DEBUG_PRINTF("Got login request\n");
+
 	if(!login_req.has_user_name())
 	{
 		reply_error(event, "Missing user name");
@@ -58,6 +84,11 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		return;
 	}
 	
+	DEBUG_PRINTF("User name = %s, password hash = %s, action = %d\n",
+		login_req.user_name().c_str(),
+		login_req.password_hash().c_str(),
+		login_req.action());
+	
 	Network::ServerPacket packet;
 	Network::LoginResponse *response = packet.mutable_login_response();
 	
@@ -66,53 +97,172 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 	case Network::LoginRequest_LoginAction_Login:
 	{
 		Login::Account account;
-		if(!login_db->get_account(login_req.user_name(), account) ||
-			account.password_hash() != login_req.password_hash())
+		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
 		{
 			reply_error(event, "Invalid user name/password");
 			return;
 		}
 		
 		response->set_success(true);
-		
-		//FIXME: Create session here
-
-		response->set_success(true);
-		response->set_session_id(0);
+		response->mutable_character_names()->CopyFrom(account.character_names());
 	}
 	break;
 	
-	case Network::LoginRequest_LoginAction_Create:
+	case Network::LoginRequest_LoginAction_CreateAccount:
 	{
-		//FIXME: Validate user name here
+		if(!valid_user_name(login_req.user_name()))
+		{
+			reply_error(event, "Invalid user name");
+			return;
+		}
+		
 		if(!login_db->create_account(login_req.user_name(), login_req.password_hash()))
 		{
 			reply_error(event, "User name taken");
 			return;
 		}
 		
-		
-		Login::Account account;
-		login_db->get_account(login_req.user_name(), account);
-		
-		//FIXME: Create session here
-		
 		response->set_success(true);
-		response->set_session_id(0);
+		response->mutable_character_names()->Clear();
 	}
 	break;
 
-	case Network::LoginRequest_LoginAction_Delete:
+	case Network::LoginRequest_LoginAction_DeleteAccount:
 	{
 		Login::Account account;
-		if(!login_db->get_account(login_req.user_name(), account) ||
-			account.password_hash() != login_req.password_hash()  )
+		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
 		{
 			reply_error(event, "Invalid user name/password");
 			return;
 		}
 		
 		login_db->delete_account(login_req.user_name());
+		response->set_success(true);
+	}
+	break;
+	
+	case Network::LoginRequest_LoginAction_CreateCharacter:
+	{
+		if( !login_req.has_character_name() ||
+			!valid_character_name(login_req.character_name()) )
+		{
+			reply_error(event, "Bad character name");
+			return;
+		}
+	
+		Login::Account account;
+		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
+		{
+			reply_error(event, "Invalid user name/password");
+			return;
+		}
+
+		//FIXME: Try adding character to game world
+		
+		//Add character
+		Login::Account next_account;
+		next_account.CopyFrom(account);
+		next_account.add_character_names(login_req.character_name());
+		
+		//Update database
+		if(!login_db->update_account(login_req.user_name(), account, next_account))
+		{
+			//FIXME: Remove character from game world
+			reply_error(event, "Could not update account");
+			return;
+		}
+		
+		//Set response values
+		response->set_success(true);
+		response->mutable_character_names()->CopyFrom(next_account.character_names());
+	}
+	break;
+	
+	case Network::LoginRequest_LoginAction_DeleteCharacter:
+	{
+		if(!login_req.has_character_name())
+		{
+			reply_error(event, "Missing character name");
+			return;
+		}
+		
+		Login::Account account;
+		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
+		{
+			reply_error(event, "Invalid user name/password");
+			return;
+		}
+
+		int idx = -1, sz = account.character_names_size();
+		for(int i=0; i<sz; ++i)
+		{
+			if(account.character_names(i) == login_req.character_name())
+			{
+				idx = i;
+				break;
+			}
+		}
+		
+		if(idx == -1)
+		{
+			reply_error(event, "Character does not exist");
+			return;
+		}
+		
+		//FIXME: Try deleting from world
+		
+		//Remove character
+		Login::Account next_account;
+		next_account.CopyFrom(account);
+		next_account.set_character_names(idx, account.character_names(sz-1));
+		next_account.mutable_character_names()->RemoveLast();
+		
+		//Update database
+		if(!login_db->update_account(login_req.user_name(), account, next_account))
+		{
+			reply_error(event, "Could not update account");
+			return;
+		}
+		
+		//Set response values
+		response->set_success(true);
+		response->mutable_character_names()->CopyFrom(next_account.character_names());
+	}
+	break;
+
+	case Network::LoginRequest_LoginAction_Join:
+	{
+		if(!login_req.has_character_name())
+		{
+			reply_error(event, "Missing character name");
+			return;
+		}
+	
+		Login::Account account;
+		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
+		{
+			reply_error(event, "Invalid user name/password");
+			return;
+		}
+		
+		int idx = -1, sz = account.character_names_size();
+		for(int i=0; i<sz; ++i)
+		{
+			if(account.character_names(i) == login_req.character_name())
+			{
+				idx = i;
+				break;
+			}
+		}
+		
+		if(idx == -1)
+		{
+			reply_error(event, "Character does not exist");
+			return;
+		}
+
+		//FIXME: Try joining game world
+		
 		response->set_success(true);
 	}
 	break;
