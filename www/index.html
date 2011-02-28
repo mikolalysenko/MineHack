@@ -9,8 +9,24 @@
 	<script src="network.pb.js"></script>
 	<script src="constants.js"></script>
 	<script src="misc.js"></script>
+	<script src="session.js"></script>
+	<script src="app.js"></script>	
 </head>
 
-<body id="docBody" >
+<body id="docBody" onload="App.init();" onunload="App.shutdown();">
+
+<div id="loginPane" align=center style="display:none;">
+<input type="text" id="userName" width="20" value=""/><br/>
+<input type="password" id="password" width="20" value=""/><br/>
+<input id="loginButton" type="button" value="Login"/>
+<input id="createButton" type="button" value="Create Account"/>
+<div id="loginError" style="color:red;"> </div>
+</div>
+
+<div id="errorPane" style="display:none; background-color:red; color:black;">
+<h1> <tt> !!!ABORT!!! <br/>
+REASON: <div id="errorReason"></div> </tt> </h1>
+</div>
+
 </body>
 </html>

@@ -105,17 +105,27 @@ bool HttpEvent::reply(Network::ServerPacket& message)
 
 	//Write object to buffer
 	int buffer_len =  2 * message.ByteSize() + 32 + sizeof(DEFAULT_PROTOBUF_HEADER);
-	char* buffer = (char*)malloc(buffer_len);
-	if(!message.SerializeToArray(buffer, buffer_len))
+	char* buffer = (char*)malloc(buffer_len + 1);
+	buffer[0] = '\n';	//Need to set to avoid messing up byte order mask
+	if(!message.SerializeToArray(buffer + 1, buffer_len))
 	{
 		DEBUG_PRINTF("Protocol buffer serialize failed\n");
 		free(buffer);
 		return false;
 	}
 	
+	/*
+	printf("Sending packet: ");
+	for(int i=0; i<=message.ByteSize(); ++i)
+	{
+		printf("%d,", (uint8_t)buffer[i]);
+	}
+	printf("\n");
+	*/
+	
 	//Compress serialized packet
 	int compressed_size;
-	ScopeFree compressed_buffer(tcgzipencode(buffer, message.ByteSize(), &compressed_size));
+	ScopeFree compressed_buffer(tcgzipencode(buffer, message.ByteSize()+1, &compressed_size));
 	if(compressed_buffer.ptr == NULL)
 	{
 		DEBUG_PRINTF("Protocol buffer GZIP compression failed\n");
@@ -141,7 +151,7 @@ bool HttpEvent::reply(Network::ServerPacket& message)
 //Sends a 403 error to the client
 bool HttpEvent::error()
 {
-	return reply(DEFAULT_ERROR_RESPONSE, sizeof(DEFAULT_ERROR_RESPONSE), false);
+	return reply(const_cast<char*>(DEFAULT_ERROR_RESPONSE), sizeof(DEFAULT_ERROR_RESPONSE), false);
 }
 
 
@@ -333,7 +343,7 @@ int SocketEvent::try_parse(char** request, int* request_len)
 	//Restore last character
 	*ptr = c;
 	
-	printf("Scanning for end of header\n");
+	DEBUG_PRINTF("Scanning for end of header\n");
 	
 	//Search for two consecutive eol
 	int eol_cnt = 0;

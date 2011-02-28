@@ -4,8 +4,7 @@ package Network;
 // An error response
 //--------------------------------------------------------
 message ErrorResponse {
-	optional int32	error_number = 1;
-	optional string error_message = 2;
+	optional string error_message = 1;
 }
 
 //--------------------------------------------------------
@@ -21,9 +20,9 @@ message LoginRequest {
 	optional string password_hash = 2;  // SHA256 hash of user password
 	
 	enum LoginAction {
-		LoginAccount = 1;
-		CreateAccount = 2;
-		DeleteAccount = 3;
+		Login = 1;
+		Create = 2;
+		Delete = 3;
 	}
 	
 	optional LoginAction action = 3;

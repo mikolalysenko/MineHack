@@ -32,19 +32,15 @@ LoginDB* login_db;
 HttpServer* server;
 
 //Sends a nice error message to the client
-void reply_error(HttpEvent* event, string& message)
+void reply_error(HttpEvent* event, string const& message)
 {
-	Network::ErrorResponse err_response;
-	err_response.set_error_message(message);
-	
 	Network::ServerPacket response;
-	response.set_err_response(err_response);
-	
+	response.mutable_error_response()->set_error_message(message);
 	event->reply(response);
 }
 
 //Handles a login request
-void handle_login(HttpEvent* event, Network::LoginRequest& login_req)
+void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 {
 	if(!login_req.has_user_name())
 	{
@@ -62,62 +58,67 @@ void handle_login(HttpEvent* event, Network::LoginRequest& login_req)
 		return;
 	}
 	
-	Network::LoginResponse response;
+	Network::ServerPacket packet;
+	Network::LoginResponse *response = packet.mutable_login_response();
 	
 	switch(login_req.action())
 	{
-	case Network::LoginRequest::LoginAction::LoginAccount:
+	case Network::LoginRequest_LoginAction_Login:
 	{
 		Login::Account account;
 		if(!login_db->get_account(login_req.user_name(), account) ||
-			account.password_hash != login_req.password_hash)
+			account.password_hash() != login_req.password_hash())
 		{
 			reply_error(event, "Invalid user name/password");
 			return;
 		}
 		
-		response.set_success(true);
+		response->set_success(true);
 		
 		//FIXME: Create session here
+
+		response->set_success(true);
+		response->set_session_id(0);
 	}
 	break;
 	
-	case Network::LoginRequest::LoginAction::CreateAccount:
+	case Network::LoginRequest_LoginAction_Create:
 	{
-		if(!login_db->create_account(login_req.user_name(), login_req.password_hash())
+		//FIXME: Validate user name here
+		if(!login_db->create_account(login_req.user_name(), login_req.password_hash()))
 		{
-			reply_error(event, "User name is already in user");
+			reply_error(event, "User name taken");
 			return;
 		}
 		
-		response.set_success(true);
 		
 		Login::Account account;
 		login_db->get_account(login_req.user_name(), account);
 		
 		//FIXME: Create session here
+		
+		response->set_success(true);
+		response->set_session_id(0);
 	}
 	break;
 
-	case Network::LoginRequest::LoginAction::DeleteAccount:
+	case Network::LoginRequest_LoginAction_Delete:
 	{
 		Login::Account account;
 		if(!login_db->get_account(login_req.user_name(), account) ||
-			account.password_hash != login_req.password_hash ||
-			!login_db->delete_account(login_req.user_name()) )
+			account.password_hash() != login_req.password_hash()  )
 		{
 			reply_error(event, "Invalid user name/password");
 			return;
 		}
 		
-		response.set_success(true);
+		login_db->delete_account(login_req.user_name());
+		response->set_success(true);
 	}
 	break;
 	}
 	
 	//Reply with response packet
-	Network::ServerPacket packet;
-	packet.set_login_packet(response);
 	event->reply(packet);
 }
 
@@ -148,6 +149,7 @@ void init_app()
 
 	printf("Starting app\n");
 	
+	printf("Starting login database\n");
 	if(!login_db->start())
 	{
 		login_db->stop();
@@ -155,8 +157,10 @@ void init_app()
 		return;
 	}
 	
+	printf("Starting http server\n");
 	if(!server->start())
 	{
+		login_db->stop();
 		server->stop();
 		printf("Failed to start http server\n");
 		return;

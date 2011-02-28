@@ -18,7 +18,7 @@ namespace Game {
 		//Initialization/state management
 		bool start();
 		void stop();
-		bool sync();
+		void sync();
 	
 		//Account management
 		bool create_account(std::string const& user_name, std::string const& password_hash);
@@ -26,7 +26,7 @@ namespace Game {
 	
 		//Record retrieval/update
 		bool get_account(std::string const& user_name, Login::Account& account);
-		bool update_account(std::string const& user_name, Login::Account& updates);
+		bool update_account(std::string const& user_name, Login::Account& next);
 	
 	private:
 		Config* config;

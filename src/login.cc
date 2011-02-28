@@ -9,6 +9,7 @@
 #include "constants.h"
 #include "config.h"
 #include "misc.h"
+#include "login.h"
 
 using namespace std;
 using namespace Game;
@@ -30,7 +31,7 @@ LoginDB::~LoginDB()
 //Start login database
 bool LoginDB::start()
 {
-	string login_db_path = config.readString("login_db_path");
+	string login_db_path = config->readString("login_db_path");
 	return tchdbopen(login_db, login_db_path.c_str(), HDBOWRITER | HDBOCREAT);
 }
 
@@ -70,21 +71,21 @@ bool LoginDB::create_account(std::string const& user_name, std::string const& pa
 //Deletes an account
 void LoginDB::delete_account(std::string const& user_name)
 {
-	return tchdbout(login_db, (const void*)user_name.c_str(), user_name.size());
+	tchdbout(login_db, (const void*)user_name.c_str(), user_name.size());
 }
 
 //Retrieves an account
 bool LoginDB::get_account(std::string const& user_name, Login::Account& account)
 {
 	int sz;
-	ScopeFree buf(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size()));
-	if(buf == NULL)
+	ScopeFree buf(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &sz));
+	if(buf.ptr == NULL)
 		return false;
-	return accoun.ParseFromArray(buf.ptr, sz);
+	return account.ParseFromArray(buf.ptr, sz);
 }
 
 //Updates an account
-bool update_account(std::string const& user_name, Login::Account& update)
+bool LoginDB::update_account(std::string const& user_name, Login::Account& next)
 {
 	while(true)
 	{
@@ -95,24 +96,23 @@ bool update_account(std::string const& user_name, Login::Account& update)
 
 		int len;
 		ScopeFree buf(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
-		if(buf.ptr == NULL || len < sizeof(LoginRecord))
+		if(buf.ptr == NULL)
 		{
 			tchdbtranabort(login_db);
 			return false;
 		}
 		
-		Login::Account prev;
-		if(!prev.SerializeFromArray(buf.ptr, len))
+		Login::Account cur;
+		if(!cur.ParseFromArray(buf.ptr, len))
 		{
 			tchdbtranabort(login_db);
 			return false;
 		}
+		cur.MergeFrom(next);
 		
-		prev.MergeFrom(update);
-		
-		int n_len = prev.ByteSize();
+		int n_len = next.ByteSize();
 		ScopeFree n_buf(malloc(n_len));
-		prev.SerializeToArray(n_buf.ptr, n_len);
+		cur.SerializeToArray(n_buf.ptr, n_len);
 		
 		if(!tchdbput(login_db, 
 			(const void*)user_name.c_str(), user_name.size(), 
@@ -126,7 +126,5 @@ bool update_account(std::string const& user_name, Login::Account& update)
 			return true;
 	}
 }
-
-};
 
 
