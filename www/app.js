@@ -14,7 +14,7 @@ var LoginState = {
 	{
 		document.getElementById('loginPane').style.display = 'none';
 		document.getElementById('password').value = "";
-		document.getElementById('loginError').innerHTML = "";
+		App.post_error("");
 	},
 
 	do_create : function()
@@ -31,7 +31,7 @@ var LoginState = {
 		}
 		else
 		{
-			LoginState.set_login_error(res);
+			App.post_error(res);
 		}
 	},
 
@@ -49,11 +49,11 @@ var LoginState = {
 		}
 		else
 		{
-			LoginState.set_login_error(res);
+			App.post_error(res);
 		}
 	},
 
-	set_login_error : function(msg)
+	post_error : function(msg)
 	{
 		//Scrub message
 		msg = msg.replace(/\&/g, "&amp;")
@@ -79,11 +79,11 @@ var CharacterSelectState = {
 
 	shutdown : function()
 	{
-		set_select_error("");
+		App.post_error("");
 		document.getElementById("selectPane").style.display = "none";
 	},
 	
-	set_select_error : function(msg)
+	post_error : function(msg)
 	{
 		msg = msg.replace(/\&/g, "&amp;")
 				 .replace(/\</g, "&lt;")
@@ -95,7 +95,7 @@ var CharacterSelectState = {
 
 	do_join_game : function(character_name)
 	{
-		set_select_error("");
+		App.post_error("");
 		var result = Session.join_game(character_name);
 	
 		if(result == "Ok")
@@ -110,7 +110,7 @@ var CharacterSelectState = {
 
 	do_delete_character : function(character_name)
 	{
-		set_select_error("");
+		App.post_error("");
 		var result = Session.delete_character(character_name);
 	
 		if(result == "Ok")
@@ -119,13 +119,13 @@ var CharacterSelectState = {
 		}
 		else
 		{
-			CharacterSelectState.set_select_error(result);
+			App.post_error(result);
 		}
 	},
 
 	do_create_character : function()
 	{
-		set_select_error("");
+		App.post_error("");
 		var character_name	= document.getElementById("characterName");
 		var result		= Session.create_character(character_name.value);
 	
@@ -136,7 +136,7 @@ var CharacterSelectState = {
 		}
 		else
 		{
-			CharacterSelectState.set_select_error(result);
+			App.post_error(result);
 		}
 	},
 
@@ -152,6 +152,42 @@ var CharacterSelectState = {
 				'<a class="avatarSelect" href="javascript:App.state.do_join_game(\'' + character_name + '\');">' + character_name + '</a>' + 
 				'<input class="avatarDel" onclick="javascript:App.state.do_delete_character(\'' + character_name + '\');" type="button" value = "X" />' +
 				'<br/>';
+		}
+	}
+};
+
+
+//The preloader
+var LoadState = {
+
+	init : function()
+	{
+		//FIXME: Start preloading map information
+		//Game.start_preload();
+	
+		if(Loader.finished)
+		{
+			App.set_state(GameState);
+		}
+		else
+		{
+			document.getElementById('progressPane').style.display = 'block';
+		}
+	},
+
+	shutdown : function()
+	{
+		document.getElementById('progressPane').style.display = 'none';
+	},
+
+	update_progress : function(url)
+	{
+		var prog_txt = document.getElementById('progressPane');
+		prog_txt.innerHTML = "Loaded: " + url + "<br\/\>%" + Loader.pct_loaded * 100.0 + " Complete";
+	
+		if(Loader.finished && App.state == LoadState)
+		{
+			App.set_state(GameState);
 		}
 	}
 };
@@ -196,8 +232,7 @@ var App = {
 	
 	init : function()
 	{
-		//Start loading resources
-		//Loader.start(LoadState.update_progress, App.crash);
+		Loader.start(LoadState.update_progress, App.crash);
 		App.set_state(LoginState);
 	},
 
@@ -216,6 +251,11 @@ var App = {
 	crash : function(msg)
 	{
 		App.set_state(ErrorState);	
+		App.state.post_error(msg);
+	},
+	
+	post_error : function(msg)
+	{
 		App.state.post_error(msg);
 	}
 };
