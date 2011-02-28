@@ -11,6 +11,7 @@
 	<script src="misc.js"></script>
 	<script src="loader.js"></script>
 	<script src="session.js"></script>
+	<script src="game.js"></script>
 	<script src="app.js"></script>	
 </head>
 
@@ -33,6 +34,14 @@ Select your character:<br/>
 </div>
 
 <div id="progressPane" style="display:none;" align=center></div>
+
+<div id="gamePane" style="display:none;">
+<canvas id="gameCanvas" style="position:absolute; top:0px; left:0px;"></canvas><br/>
+<div id="uiPane" style="position:absolute; bottom:0px; left:0px;">
+<div id="chatLog" align="left"> </div> <br/>
+<input id="chatBox" type="text" value="" size="128" style="display:none; width:500px; "/>
+</div>
+</div>
 
 <div id="errorPane" style="display:none; background-color:red; color:black;">
 <h1> <tt> The application has crashed! <br/>

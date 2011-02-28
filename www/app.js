@@ -162,12 +162,11 @@ var LoadState = {
 
 	init : function()
 	{
-		//FIXME: Start preloading map information
-		//Game.start_preload();
+		Game.preload();
 	
 		if(Loader.finished)
 		{
-			App.set_state(GameState);
+			App.set_state(Game);
 		}
 		else
 		{
