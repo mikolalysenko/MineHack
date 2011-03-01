@@ -10,10 +10,10 @@
 EXE = a.out
 
 # C++ compiler
-CXX = g++ -std=c++0x
+CXX = icpc -std=c++0x
 
 # C compiler
-CC = gcc
+CC = icpc
 
 #Protocol buffer compiler
 PROTOC = protoc
@@ -102,12 +102,9 @@ else
    # compilation verification options
    WARN_OPTS = $(BWARN_OPTS)
    # optimization options
-   OPTIMISE_OPTS = -O4 -fomit-frame-pointer
+   OPTIMISE_OPTS = -O3
    # dependencies must be up to date
-   CHECK_DEPS = yes
-   
-   CXX = llvm-g++ -std=c++0x
-   CC = llvm-gcc
+   CHECK_DEPS = yes   
 
   else
 
@@ -272,13 +269,13 @@ $(builddir)/%.o:	src/%.c
 # The goal_flag_file is determined at run time because it must be the current
 # goal and not the goal in use when the dependencies makefile was created.
 $(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file)
-	$(SHELL) -ec '$(CXX) -MM $(CPPOPTS) $(CPPFLAGS) $< |\
+	$(SHELL) -ec 'g++ -stc=c++0x -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 
 
 $(builddir)/%.$(deps_suffix):	src/%.c $(goal_flag_file)
-	$(SHELL) -ec '$(CC) -std=c99 -MM $(CPPOPTS) $(CPPFLAGS) $< |\
+	$(SHELL) -ec 'gcc -std=c99 -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 

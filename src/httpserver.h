@@ -8,7 +8,7 @@
 #include <map>
 #include <vector>
 
-#include <cstdint>
+#include <stdint.h>
 
 #include "constants.h"
 #include "config.h"

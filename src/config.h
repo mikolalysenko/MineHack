@@ -2,9 +2,9 @@
 #define CONFIG_H
 
 #include <string>
-#include <cstdint>
 #include <cstdlib>
 
+#include <stdint.h>
 #include <pthread.h>
 
 #include <tcutil.h>

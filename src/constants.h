@@ -10,13 +10,6 @@
 #define RECV_BUFFER_SIZE		0x10000
 #define EPOLL_TIMEOUT			400
 
-//Constants for different buffer sizes
-#define PASSWORD_HASH_LEN		64
-#define USER_NAME_MAX_LEN		20
-#define USER_NAME_MIN_LEN		3
-
-//Player name info
-#define PLAYER_NAME_MAX_LEN		20
 
 //Chunk dimensions
 #define CHUNK_X_S				4

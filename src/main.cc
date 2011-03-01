@@ -1,7 +1,7 @@
 #include <pthread.h>
 #include <time.h>
 
-#include <cstdint>
+#include <stdint.h>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -16,6 +16,7 @@
 #include "login.h"
 #include "httpserver.h"
 #include "misc.h"
+#include "world.h"
 
 using namespace std;
 using namespace Game;
@@ -33,14 +34,10 @@ using namespace Game;
 
 bool app_running = false;
 
-//The global config file
-Config* config;
-
-//Login database
-LoginDB* login_db;
-
-//The HttpServer
+Config* 	config;
+LoginDB* 	login_db;
 HttpServer* server;
+World*		world;
 
 //Sends a nice error message to the client
 void reply_error(HttpEvent* event, string const& message)
@@ -299,6 +296,7 @@ void init_app()
 
 	printf("Starting app\n");
 	
+	
 	printf("Starting login database\n");
 	if(!login_db->start())
 	{
@@ -306,11 +304,20 @@ void init_app()
 		printf("Failed to start login database\n");
 		return;
 	}
+
+	printf("Starting world instance\n");
+	if(!world->start())
+	{
+		world->stop();
+		printf("Failed to start world instance");
+		return;
+	}
 	
 	printf("Starting http server\n");
 	if(!server->start())
 	{
 		login_db->stop();
+		world->stop();
 		server->stop();
 		printf("Failed to start http server\n");
 		return;
@@ -330,12 +337,16 @@ void shutdown_app()
 	}
 
 	printf("Stopping app\n");
+
+	printf("Stopping world instance\n");
+	world->stop();
 	
 	printf("Stopping http server\n");
 	server->stop();
 	
 	printf("Stopping login database\n");
 	login_db->stop();
+	
 	
 	app_running = false;
 }
@@ -351,6 +362,9 @@ void sync()
 	
 	printf("Synchronizing login\n");
 	login_db->sync();
+	
+	printf("Synchronizing world state\n");
+	world->sync();
 }
 
 //This loop runs in the main thread.  Implements the admin console
@@ -430,6 +444,7 @@ int main(int argc, char** argv)
 
 	printf("Allocating objects\n");
 	auto GC = ScopeDelete<Config>(config = new Config("data/config.tc"));
+	auto GW = ScopeDelete<World>(world = new World(config));
 	auto GL = ScopeDelete<LoginDB>(login_db = new LoginDB(config));
 	auto GS = ScopeDelete<HttpServer>(server = new HttpServer(config, callback));
 

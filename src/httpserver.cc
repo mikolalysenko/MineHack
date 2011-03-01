@@ -6,8 +6,9 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
+#include <errno.h>
 
-#include <cstdint>
+#include <stdint.h>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
