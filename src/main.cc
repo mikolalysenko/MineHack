@@ -39,12 +39,13 @@ LoginDB* 	login_db;
 HttpServer* server;
 World*		world;
 
+
 //Sends a nice error message to the client
-void reply_error(HttpEvent* event, string const& message)
+Network::ServerPacket* error_response(string const& message)
 {
-	Network::ServerPacket response;
-	response.mutable_error_response()->set_error_message(message);
-	event->reply(response);
+	auto response = new Network::ServerPacket();
+	response->mutable_error_response()->set_error_message(message);
+	return response;
 }
 
 //Validates a user name
@@ -61,24 +62,21 @@ bool valid_character_name(string const& character_name)
 }
 
 //Handles a login request
-void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
+Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 {
 	DEBUG_PRINTF("Got login request\n");
 
 	if(!login_req.has_user_name())
 	{
-		reply_error(event, "Missing user name");
-		return;
+		return error_response("Missing user name");
 	}
 	else if(!login_req.has_password_hash())
 	{
-		reply_error(event, "Missing password hash");
-		return;
+		return error_response("Missing password hash");
 	}
 	else if(!login_req.has_action())
 	{
-		reply_error(event, "Missing login action");
-		return;
+		return error_response("Missing login action");
 	}
 	
 	DEBUG_PRINTF("User name = %s, password hash = %s, action = %d\n",
@@ -87,7 +85,7 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		login_req.action());
 	
 	Network::ServerPacket packet;
-	Network::LoginResponse *response = packet.mutable_login_response();
+	auto response = packet.mutable_login_response();
 	
 	switch(login_req.action())
 	{
@@ -96,8 +94,7 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		Login::Account account;
 		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
 		{
-			reply_error(event, "Invalid user name/password");
-			return;
+			return error_response("Invalid user name/password");
 		}
 		
 		response->set_success(true);
@@ -109,14 +106,12 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 	{
 		if(!valid_user_name(login_req.user_name()))
 		{
-			reply_error(event, "Invalid user name");
-			return;
+			return error_response("Invalid user name");
 		}
 		
 		if(!login_db->create_account(login_req.user_name(), login_req.password_hash()))
 		{
-			reply_error(event, "User name taken");
-			return;
+			return error_response("User name taken");
 		}
 		
 		response->set_success(true);
@@ -129,8 +124,7 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		Login::Account account;
 		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
 		{
-			reply_error(event, "Invalid user name/password");
-			return;
+			return error_response("Invalid user name/password");
 		}
 		
 		login_db->delete_account(login_req.user_name());
@@ -143,15 +137,13 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		if( !login_req.has_character_name() ||
 			!valid_character_name(login_req.character_name()) )
 		{
-			reply_error(event, "Bad character name");
-			return;
+			return error_response("Bad character name");
 		}
 	
 		Login::Account account;
 		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
 		{
-			reply_error(event, "Invalid user name/password");
-			return;
+			return error_response("Invalid user name/password");
 		}
 
 		//FIXME: Try adding character to game world
@@ -165,8 +157,7 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		if(!login_db->update_account(login_req.user_name(), account, next_account))
 		{
 			//FIXME: Remove character from game world
-			reply_error(event, "Could not update account");
-			return;
+			return error_response("Could not update account");
 		}
 		
 		//Set response values
@@ -179,15 +170,13 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 	{
 		if(!login_req.has_character_name())
 		{
-			reply_error(event, "Missing character name");
-			return;
+			return error_response("Missing character name");
 		}
 		
 		Login::Account account;
 		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
 		{
-			reply_error(event, "Invalid user name/password");
-			return;
+			return error_response("Invalid user name/password");
 		}
 
 		int idx = -1, sz = account.character_names_size();
@@ -202,8 +191,7 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		
 		if(idx == -1)
 		{
-			reply_error(event, "Character does not exist");
-			return;
+			return error_response("Character does not exist");
 		}
 		
 		//FIXME: Try deleting from world
@@ -217,8 +205,7 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		//Update database
 		if(!login_db->update_account(login_req.user_name(), account, next_account))
 		{
-			reply_error(event, "Could not update account");
-			return;
+			return error_response("Could not update account");
 		}
 		
 		//Set response values
@@ -231,15 +218,13 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 	{
 		if(!login_req.has_character_name())
 		{
-			reply_error(event, "Missing character name");
-			return;
+			return error_response("Missing character name");
 		}
 	
 		Login::Account account;
 		if(!login_db->get_account(login_req.user_name(), login_req.password_hash(), account))
 		{
-			reply_error(event, "Invalid user name/password");
-			return;
+			return error_response("Invalid user name/password");
 		}
 		
 		int idx = -1, sz = account.character_names_size();
@@ -254,34 +239,29 @@ void handle_login(HttpEvent* event, Network::LoginRequest const& login_req)
 		
 		if(idx == -1)
 		{
-			reply_error(event, "Character does not exist");
-			return;
+			return error_response("Character does not exist");
 		}
 
-		//FIXME: Try joining game world
+		//FIXME: Allocate session id for character and return it
 		
 		response->set_success(true);
 	}
 	break;
 	}
 	
-	//Reply with response packet
-	event->reply(packet);
+	return new Network::ServerPacket(packet);
 }
 
 //Handles an http event
-void callback(HttpEvent* event)
+Network::ServerPacket* callback(Network::ClientPacket* client_packet)
 {
-	if(event->client_packet->has_login_packet())
+	if(client_packet->has_login_packet())
 	{
-		handle_login(event, event->client_packet->login_packet());
-		delete event;
+		return handle_login(client_packet->login_packet());
 	}
 	else
 	{
-		//Client is fucking with us.  Send them a nasty error message.
-		event->error();
-		delete event;
+		return NULL;
 	}
 }
 
@@ -352,7 +332,7 @@ void shutdown_app()
 }
 
 //Saves the state of the entire game to the database
-void sync()
+void resync()
 {
 	if(!app_running)
 	{
@@ -394,7 +374,7 @@ void console_loop()
 		}
 		else if(command == "s" || command == "sync")
 		{
-			sync();
+			resync();
 		}
 		else if(command == "stop")
 		{

@@ -38,7 +38,7 @@ protodir = proto
 INC_PATH = -I$(srcdir) -I/usr/local/include
 
 # libraries link options ('-lm' is common to link with the math library)
-LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -pthread -ldl -lm -lc
+LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -ltbb -pthread -ldl -lm -lc 
 
 # other compilation options
 COMPILE_OPTS = -pthread -msse2 -Wno-deprecated
@@ -96,7 +96,6 @@ else
   # build options for GOAL_EXE (optimized executable) goal
   ifeq "$(MAKECMDGOALS)" "$(GOAL_EXE)"
 
-   LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -pthread -ldl -lm  -lc  -ltcmalloc 
    # specific options for optimized executable
    GOAL_OPTS = -s
    # compilation verification options
@@ -269,7 +268,7 @@ $(builddir)/%.o:	src/%.c
 # The goal_flag_file is determined at run time because it must be the current
 # goal and not the goal in use when the dependencies makefile was created.
 $(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file)
-	$(SHELL) -ec 'g++ -stc=c++0x -MM $(CPPOPTS) $(CPPFLAGS) $< |\
+	$(SHELL) -ec 'g++ -std=c++0x -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 

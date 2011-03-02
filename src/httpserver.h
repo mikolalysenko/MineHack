@@ -10,130 +10,101 @@
 
 #include <stdint.h>
 
+#include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_hash_map.h>
+
 #include "constants.h"
 #include "config.h"
+#include "httpparser.h"
+
 #include "network.pb.h"
 
 namespace Game {
 
-	class HttpServer;
-
-	enum SocketEventState
+	enum SocketState
 	{
-		Listening,
-		WaitForHeader,
-		Receiving,
-		Processing,
-		Sending
+		SocketState_Listening,
+		SocketState_WaitForHeader,
+		SocketState_CachedReply,
+		SocketState_PostRecv,
+		SocketState_PostReply,
+	};
+
+	//Either send or recv side of a socket
+	struct SocketSide
+	{
+		int size, pending;
+		char *buf_start, *buf_cur;
+		
+		SocketSide() : size(0), pending(0), buf_start(NULL), buf_cur(NULL) { }
+		
+		~SocketSide() 
+		{
+			if(buf_start != NULL)
+				free(buf_start);
+		}
 	};
 
 	//The internal HTTP client event packet structure
-	//Generally speaking, this is only used inside the http server.  Users interact with
-	// HttpEvent
-	struct SocketEvent
+	struct Socket
 	{
-		SocketEvent(int fd, bool listener);
-		~SocketEvent();
+		Socket(int fd, bool listener);
+		~Socket();
 	
-		//The internal socket file descriptor
+		//Socket descriptors
 		int socket_fd;
-		
-		//Socket address
 		sockaddr_storage addr;
 		
-		//State for the event
-		SocketEventState state;
+		//Internal socket state
+		SocketState state;
+		SocketSide inp;
+		SocketSide outp;
 		
-		//Amount of pending bytes for current send/recv
-		int pending_bytes;
-		
-		//Pointer to packet contents		
-		int content_length;
-		char* content_ptr;
-		
-		//Recv buffer stuff
-		int recv_buf_size;
-		char *recv_buf_start, *recv_buf_cur;
-		
-		//Send buffer stuff
-		bool free_send_buffer;
-		char *send_buf_start, *send_buf_cur;
-		
-		//Try parsing the request
-		int try_parse(char** request, int* request_len);
+		//Special case for cached get requests
+		tbb::concurrent_hash_map<std::string, HttpResponse>::const_accessor cached_response;
 	};
-	
-	//The external interface to the HttpEvent server
-	struct HttpEvent
-	{
-		HttpEvent(Network::ClientPacket* packet, SocketEvent* s_event, HttpServer* server);
-		~HttpEvent();
-		
-		//Sends a reply
-		bool reply(void* buf, int len, bool release);
-		bool reply(Network::ServerPacket& message);
-		
-		//Sends a 403 forbidden
-		bool error();
-		
-		//The client packet data
-		Network::ClientPacket* client_packet;
-		
-		//Used for implementing a linked list
-		HttpEvent* next;
-		
-	private:
-		SocketEvent*	socket_event;
-		HttpServer*		server;
-	};
-	
 	
 	//The callback function type
-	typedef void (*http_func)(HttpEvent*);
+	typedef Network::ServerPacket* (*command_func)(Network::ClientPacket*);
 
 	//The HttpServer
-	struct HttpServer
+	class HttpServer
 	{
+	public:
 		//Creates the HttpServer
-		HttpServer(Config* cfg, http_func handler);
-		~HttpServer();
+		HttpServer(Config* cfg, command_func command_handler);
 		
+		//Start the server
 		bool start();
 		void stop();
 		
-		//Recaches all pages
-		void recache();
-		
-		//DO NOT CALL THESE METHODS.  They are used internally by the HttpEvent class to manage sockets.
-		//C++'s stupid scoping rules make it very difficult to let HttpEvent access these things in some
-		//non-obfuscated, efficient way.
-		void dispose_event(SocketEvent* event);
-		bool initiate_send(SocketEvent* event, void* buf, int len, bool release);
+		//Recaches all static http content
+		void recache();		
 		
 	private:
 
 		//Configuration stuff
-		Config* config;
-		http_func callback;
+		Config*			config;
+		command_func	command_callback;
 
 		//Basic server stuff
 		volatile bool running;
 		int living_threads;
-		
-		//Event stuff
 		int epollfd;
-		pthread_spinlock_t event_map_lock;
-		TCMAP* event_map;
-		SocketEvent* create_event(int fd, bool listener = false);
-		void cleanup_events();
+		
+		//Socket set management
+		tbb::concurrent_hash_map<int, Socket*> socket_set;
+		Socket* create_socket(int fd, bool listener = false);
+		bool notify_socket(Socket*);
+		void dispose_socket(Socket*);
+		void cleanup_sockets();
 		
 		//Event handlers
-		void accept_event(SocketEvent* event);
-		void process_header(SocketEvent* event, bool do_recv = true);
-		void process_cached_request(SocketEvent* event, char* req, int req_len);
-		void process_command(SocketEvent* event);
-		void process_recv(SocketEvent* event);
-		void process_send(SocketEvent* event);
+		void process_accept(Socket*);
+		void process_header(Socket*);
+		void process_reply_cached(Socket*);
+		void process_post_recv(Socket*);
+		void process_post_send(Socket*);
 		
 		//Worker stuff
 		pthread_t workers[NUM_HTTP_WORKERS];
@@ -141,10 +112,9 @@ namespace Game {
 		void worker_loop();
 		
 		//Cache functions
-		pthread_spinlock_t cache_lock;
-		TCMAP*	cached_response;
-		TCLIST*	old_cache;
-		const char* get_cached_response(const char* filename, int filename_len, int* cache_len);
+		tbb::concurrent_hash_map<std::string, HttpResponse >	cached_responses;
+		bool get_response(std::string const& request, tbb::concurrent_hash_map<std::string, HttpResponse>::const_accessor& acc);
+		void cleanup_cache();
 	};
 };
 
