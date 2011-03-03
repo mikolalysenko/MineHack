@@ -6,6 +6,7 @@
 //Server stuff
 #define NUM_HTTP_WORKERS		3
 #define MAX_EPOLL_EVENTS		10
+#define MAX_CONNECTIONS			3000
 #define LISTEN_BACKLOG			3
 #define RECV_BUFFER_SIZE		0x10000
 #define EPOLL_TIMEOUT			400

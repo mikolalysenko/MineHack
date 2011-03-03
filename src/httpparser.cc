@@ -47,15 +47,10 @@ const char DEFAULT_PROTOBUF_HEADER[] =
 	"Content-Length: %d\r\n"
 	"\r\n";
 
-// HTTP Header parsing philosophy:
-//
-// Needs to accept output from our supported platforms and do it fast, and reject outright malicious 
-// code.  Any extra cruft is ignored.
-//
-HttpHeader parse_http_header(char* ptr, char* end_ptr)
+HttpRequest parse_http_request(char* ptr, char* end_ptr)
 {
-	HttpHeader result;
-	result.type = HttpHeaderType_Bad;
+	HttpRequest result;
+	result.type = HttpRequestType_Bad;
 	char c;
 		  
 	DEBUG_PRINTF("parsing header\n");
@@ -65,12 +60,10 @@ HttpHeader parse_http_header(char* ptr, char* end_ptr)
 		return result;
 		  
 	//Eat leading whitespace
-	c = *ptr;
-	while(
-		(c == ' ' || c == '\r' || c == 'n' || c == '\t') &&
-		ptr < end_ptr)
-	{
-		c = *(ptr++);
+	for(c = *ptr;
+		(c == ' ' || c == '\r' || c == '\n' || c == '\t') && ptr < end_ptr;
+		c = *(++ptr))
+	{	
 	}
 		  
 	int len = (int)(end_ptr - ptr);
@@ -100,136 +93,109 @@ HttpHeader parse_http_header(char* ptr, char* end_ptr)
 		ptr++;	
 	}
 	
-	//For get stuff, we are done
-	if(!post)
-	{
-		char* request_start = ptr;
-	
-		//Read to end of request
-		while(ptr < end_ptr)
-		{
-			c = *(ptr++);
-			if(c == ' ' || c == '\0')
-				break;
-		}
-	
-		//Set end of request
-		if(ptr == end_ptr)
-			return result;
-			
-		result.type = HttpHeaderType_Get;
-		result.request = string(request_start, (int)(ptr - 1 - request_start));
-		
-		return result;
-	}
+	//Parse out the request portion
+	char* request_start = ptr;
 
-	return result;
-	
-	/*
-
-	DEBUG_PRINTF("Got post header, scanning for content-length\n");
-
-	//Seek to content length field
+	//Read to end of request
 	while(ptr < end_ptr)
 	{
 		c = *(ptr++);
-		if(c == 'C')
-		{
-			//Check for field match
-			const char ONTENT_LEN[] = "ontent-Length:";
-			if(end_ptr - ptr < sizeof(ONTENT_LEN))
-			{
-				return -1;
-			}
-		
-			bool match = true;
-			for(int i=0; i<sizeof(ONTENT_LEN)-1; ++i)
-			{
-				if(ptr[i] != ONTENT_LEN[i])
-				{
-					match = false;
-					break;
-				}
-			}
-		
-			if(match)
-			{
-				ptr += sizeof(ONTENT_LEN);
-				break;
-			}
-		}
-	}
-	if(ptr == end_ptr)
-		return -1;
-
-	DEBUG_PRINTF("Found content length\n");
-
-	//Seek to end of line
-	char* content_str = ptr;
-	while(ptr < end_ptr)
-	{
-		c = *(ptr++);
-		if(c == '\n' || c == '\r' || c == '\0')
+		if(c == ' ' || c == '\0')
 			break;
 	}
 
+	//Set end of request
 	if(ptr == end_ptr)
-		return -1;
-	*(--ptr) = '\0';	
-	content_length = atoi(content_str);
-
-	DEBUG_PRINTF("Content length = %d\n", content_length);
-
-	//Error: must specify content length > 0
-	if(content_length <= 0)
-		return 0;
-
-	//Restore last character
-	*ptr = c;
+		return result;
+		
+	result.request = string(request_start, (int)(ptr - 1 - request_start));
 	
-	DEBUG_PRINTF("Scanning for end of header\n");
-	
-	//Search for two consecutive eol
-	int eol_cnt = 0;
+	//Scan to end of line
 	while(ptr < end_ptr)
 	{
 		c = *(ptr++);
-		
 		if(c == '\n')
+			break;
+	}
+	if(ptr == end_ptr)
+		return result;
+		
+	//Split out the header fields
+	while(ptr < end_ptr)
+	{
+		//Eat whitespace
+		for(c = *ptr;
+			(c == ' ' || c == '\r' || c == '\n' || c == '\t') && ptr < end_ptr;
+			c = *(++ptr))
+		{	
+		}
+		if(ptr == end_ptr)
+			break;
+	
+		char* header_start = ptr;
+	
+		//Scan in request field
+		while(ptr < end_ptr)
 		{
-			if(++eol_cnt == 2)
+			c = *(ptr++);
+			if(c == ':')
 				break;
 		}
-		else if(c == '\r')
-		{
+		if(ptr == end_ptr)
+			break;
+		
+		string request_header_name = string(header_start, ptr-1);
+		
+		//Eat more whitespace
+		for(c = *ptr;
+			(c == ' ' || c == '\t') && ptr < end_ptr;
+			c = *(++ptr))
+		{	
 		}
-		else
+		if(ptr == end_ptr)
+			break;
+		
+		//Scan to 
+		char* data_start = ptr;
+		while(ptr < end_ptr)
 		{
-			eol_cnt = 0;
+			c = *(ptr++);
+			if(c == '\n' || c == '\r')
+				break;
 		}
+		if(ptr == end_ptr)
+			break;
+		
+		string request_data = string(data_start, ptr-1);
+		
+		DEBUG_PRINTF("Got request header: %s, %s\n", request_header_name.c_str(), request_data.c_str());
+		
+		result.headers[request_header_name] = request_data;
 	}
 	
-	if(eol_cnt == 2)
+	//Check for web socket
+	
+	if(post)
 	{
-		*(ptr-1) = '\0';
-		
-		DEBUG_PRINTF("Successfully parsed header: %s\n", recv_buf_start);
-	
-		content_ptr = ptr;
-		
-		return 1;
+		result.type = HttpRequestType_Post;
+	}
+	else
+	{
+		result.type = HttpRequestType_Get;
 	}
 	
-	return -1;
-	*/
+	return result;
 }
 
 
 /*
-
 //Serializes a protocol buffer to an http response
-char* serialize_protobuf_http(Network::ServerPacket& message, int* size)
+HttpResponse http_serialize_protobuf(Network::ServerPacket& message)
 {
+	HttpResponse result;
+	result.buf = NULL;
+	result.size = 0;
+
 	//Write object to buffer
 	int buffer_len =  2 * message.ByteSize() + 32 + sizeof(DEFAULT_PROTOBUF_HEADER);
 	char* buffer = (char*)malloc(buffer_len + 1);
@@ -238,7 +204,7 @@ char* serialize_protobuf_http(Network::ServerPacket& message, int* size)
 	{
 		DEBUG_PRINTF("Protocol buffer serialize failed\n");
 		free(buffer);
-		return false;
+		return result;;
 	}
 	
 	//Compress serialized packet
@@ -248,7 +214,7 @@ char* serialize_protobuf_http(Network::ServerPacket& message, int* size)
 	{
 		DEBUG_PRINTF("Protocol buffer GZIP compression failed\n");
 		free(buffer);
-		return false;
+		return result;
 	}
 
 	//Write packet offset
@@ -257,17 +223,18 @@ char* serialize_protobuf_http(Network::ServerPacket& message, int* size)
 	{
 		DEBUG_PRINTF("Send packet is too big\n");
 		free(buffer);
-		return false;
+		return result;
 	}
 	
 	memcpy(buffer + packet_offset, compressed_buffer.ptr, compressed_size);
-	return buffer;
+	
+	result.size = compressed_size + packet_offset;
+	result.buf = buffer;
+	
+	return result;
 }
 
 */
-
-
-
 
 //Recursively enumerates all files in a directory
 int list_files(string dir, vector<string> &files)

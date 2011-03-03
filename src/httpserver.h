@@ -94,7 +94,7 @@ namespace Game {
 		
 		//Socket set management
 		tbb::concurrent_hash_map<int, Socket*> socket_set;
-		Socket* create_socket(int fd, bool listener = false);
+		Socket* create_socket(int fd, bool listener, sockaddr_storage* addr);
 		bool notify_socket(Socket*);
 		void dispose_socket(Socket*);
 		void cleanup_sockets();

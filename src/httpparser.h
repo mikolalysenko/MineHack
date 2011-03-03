@@ -1,31 +1,25 @@
 #ifndef HTTPPARSER_H
 #define HTTPPARSER_H
 
+#include <map>
 #include <string>
 #include <tbb/concurrent_hash_map.h>
 
 namespace Game
 {
-	enum HttpHeaderType
+	enum HttpRequestType
 	{
-		HttpHeaderType_Bad,
-		HttpHeaderType_Get,
-		HttpHeaderType_Post,
-		HttpHeaderType_WebSocket
+		HttpRequestType_Bad,
+		HttpRequestType_Get,
+		HttpRequestType_Post,
+		HttpRequestType_WebSocket
 	};
 
-	struct HttpHeader
+	struct HttpRequest
 	{
-		HttpHeaderType type;
-		
-		//The request string
+		HttpRequestType type;
 		std::string request;
-		
-		//Content pointers for post data
-		int content_len;
-		char* content_ptr;
-		
-		//FIXME: Add websocket stuff here
+		std::map<std::string, std::string> headers;
 	};
 	
 	//An http response
@@ -36,7 +30,7 @@ namespace Game
 	};
 
 	//Parses an http header
-	HttpHeader parse_http_header(char* buf_start, char* buf_end);
+	HttpRequest parse_http_request(char* buf_start, char* buf_end);
 	
 	//Caches a directory
 	void cache_directory(tbb::concurrent_hash_map<std::string, HttpResponse>& cache, std::string const& wwwroot);

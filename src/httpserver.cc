@@ -138,7 +138,7 @@ bool HttpServer::start()
 
 	//Create epoll object
 	DEBUG_PRINTF("Creating epoll object\n");
-	epollfd = epoll_create(1000);
+	epollfd = epoll_create(MAX_CONNECTIONS);
 	if(epollfd == -1)
 	{
 		perror("epoll_create");
@@ -147,7 +147,9 @@ bool HttpServer::start()
 	}
 
 	//Add listen socket event
-	auto listen_socket = create_socket(listen_socket_fd, true);
+	sockaddr_storage st_addr;
+	*((sockaddr_in*)(void*)&st_addr) = addr;
+	auto listen_socket = create_socket(listen_socket_fd, true, &st_addr);
 	if(listen_socket == NULL)
 	{
 		stop();
@@ -260,11 +262,16 @@ bool HttpServer::get_response(string const& request, concurrent_hash_map<string,
 //-------------------------------------------------------------------
 
 //Creates an http event
-Socket* HttpServer::create_socket(int fd, bool listener)
+Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 {
 	Socket* result = new Socket(fd, listener);
 	result->socket_fd = fd;
 	
+	
+	if(addr != NULL)
+	{
+		result->addr = *addr;
+	}
 	
 	//Set socket to non blocking
 	int flags = fcntl(fd, F_GETFL, 0);
@@ -278,7 +285,7 @@ Socket* HttpServer::create_socket(int fd, bool listener)
 	}
 	
 	epoll_event ev;
-	ev.events = EPOLLIN | ( listener ? 0 : EPOLLONESHOT | EPOLLET );
+	ev.events = listener ? EPOLLIN : (EPOLLIN | EPOLLET | EPOLLONESHOT);
 	ev.data.fd = fd;
 	ev.data.ptr = result;
 
@@ -368,75 +375,63 @@ void HttpServer::process_accept(Socket* socket)
 
 	//Accept connection
 	sockaddr_storage addr;
-	int addr_size = sizeof(addr);
-	int conn_fd = accept(socket->socket_fd, (sockaddr*)&(addr), (socklen_t*)&addr_size);
+	int addr_size = sizeof(addr), conn_fd = -1;
 	
+	conn_fd = accept(socket->socket_fd, (sockaddr*)&(addr), (socklen_t*)&addr_size);
 	if(conn_fd == -1)
 	{
 		DEBUG_PRINTF("Accept error, errno = %d\n", errno);
 		return;
 	}
-	
+		
 	//FIXME: Maybe check black list here, deny connections from ahole ip addresses
 	
-	auto res = create_socket(conn_fd);
+	auto res = create_socket(conn_fd, false, &addr);
 	if(res == NULL)
 	{
 		DEBUG_PRINTF("Error accepting connection\n");
 	}
-
-	//Set socket address
-	res->addr = addr;
 	
-	DEBUG_PRINTF("Connection successfully accepted\n");
+	DEBUG_PRINTF("Connection successfully accepted, fd = %d\n", conn_fd);
 }
 
 
 //Process a header request
 void HttpServer::process_header(Socket* socket)
 {
-	DEBUG_PRINTF("Processing header\n");
+	DEBUG_PRINTF("Processing header, fd = %d\n", socket->socket_fd);
 
 	char* header_end = max(socket->inp.buf_cur - 4, socket->inp.buf_start);
 	
-	do
+	int buf_len = socket->inp.size - (int)(socket->inp.buf_cur - socket->inp.buf_start);
+	if(buf_len <= 0)
 	{
-		int buf_len = socket->inp.size - (int)(socket->inp.buf_cur - socket->inp.buf_start);
-		if(buf_len <= 0)
-		{
-			DEBUG_PRINTF("Client packet overflowed, discarding");
-			dispose_socket(socket);
-			return;
-		}
-		
-		int len = recv(socket->socket_fd, socket->inp.buf_cur, buf_len, 0);
-		if(len < 0 )
-		{
-			if(errno == EAGAIN)
-			{
-				DEBUG_PRINTF("Socket not ready, repolling\n");
-				continue;
-			}
-			perror("recv");
-			dispose_socket(socket);
-			return;
-		}
-		else if(len == 0)
-		{
-			DEBUG_PRINTF("Remote end hung up during header transmission\n");
-			dispose_socket(socket);
-			return;
-		}
-	
-		socket->inp.buf_cur += len;
-	} while(running && errno == EAGAIN);
-	
-	if(!running)
-	{
-		DEBUG_PRINTF("Server died when recving\n");
+		DEBUG_PRINTF("Client packet overflowed, discarding\n");
 		dispose_socket(socket);
 		return;
 	}
+	
+	int len = recv(socket->socket_fd, socket->inp.buf_cur, buf_len, 0);
+	if(len < 0 )
+	{
+		if(errno == EAGAIN)
+		{
+			DEBUG_PRINTF("Socket not yet ready, readding\n");
+			notify_socket(socket);
+			return;
+		}
+		perror("recv");
+		dispose_socket(socket);
+		return;
+	}
+	else if(len == 0)
+	{
+		DEBUG_PRINTF("Remote end hung up during header transmission\n");
+		dispose_socket(socket);
+		return;
+	}
+
+	socket->inp.buf_cur += len;
 	
 	//Scan for end of header
 	int num_eol = 0;	
@@ -471,22 +466,22 @@ void HttpServer::process_header(Socket* socket)
 	}
 	
 	//Parse header
-	auto header = parse_http_header(socket->inp.buf_start, header_end);
+	auto request = parse_http_request(socket->inp.buf_start, header_end);
 	
-	switch(header.type)
+	switch(request.type)
 	{
-	case HttpHeaderType_Bad:
+	case HttpRequestType_Bad:
 	{
 		DEBUG_PRINTF("Bad HTTP header\n");
 		dispose_socket(socket);
 	}
 	break;
 	
-	case HttpHeaderType_Get:
+	case HttpRequestType_Get:
 	{
-		DEBUG_PRINTF("Got cached HTTP request: %s\n", header.request.c_str());
+		DEBUG_PRINTF("Got cached HTTP request: %s\n", request.request.c_str());
 		
-		if(!get_response(header.request, socket->cached_response))
+		if(!get_response(request.request, socket->cached_response))
 		{
 			dispose_socket(socket);
 		}
@@ -499,14 +494,16 @@ void HttpServer::process_header(Socket* socket)
 	}
 	break;
 		
-	case HttpHeaderType_Post:
+	case HttpRequestType_Post:
 	{
 		DEBUG_PRINTF("Got post HTTP request\n");
+		
+		
 		dispose_socket(socket);
 	}
 	break;
 	
-	case HttpHeaderType_WebSocket:
+	case HttpRequestType_WebSocket:
 	{
 		DEBUG_PRINTF("Got a web socket connection\n");
 		dispose_socket(socket);
@@ -521,34 +518,31 @@ void HttpServer::process_reply_cached(Socket* socket)
 	
 	auto response = socket->cached_response->second;
 	
-	do
+	int offset = response.size - socket->outp.pending;
+	int len = send(socket->socket_fd, response.buf + offset, socket->outp.pending, 0);
+	
+	if(len < 0)
 	{
-		int offset = response.size - socket->outp.pending;
-		int len = send(socket->socket_fd, response.buf + offset, socket->outp.pending, 0);
-		
-		if(len < 0)
+		if(errno == EAGAIN);
 		{
-			if(errno == EAGAIN);
-			{
-				DEBUG_PRINTF("Send incomplete, retrying\n");
-				continue;
-			}
-			perror("send");
-			socket->cached_response.release();
-			dispose_socket(socket);
+			DEBUG_PRINTF("Send incomplete, retrying\n");
+			notify_socket(socket);
 			return;
 		}
-		else if(len == 0)
-		{
-			DEBUG_PRINTF("Remote end hung up\n");
-			socket->cached_response.release();
-			dispose_socket(socket);
-			return;
-		}
-		
-		socket->outp.pending -= len;
-		
-	} while(running && errno == EAGAIN);
+		perror("send");
+		socket->cached_response.release();
+		dispose_socket(socket);
+		return;
+	}
+	else if(len == 0)
+	{
+		DEBUG_PRINTF("Remote end hung up\n");
+		socket->cached_response.release();
+		dispose_socket(socket);
+		return;
+	}
+	
+	socket->outp.pending -= len;
 
 	if(!running || socket->outp.pending <= 0)
 	{
