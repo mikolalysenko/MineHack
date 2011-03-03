@@ -1,5 +1,3 @@
-"use strict";
-
 //Rates for the different game intervals
 const GAME_TICK_RATE		= 20;
 const GAME_DRAW_RATE		= 40;

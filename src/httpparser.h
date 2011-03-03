@@ -5,6 +5,9 @@
 #include <string>
 #include <tbb/concurrent_hash_map.h>
 
+#include "constants.h"
+#include "network.pb.h"
+
 namespace Game
 {
 	enum HttpRequestType
@@ -18,8 +21,12 @@ namespace Game
 	struct HttpRequest
 	{
 		HttpRequestType type;
-		std::string request;
+		std::string url;
 		std::map<std::string, std::string> headers;
+		
+		//For post requests
+		int content_length;
+		char* content_ptr;
 	};
 	
 	//An http response
@@ -30,7 +37,10 @@ namespace Game
 	};
 
 	//Parses an http header
-	HttpRequest parse_http_request(char* buf_start, char* buf_end);
+	void parse_http_request(char* buf_start, char* buf_end, HttpRequest&);
+	
+	//Generates a protocol buffer base http serialized packet
+	HttpResponse http_serialize_protobuf(Network::ServerPacket* message);
 	
 	//Caches a directory
 	void cache_directory(tbb::concurrent_hash_map<std::string, HttpResponse>& cache, std::string const& wwwroot);

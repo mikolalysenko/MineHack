@@ -255,6 +255,7 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 //Handles an http event
 Network::ServerPacket* callback(Network::ClientPacket* client_packet)
 {
+	DEBUG_PRINTF("Got a packet!\n");
 	if(client_packet->has_login_packet())
 	{
 		return handle_login(client_packet->login_packet());

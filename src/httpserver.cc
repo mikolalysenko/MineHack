@@ -248,7 +248,7 @@ void HttpServer::cleanup_cache()
 }
 
 //Retrieves a response
-bool HttpServer::get_response(string const& request, concurrent_hash_map<string, HttpResponse>::const_accessor& acc)
+bool HttpServer::get_cached_response(string const& request, concurrent_hash_map<string, HttpResponse>::const_accessor& acc)
 {
 	if(!cached_responses.find(acc, request))
 	{
@@ -316,17 +316,17 @@ bool HttpServer::notify_socket(Socket* socket)
 	switch(socket->state)
 	{
 		case SocketState_Listening:
-			ev.events = EPOLLIN | EPOLLET;
+			ev.events = EPOLLIN | EPOLLET | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 		break;
 		
 		case SocketState_PostRecv:
 		case SocketState_WaitForHeader:
-			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 		break;
 		
 		case SocketState_PostReply:
 		case SocketState_CachedReply:
-			ev.events = EPOLLOUT | EPOLLET | EPOLLONESHOT;
+			ev.events = EPOLLOUT | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 		break;
 	}
 	
@@ -453,6 +453,7 @@ void HttpServer::process_header(Socket* socket)
 			break;
 		}
 	}
+	header_end++;
 	
 	//Incomplete http header
 	if(num_eol < 2)
@@ -466,9 +467,10 @@ void HttpServer::process_header(Socket* socket)
 	}
 	
 	//Parse header
-	auto request = parse_http_request(socket->inp.buf_start, header_end);
+	int header_size = (int)(header_end - socket->inp.buf_start);
+	parse_http_request(socket->inp.buf_start, header_end, socket->request);
 	
-	switch(request.type)
+	switch(socket->request.type)
 	{
 	case HttpRequestType_Bad:
 	{
@@ -479,17 +481,20 @@ void HttpServer::process_header(Socket* socket)
 	
 	case HttpRequestType_Get:
 	{
-		DEBUG_PRINTF("Got cached HTTP request: %s\n", request.request.c_str());
+		DEBUG_PRINTF("Got cached HTTP request: %s\n", socket->request.url.c_str());
 		
-		if(!get_response(request.request, socket->cached_response))
+		if(!get_cached_response(socket->request.url, socket->cached_response))
 		{
 			dispose_socket(socket);
+			return;
 		}
-		else
+		
+		socket->state = SocketState_CachedReply;
+		socket->outp.pending = socket->cached_response->second.size;
+		if(!notify_socket(socket))
 		{
-			socket->state = SocketState_CachedReply;
-			socket->outp.pending = socket->cached_response->second.size;
-			notify_socket(socket);
+			dispose_socket(socket);
+			return;
 		}
 	}
 	break;
@@ -498,8 +503,35 @@ void HttpServer::process_header(Socket* socket)
 	{
 		DEBUG_PRINTF("Got post HTTP request\n");
 		
+		int total_size = socket->request.content_length + header_size;
 		
-		dispose_socket(socket);
+		if(socket->request.content_length <= 0 || 
+			socket->request.content_length + header_size > socket->inp.size)
+		{
+			//FIXME: Send error reply
+			dispose_socket(socket);
+			return;
+		}
+
+		int pending_bytes = total_size - (int)(socket->inp.buf_cur - socket->inp.buf_start);
+		
+		if(pending_bytes <= 0)
+		{
+			//Handle post request immediately
+			process_post(socket);
+			return;
+		}
+		else
+		{
+			socket->state = SocketState_PostRecv;
+			socket->inp.pending = pending_bytes;
+			
+			if(!notify_socket(socket))
+			{
+				dispose_socket(socket);
+			}
+			return;
+		}
 	}
 	break;
 	
@@ -544,32 +576,158 @@ void HttpServer::process_reply_cached(Socket* socket)
 	
 	socket->outp.pending -= len;
 
-	if(!running || socket->outp.pending <= 0)
+	if(socket->outp.pending <= 0)
 	{
 		DEBUG_PRINTF("Send complete\n");
 		socket->cached_response.release();
 		dispose_socket(socket);
 		return;
 	}
-	else if(!notify_socket(socket))
+	
+	DEBUG_PRINTF("More to send, continuing\n");	
+	if(!notify_socket(socket))
 	{
 		DEBUG_PRINTF("Notify failed\n");
 		socket->cached_response.release();
 		dispose_socket(socket);
 		return;
 	}
+}
+
+void HttpServer::process_post_recv(Socket* socket)
+{
+	DEBUG_PRINTF("Receiving post data, pending_bytes = %d\n", socket->inp.pending);
+	
+	int len = recv(socket->socket_fd, socket->inp.buf_cur, socket->inp.pending, 0);
+	
+	if(len < 0)
+	{
+		if(errno == EAGAIN);
+		{
+			DEBUG_PRINTF("Recv incomplete, retrying\n");
+			notify_socket(socket);
+			return;
+		}
+		perror("recv");
+		dispose_socket(socket);
+		return;
+	}
+	else if(len == 0)
+	{
+		DEBUG_PRINTF("Remote end hung up\n");
+		dispose_socket(socket);
+		return;
+	}
+	
+	socket->inp.pending -= len;
+	socket->inp.buf_cur += len;
+
+	if(socket->inp.pending <= 0)
+	{
+		DEBUG_PRINTF("Recv complete\n");
+		process_post(socket);
+		return;
+	}
+	
+	DEBUG_PRINTF("More to recv, continuing\n");
+	if(!notify_socket(socket))
+	{
+		DEBUG_PRINTF("Notify failed\n");
+		dispose_socket(socket);
+		return;
+	}
+}
+
+void HttpServer::process_post_send(Socket* socket)
+{
+	DEBUG_PRINTF("Sending post reply, pending_bytes = %d\n", socket->outp.pending);
+	
+	int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, 0);
+	
+	if(len < 0)
+	{
+		if(errno == EAGAIN);
+		{
+			DEBUG_PRINTF("Send incomplete, retrying\n");
+			notify_socket(socket);
+			return;
+		}
+		perror("send");
+		dispose_socket(socket);
+		return;
+	}
+	else if(len == 0)
+	{
+		DEBUG_PRINTF("Remote end hung up\n");
+		dispose_socket(socket);
+		return;
+	}
+	
+	socket->outp.pending -= len;
+	socket->outp.buf_cur += len;
+
+	if(socket->outp.pending <= 0)
+	{
+		DEBUG_PRINTF("Send complete\n");
+		dispose_socket(socket);
+		return;
+	}
 	
 	DEBUG_PRINTF("More to send, continuing\n");
+	if(!notify_socket(socket))
+	{
+		DEBUG_PRINTF("Notify failed\n");
+		dispose_socket(socket);
+		return;
+	}
 }
 
-void HttpServer::process_post_recv(Socket* event)
+//Process a post request
+void HttpServer::process_post(Socket* socket)
 {
-	assert(false);
-}
-
-void HttpServer::process_post_send(Socket* event)
-{
-	assert(false);
+	DEBUG_PRINTF("Processinng a post request, len = %d\n", socket->request.content_length);
+	
+	for(int i=0; i<socket->request.content_length; ++i)
+	{
+		DEBUG_PRINTF( "%d,", (uint8_t)(socket->request.content_ptr[i]) );
+	}
+	DEBUG_PRINTF("\n");
+	
+	//Parse client packet
+	auto P = ScopeDelete<Network::ClientPacket>(new Network::ClientPacket());
+	if(!P.ptr->ParseFromArray(socket->request.content_ptr, socket->request.content_length))
+	{
+		DEBUG_PRINTF("Failed to parse post request\n");
+		dispose_socket(socket);
+		return;
+	}
+	
+	
+	auto reply = ScopeDelete<Network::ServerPacket>((*command_callback)(P.ptr));
+	if(reply.ptr == NULL)
+	{
+		dispose_socket(socket);
+		return;
+	}
+	
+	auto resp = http_serialize_protobuf(reply.ptr);
+	
+	if(resp.buf == NULL)
+	{
+		dispose_socket(socket);
+		return;
+	}
+	
+	socket->state = SocketState_PostReply;
+	socket->outp.size = resp.size;
+	socket->outp.pending = resp.size;
+	socket->outp.buf_start = resp.buf;
+	socket->outp.buf_cur = resp.buf;
+	
+	if(!notify_socket(socket))
+	{
+		dispose_socket(socket);
+	}
 }
 
 

@@ -60,6 +60,9 @@ namespace Game {
 		SocketSide inp;
 		SocketSide outp;
 		
+		//Request header information
+		HttpRequest request;
+		
 		//Special case for cached get requests
 		tbb::concurrent_hash_map<std::string, HttpResponse>::const_accessor cached_response;
 	};
@@ -105,6 +108,7 @@ namespace Game {
 		void process_reply_cached(Socket*);
 		void process_post_recv(Socket*);
 		void process_post_send(Socket*);
+		void process_post(Socket*);
 		
 		//Worker stuff
 		pthread_t workers[NUM_HTTP_WORKERS];
@@ -113,7 +117,7 @@ namespace Game {
 		
 		//Cache functions
 		tbb::concurrent_hash_map<std::string, HttpResponse >	cached_responses;
-		bool get_response(std::string const& request, tbb::concurrent_hash_map<std::string, HttpResponse>::const_accessor& acc);
+		bool get_cached_response(std::string const& request, tbb::concurrent_hash_map<std::string, HttpResponse>::const_accessor& acc);
 		void cleanup_cache();
 	};
 };

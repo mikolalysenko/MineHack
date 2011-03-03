@@ -47,17 +47,17 @@ const char DEFAULT_PROTOBUF_HEADER[] =
 	"Content-Length: %d\r\n"
 	"\r\n";
 
-HttpRequest parse_http_request(char* ptr, char* end_ptr)
+void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 {
-	HttpRequest result;
 	result.type = HttpRequestType_Bad;
+	result.content_ptr = end_ptr;
 	char c;
 		  
 	DEBUG_PRINTF("parsing header\n");
 	
 	//Check for no data case
 	if(ptr == end_ptr)
-		return result;
+		return;
 		  
 	//Eat leading whitespace
 	for(c = *ptr;
@@ -68,7 +68,7 @@ HttpRequest parse_http_request(char* ptr, char* end_ptr)
 		  
 	int len = (int)(end_ptr - ptr);
 	if(len < 12)
-		return result;
+		return;
 	
 	//Check for get or post
 	bool post = false;
@@ -84,7 +84,7 @@ HttpRequest parse_http_request(char* ptr, char* end_ptr)
 	else
 	{
 		DEBUG_PRINTF("Unkown HTTP request type\n");
-		return result;
+		return;
 	}
 	
 	//Skip leading slash
@@ -106,9 +106,9 @@ HttpRequest parse_http_request(char* ptr, char* end_ptr)
 
 	//Set end of request
 	if(ptr == end_ptr)
-		return result;
+		return;
 		
-	result.request = string(request_start, (int)(ptr - 1 - request_start));
+	result.url = string(request_start, (int)(ptr - 1 - request_start));
 	
 	//Scan to end of line
 	while(ptr < end_ptr)
@@ -118,7 +118,7 @@ HttpRequest parse_http_request(char* ptr, char* end_ptr)
 			break;
 	}
 	if(ptr == end_ptr)
-		return result;
+		return;
 		
 	//Split out the header fields
 	while(ptr < end_ptr)
@@ -173,34 +173,44 @@ HttpRequest parse_http_request(char* ptr, char* end_ptr)
 		result.headers[request_header_name] = request_data;
 	}
 	
-	//Check for web socket
+	//FIXME: Check for web socket
 	
 	if(post)
 	{
-		result.type = HttpRequestType_Post;
+		auto iter = result.headers.find("Content-Length");
+		if(iter == result.headers.end())
+		{
+			DEBUG_PRINTF("Missing content length field in post request\n");
+			return;
+		}
+		
+		result.content_length = atoi(iter->second.c_str());
+		
+		if(result.content_length >= 0)
+		{
+			result.type = HttpRequestType_Post;
+		}
 	}
 	else
 	{
 		result.type = HttpRequestType_Get;
 	}
-	
-	return result;
 }
 
 
-/*
 //Serializes a protocol buffer to an http response
-HttpResponse http_serialize_protobuf(Network::ServerPacket& message)
+HttpResponse http_serialize_protobuf(Network::ServerPacket* message)
 {
 	HttpResponse result;
 	result.buf = NULL;
 	result.size = 0;
 
 	//Write object to buffer
-	int buffer_len =  2 * message.ByteSize() + 32 + sizeof(DEFAULT_PROTOBUF_HEADER);
+	int bs = message->ByteSize();
+	int buffer_len =  2 * bs + 32 + sizeof(DEFAULT_PROTOBUF_HEADER);
 	char* buffer = (char*)malloc(buffer_len + 1);
 	buffer[0] = '\n';	//Need to set to avoid messing up byte order mask
-	if(!message.SerializeToArray(buffer + 1, buffer_len))
+	if(!message->SerializeToArray(buffer + 1, buffer_len))
 	{
 		DEBUG_PRINTF("Protocol buffer serialize failed\n");
 		free(buffer);
@@ -209,7 +219,7 @@ HttpResponse http_serialize_protobuf(Network::ServerPacket& message)
 	
 	//Compress serialized packet
 	int compressed_size;
-	ScopeFree compressed_buffer(tcgzipencode(buffer, message.ByteSize()+1, &compressed_size));
+	ScopeFree compressed_buffer(tcgzipencode(buffer, bs+1, &compressed_size));
 	if(compressed_buffer.ptr == NULL)
 	{
 		DEBUG_PRINTF("Protocol buffer GZIP compression failed\n");
@@ -233,8 +243,6 @@ HttpResponse http_serialize_protobuf(Network::ServerPacket& message)
 	
 	return result;
 }
-
-*/
 
 //Recursively enumerates all files in a directory
 int list_files(string dir, vector<string> &files)
