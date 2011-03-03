@@ -324,6 +324,7 @@ bool HttpServer::notify_socket(Socket* socket)
 			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 		break;
 		
+		case SocketState_WebSocketHandshake:
 		case SocketState_PostReply:
 		case SocketState_CachedReply:
 			ev.events = EPOLLOUT | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
@@ -538,7 +539,36 @@ void HttpServer::process_header(Socket* socket)
 	case HttpRequestType_WebSocket:
 	{
 		DEBUG_PRINTF("Got a web socket connection\n");
-		dispose_socket(socket);
+		
+		//Make sure we read the extra 8 bytes for the connection key
+		if((int)(socket->inp.buf_cur - socket->request.content_ptr) < 8)
+		{
+			if(!notify_socket(socket))
+				dispose_socket(socket);
+			return;
+		}
+		
+		//Create the handshake packet
+		auto ws_handshake = http_websocket_handshake(socket->request);
+		if(ws_handshake.buf == NULL)
+		{
+			DEBUG_PRINTF("Bad WebSocket handshake\n");
+			dispose_socket(socket);
+			return;
+		}
+		
+		//FIXME: Register web socket with application here
+		
+		socket->state = SocketState_WebSocketHandshake;
+		socket->outp.size = ws_handshake.size;
+		socket->outp.pending = ws_handshake.size;		
+		socket->outp.buf_start = ws_handshake.buf;
+		socket->outp.buf_cur = ws_handshake.buf;
+		
+		if(!notify_socket(socket))
+		{
+			dispose_socket(socket);
+		}
 	}
 	break;
 	}
@@ -594,9 +624,9 @@ void HttpServer::process_reply_cached(Socket* socket)
 	}
 }
 
-void HttpServer::process_post_recv(Socket* socket)
+void HttpServer::process_recv(Socket* socket)
 {
-	DEBUG_PRINTF("Receiving post data, pending_bytes = %d\n", socket->inp.pending);
+	DEBUG_PRINTF("Receiving, pending_bytes = %d\n", socket->inp.pending);
 	
 	int len = recv(socket->socket_fd, socket->inp.buf_cur, socket->inp.pending, 0);
 	
@@ -625,7 +655,17 @@ void HttpServer::process_post_recv(Socket* socket)
 	if(socket->inp.pending <= 0)
 	{
 		DEBUG_PRINTF("Recv complete\n");
-		process_post(socket);
+		
+		switch(socket->state)
+		{	
+		case SocketState_PostRecv:
+			process_post(socket);
+			return;
+		break;
+		}
+
+		DEBUG_PRINTF("Unknown state, destroy socket\n");
+		dispose_socket(socket);		
 		return;
 	}
 	
@@ -638,9 +678,9 @@ void HttpServer::process_post_recv(Socket* socket)
 	}
 }
 
-void HttpServer::process_post_send(Socket* socket)
+void HttpServer::process_send(Socket* socket)
 {
-	DEBUG_PRINTF("Sending post reply, pending_bytes = %d\n", socket->outp.pending);
+	DEBUG_PRINTF("Sending, pending_bytes = %d\n", socket->outp.pending);
 	
 	int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, 0);
 	
@@ -669,6 +709,27 @@ void HttpServer::process_post_send(Socket* socket)
 	if(socket->outp.pending <= 0)
 	{
 		DEBUG_PRINTF("Send complete\n");
+		
+		
+		switch(socket->state)
+		{	
+		case SocketState_PostReply:
+			dispose_socket(socket);
+			return;
+		break;
+		
+		case SocketState_WebSocketHandshake:
+		{
+			DEBUG_PRINTF("WebSocket handshake complete\n");
+			
+			//FIXME: Implement frame protocol here
+			
+			dispose_socket(socket);
+			return;
+		}
+		break;
+		}
+		
 		dispose_socket(socket);
 		return;
 	}
@@ -686,12 +747,6 @@ void HttpServer::process_post_send(Socket* socket)
 void HttpServer::process_post(Socket* socket)
 {
 	DEBUG_PRINTF("Processinng a post request, len = %d\n", socket->request.content_length);
-	
-	for(int i=0; i<socket->request.content_length; ++i)
-	{
-		DEBUG_PRINTF( "%d,", (uint8_t)(socket->request.content_ptr[i]) );
-	}
-	DEBUG_PRINTF("\n");
 	
 	//Parse client packet
 	auto P = ScopeDelete<Network::ClientPacket>(new Network::ClientPacket());
@@ -729,7 +784,6 @@ void HttpServer::process_post(Socket* socket)
 		dispose_socket(socket);
 	}
 }
-
 
 //-------------------------------------------------------------------
 // Worker loop
@@ -792,11 +846,11 @@ void HttpServer::worker_loop()
 				break;
 				
 				case SocketState_PostRecv:
-					process_post_recv(socket);
+					process_recv(socket);
 				break;
 				
 				case SocketState_PostReply:
-					process_post_send(socket);
+					process_send(socket);
 				break;
 			}
 		}

@@ -28,6 +28,7 @@ namespace Game {
 		SocketState_CachedReply,
 		SocketState_PostRecv,
 		SocketState_PostReply,
+		SocketState_WebSocketHandshake
 	};
 
 	//Either send or recv side of a socket
@@ -106,8 +107,8 @@ namespace Game {
 		void process_accept(Socket*);
 		void process_header(Socket*);
 		void process_reply_cached(Socket*);
-		void process_post_recv(Socket*);
-		void process_post_send(Socket*);
+		void process_recv(Socket*);
+		void process_send(Socket*);
 		void process_post(Socket*);
 		
 		//Worker stuff

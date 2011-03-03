@@ -27,9 +27,6 @@ World::World(Config* cfg) : config(cfg)
 //Clean up/saving stuff
 World::~World()
 {
-	//Save tick count
-	config->storeInt("tick_count", ticks);
-	
 	delete session_manager;
 	delete entity_db;
 }

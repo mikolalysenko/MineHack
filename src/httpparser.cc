@@ -173,8 +173,6 @@ void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 		result.headers[request_header_name] = request_data;
 	}
 	
-	//FIXME: Check for web socket
-	
 	if(post)
 	{
 		auto iter = result.headers.find("Content-Length");
@@ -193,7 +191,16 @@ void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 	}
 	else
 	{
-		result.type = HttpRequestType_Get;
+		auto iter = result.headers.find("Upgrade");
+		
+		if(iter != result.headers.end() && iter->second == "WebSocket")
+		{
+			result.type = HttpRequestType_WebSocket;
+		}
+		else
+		{
+			result.type = HttpRequestType_Get;
+		}
 	}
 }
 
@@ -243,6 +250,16 @@ HttpResponse http_serialize_protobuf(Network::ServerPacket* message)
 	
 	return result;
 }
+
+//Generates a websocket handshake reply
+HttpResponse http_websocket_handshake(HttpRequest const& request)
+{
+	HttpResponse result;
+	result.size = 0;
+	result.buf = NULL;
+	return result;
+}
+
 
 //Recursively enumerates all files in a directory
 int list_files(string dir, vector<string> &files)

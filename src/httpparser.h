@@ -42,6 +42,9 @@ namespace Game
 	//Generates a protocol buffer base http serialized packet
 	HttpResponse http_serialize_protobuf(Network::ServerPacket* message);
 	
+	//Generates a web socket handshake accept
+	HttpResponse http_websocket_handshake(HttpRequest const& request);
+	
 	//Caches a directory
 	void cache_directory(tbb::concurrent_hash_map<std::string, HttpResponse>& cache, std::string const& wwwroot);
 };
