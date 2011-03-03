@@ -376,19 +376,6 @@ void console_loop()
 		{
 			resync();
 		}
-		else if(command == "stop")
-		{
-			shutdown_app();
-		}
-		else if(command == "start")
-		{
-			init_app();
-		}
-		else if(command == "restart")
-		{
-			shutdown_app();
-			init_app();
-		}
 		else if(command == "print")
 		{
 			string a;

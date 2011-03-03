@@ -278,7 +278,7 @@ Socket* HttpServer::create_socket(int fd, bool listener)
 	}
 	
 	epoll_event ev;
-	ev.events = EPOLLIN | EPOLLET | ( listener ? 0 : EPOLLONESHOT );
+	ev.events = EPOLLIN | ( listener ? 0 : EPOLLONESHOT | EPOLLET );
 	ev.data.fd = fd;
 	ev.data.ptr = result;
 
@@ -364,6 +364,8 @@ void HttpServer::cleanup_sockets()
 
 void HttpServer::process_accept(Socket* socket)
 {
+	DEBUG_PRINTF("Got connection\n");
+
 	//Accept connection
 	sockaddr_storage addr;
 	int addr_size = sizeof(addr);
@@ -385,6 +387,8 @@ void HttpServer::process_accept(Socket* socket)
 
 	//Set socket address
 	res->addr = addr;
+	
+	DEBUG_PRINTF("Connection successfully accepted\n");
 }
 
 
@@ -395,7 +399,7 @@ void HttpServer::process_header(Socket* socket)
 
 	char* header_end = max(socket->inp.buf_cur - 4, socket->inp.buf_start);
 	
-	while(running)
+	do
 	{
 		int buf_len = socket->inp.size - (int)(socket->inp.buf_cur - socket->inp.buf_start);
 		if(buf_len <= 0)
@@ -409,7 +413,10 @@ void HttpServer::process_header(Socket* socket)
 		if(len < 0 )
 		{
 			if(errno == EAGAIN)
+			{
+				DEBUG_PRINTF("Socket not ready, repolling\n");
 				continue;
+			}
 			perror("recv");
 			dispose_socket(socket);
 			return;
@@ -422,10 +429,11 @@ void HttpServer::process_header(Socket* socket)
 		}
 	
 		socket->inp.buf_cur += len;
-	}
+	} while(running && errno == EAGAIN);
 	
 	if(!running)
 	{
+		DEBUG_PRINTF("Server died when recving\n");
 		dispose_socket(socket);
 		return;
 	}
@@ -445,7 +453,7 @@ void HttpServer::process_header(Socket* socket)
 			break;
 		}
 		
-		if(num_eol == 2)
+		if(num_eol >= 2)
 		{
 			break;
 		}
@@ -476,11 +484,18 @@ void HttpServer::process_header(Socket* socket)
 	
 	case HttpHeaderType_Get:
 	{
-		DEBUG_PRINTF("Got cached HTTP request\n");
+		DEBUG_PRINTF("Got cached HTTP request: %s\n", header.request.c_str());
 		
-		//FIXME: Process cached request here
-		
-		dispose_socket(socket);
+		if(!get_response(header.request, socket->cached_response))
+		{
+			dispose_socket(socket);
+		}
+		else
+		{
+			socket->state = SocketState_CachedReply;
+			socket->outp.pending = socket->cached_response->second.size;
+			notify_socket(socket);
+		}
 	}
 	break;
 		
@@ -502,22 +517,22 @@ void HttpServer::process_header(Socket* socket)
 
 void HttpServer::process_reply_cached(Socket* socket)
 {
-	DEBUG_PRINTF("Sending cached post request, pending_bytes = %d\n", socket->outp.pending);
+	DEBUG_PRINTF("Sending cached reply, pending_bytes = %d\n", socket->outp.pending);
 	
 	auto response = socket->cached_response->second;
 	
-	while(running)
+	do
 	{
-		if(socket->outp.pending == 0)
-			break;
-	
 		int offset = response.size - socket->outp.pending;
 		int len = send(socket->socket_fd, response.buf + offset, socket->outp.pending, 0);
 		
 		if(len < 0)
 		{
 			if(errno == EAGAIN);
+			{
+				DEBUG_PRINTF("Send incomplete, retrying\n");
 				continue;
+			}
 			perror("send");
 			socket->cached_response.release();
 			dispose_socket(socket);
@@ -525,25 +540,32 @@ void HttpServer::process_reply_cached(Socket* socket)
 		}
 		else if(len == 0)
 		{
+			DEBUG_PRINTF("Remote end hung up\n");
 			socket->cached_response.release();
 			dispose_socket(socket);
 			return;
 		}
 		
 		socket->outp.pending -= len;
-		break;
-	}
+		
+	} while(running && errno == EAGAIN);
 
 	if(!running || socket->outp.pending <= 0)
 	{
 		DEBUG_PRINTF("Send complete\n");
 		socket->cached_response.release();
 		dispose_socket(socket);
+		return;
 	}
 	else if(!notify_socket(socket))
 	{
+		DEBUG_PRINTF("Notify failed\n");
+		socket->cached_response.release();
 		dispose_socket(socket);
+		return;
 	}
+	
+	DEBUG_PRINTF("More to send, continuing\n");
 }
 
 void HttpServer::process_post_recv(Socket* event)
