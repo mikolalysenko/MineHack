@@ -31,7 +31,7 @@
 
 using namespace std;
 using namespace tbb;
-using namespace Game;
+
 
 
 //Uncomment this line to get dense logging for the web server
@@ -43,6 +43,8 @@ using namespace Game;
 #define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
 #endif
 
+
+namespace Game {
 
 //-------------------------------------------------------------------
 // Constructor/destructor pairs
@@ -76,9 +78,10 @@ Socket::~Socket()
 
 
 //Http server constructor
-HttpServer::HttpServer(Config* cfg, command_func cback) :
+HttpServer::HttpServer(Config* cfg, command_func cback, websocket_func wcback) :
 	config(cfg), 
-	command_callback(cback)
+	command_callback(cback),
+	websocket_callback(wcback)
 {
 }
 
@@ -267,7 +270,6 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 	Socket* result = new Socket(fd, listener);
 	result->socket_fd = fd;
 	
-	
 	if(addr != NULL)
 	{
 		result->addr = *addr;
@@ -284,29 +286,29 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 		return NULL;
 	}
 	
+	//Store pointer in map
+	if(!socket_set.insert(make_pair(fd, result)))
+	{
+		DEBUG_PRINTF("File descriptor is already in use!\n");
+		delete result;
+		return NULL;
+	}
+	
 	epoll_event ev;
-	ev.events = listener ? EPOLLIN : (EPOLLIN | EPOLLET | EPOLLONESHOT);
+	ev.events = (EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP) | (listener ? 0 : (EPOLLET | EPOLLONESHOT));
 	ev.data.fd = fd;
 	ev.data.ptr = result;
 
 	if(epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1)
 	{
 		perror("epoll_add");
-		delete result;
-		return NULL;
-	}
-
-	//Store pointer in map
-	concurrent_hash_map<int, Socket*>::accessor acc;
-	if(!socket_set.insert(acc, make_pair(fd, result)))
-	{
-		DEBUG_PRINTF("File descriptor is already in use!\n");
 		dispose_socket(result);
 		return NULL;
 	}
-	
+
 	return result;
 }
+
 
 //Notifies a socket of a change
 bool HttpServer::notify_socket(Socket* socket)
@@ -316,14 +318,16 @@ bool HttpServer::notify_socket(Socket* socket)
 	switch(socket->state)
 	{
 		case SocketState_Listening:
-			ev.events = EPOLLIN | EPOLLET | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+			ev.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 		break;
 		
+		case SocketState_WebSocketPoll:
 		case SocketState_PostRecv:
 		case SocketState_WaitForHeader:
 			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 		break;
 		
+		case SocketState_WebSocketSend:
 		case SocketState_WebSocketHandshake:
 		case SocketState_PostReply:
 		case SocketState_CachedReply:
@@ -347,8 +351,8 @@ bool HttpServer::notify_socket(Socket* socket)
 void HttpServer::dispose_socket(Socket* socket)
 {
 	DEBUG_PRINTF("Disposing socket\n");
-	epoll_ctl(epollfd, EPOLL_CTL_DEL, socket->socket_fd, NULL);	
 	socket_set.erase(socket->socket_fd);
+	epoll_ctl(epollfd, EPOLL_CTL_DEL, socket->socket_fd, NULL);	
 	delete socket;
 }
 
@@ -366,7 +370,367 @@ void HttpServer::cleanup_sockets()
 
 
 //-------------------------------------------------------------------
-// Event handlers
+// Web socket event handlers
+// This situation is kind of a bastardized version of producer-consumer synchronization
+//	The problem is that the consumers and producers can spont aneously die, and so we have to
+//	deal with destruction of these objects in some nice way without garbage collection.
+//	Blah.
+//-------------------------------------------------------------------
+
+
+void HttpServer::initialize_websocket(Socket* socket)
+{
+	int send_fd = dup(socket->socket_fd);
+	if(send_fd == -1)
+	{
+		perror("dup");
+		dispose_socket(socket);
+	}
+
+	auto sender = new Socket(send_fd, true);
+	
+	//Initialize state
+	socket->state = SocketState_WebSocketPoll;
+	sender->state = SocketState_WebSocketSend;
+	
+	//Update buffers
+	sender->outp.size = socket->outp.size;
+	sender->outp.pending = 0;
+	sender->outp.buf_cur = sender->outp.buf_start = socket->outp.buf_start;
+	
+	//Clear out socket's send buffer
+	socket->outp.size = 0;
+	socket->outp.pending = 0;
+	socket->outp.buf_cur = socket->outp.buf_start = NULL;
+		
+	//Store pointer in map
+	if(!socket_set.insert(make_pair(sender->socket_fd, sender)))
+	{
+		DEBUG_PRINTF("File descriptor is already in use!\n");
+		dispose_socket(socket);
+		delete sender;
+		return;
+	}
+	
+	//Create web socket queue
+	auto recv_q_impl = new WebSocketQueue_Impl();
+	auto send_q_impl = new WebSocketQueue_Impl();
+	
+	//Bind queues
+	socket->message_queue.attach(recv_q_impl);
+	sender->message_queue.attach(send_q_impl);
+	
+	//Push a bum event into the sender queue for initialization purposes
+	sender->message_queue.push_and_check_empty(NULL);
+	
+	//Create web socket
+	auto websocket = new WebSocket(
+		this,
+		recv_q_impl,
+		send_q_impl,
+		sender->socket_fd,
+		sender);
+	
+	//Try to register the websocket with the client
+	if(!(websocket_callback)(socket->request, websocket))
+	{
+		dispose_socket(socket);
+		dispose_socket(sender);
+		delete websocket;
+		return;
+	}
+
+	//Add the sender to epoll
+	epoll_event ev;
+	ev.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLET | EPOLLONESHOT;
+	ev.data.fd = sender->socket_fd;
+	ev.data.ptr = sender;
+	if(epoll_ctl(epollfd, EPOLL_CTL_ADD, sender->socket_fd, &ev) == -1)
+	{
+		perror("epoll_add");
+		dispose_socket(socket);
+		dispose_socket(sender);
+		return;
+	}
+	
+	//Notify receiver
+	if(!notify_socket(socket))
+	{
+		dispose_socket(socket);
+	}
+}
+
+void notify_websocket_send(HttpServer* server, int send_fd, Socket* socket)
+{
+	//Verify that the socket is in the hash map
+	concurrent_hash_map<int, Socket*>::const_accessor acc;
+	if(!server->socket_set.find(acc, send_fd) ||
+		acc->second != socket)
+	{
+		return;
+	}
+	if(!server->notify_socket(socket))
+	{
+		server->dispose_socket(socket);
+	}
+}
+
+void HttpServer::handle_websocket_recv(Socket* socket)
+{
+	//While there are still frames to process:
+	while(true)
+	{
+		if(socket->message_queue.ref_count() < 2)
+		{
+			DEBUG_PRINTF("Web socket died\n");
+			dispose_socket(socket);
+			return;
+		}
+	
+		//Try reading some bytes from the web socket
+		int len = recv(socket->socket_fd, 
+			socket->inp.buf_cur, 
+			socket->inp.size - (int)(socket->inp.buf_cur - socket->inp.buf_start), 
+			0);
+	
+		if(len < 0)
+		{
+			if(errno == EAGAIN);
+			{
+				DEBUG_PRINTF("Recv incomplete, retrying\n");
+				notify_socket(socket);
+				return;
+			}
+			perror("recv");
+			dispose_socket(socket);
+			return;
+		}
+		else if(len == 0)
+		{
+			DEBUG_PRINTF("Remote end hung up\n");
+			dispose_socket(socket);
+			return;
+		}
+	
+		socket->inp.buf_cur += len;
+	
+		//Check frame start
+		uint8_t frame_type = (uint8_t)socket->inp.buf_start[0];
+		if(frame_type < 0x80)
+		{
+			DEBUG_PRINTF("Server does not accept UTF-8 frames\n");
+			dispose_socket(socket);
+			return;
+		}
+		
+		if(frame_type == 0xff)
+		{
+			DEBUG_PRINTF("Connection closed\n");
+			dispose_socket(socket);
+			return;
+		}
+		
+		//Check frame size
+		if(socket->inp.buf_start + 2 > socket->inp.buf_cur)
+		{
+			DEBUG_PRINTF("Frame header not finished, continuing\n");
+			notify_socket(socket);
+			return;
+		}
+		
+		//Calculate frame length and start of pointer
+		char* frame_start_ptr = socket->inp.buf_start+1;
+		uint64_t frame_len = 0;
+		while(frame_start_ptr < socket->inp.buf_cur)
+		{
+			uint8_t v = (uint8_t)(*(frame_start_ptr++));
+			frame_len = (frame_len<<7ULL) + (uint64_t)(v&0x7f);
+			
+			if(frame_len > socket->inp.size - 32)
+			{
+				DEBUG_PRINTF("Packet size overflow\n");
+				dispose_socket(socket);
+				return;
+			}
+			
+			if((v & 0x80) == 0)
+				break;
+		}
+		
+		int buf_size = (int)(socket->inp.buf_cur - frame_start_ptr);
+		
+		if(frame_len > buf_size)
+		{
+			DEBUG_PRINTF("Frame body incomplete, continuing\n");
+			notify_socket(socket);
+			return;
+		}
+		
+		//Is frame complete?  If so, then do this:
+		auto packet = new Network::ClientPacket();
+		if(!packet->ParseFromArray(frame_start_ptr, frame_len))
+		{
+			DEBUG_PRINTF("Bad packet, killing connection\n");
+			dispose_socket(socket);
+			return;
+		}
+		
+		//Add frame to queue
+		socket->message_queue.push_and_check_empty(packet);
+		
+		//Shift queue backwards
+		char* frame_end_ptr = frame_start_ptr + frame_len;
+		int extra_bytes = socket->inp.buf_cur - frame_end_ptr;
+		int frame_size = frame_end_ptr - socket->inp.buf_start;
+		memmove(socket->inp.buf_start, frame_end_ptr, extra_bytes);
+		socket->inp.buf_cur -= frame_size;
+	}
+}
+
+void HttpServer::handle_websocket_send(Socket* socket)
+{
+	if(socket->message_queue.ref_count() < 2)
+	{
+		DEBUG_PRINTF("Web socket died\n");
+		dispose_socket(socket);
+		return;
+	}
+
+	//Check pending bytes
+	if(socket->outp.pending == 0)
+	{
+		
+		//Check if there are any messages left to send
+		google::protobuf::Message* msg = NULL;
+		while(msg == NULL)
+		{
+			if(!socket->message_queue.peek_if_full(msg))
+				return;
+		}
+		
+		auto packet = (Network::ServerPacket*)msg;
+		
+		int message_size = packet->ByteSize();
+		
+		socket->outp.buf_cur = socket->outp.buf_start;
+		*(socket->outp.buf_cur++) = 0x80;
+		int nb = 0;
+		
+		for(int ml=message_size; ml!=0; ml>>=7)
+		{
+			*(socket->outp.buf_cur++) = ml & 0x7f;
+			nb++;
+		}
+		
+		//Reverse length bits and set varint flags
+		for(int i=0; i<nb-1; ++i)
+		{
+			if(i < (nb>>1))
+			{
+				uint8_t tmp = socket->outp.buf_start[i+1];
+				socket->outp.buf_start[i+1] = socket->outp.buf_start[nb-i-1];
+				socket->outp.buf_start[nb-i-1] = tmp;
+			}
+			socket->outp.buf_start[i+1] |= 0x80;
+		}
+		
+		//Serialize the actual packet
+		if(!packet->SerializeToArray(socket->outp.buf_cur, message_size))
+		{
+			DEBUG_PRINTF("Could not serialize packet, destroying connection\n");
+			dispose_socket(socket);
+			return;
+		}
+		
+		//Set pointers and go
+		socket->outp.pending = message_size + nb + 1;
+		socket->outp.buf_cur = socket->outp.buf_start;
+	}
+	
+
+	//Write pending bytes
+	int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, 0);
+	
+	if(len < 0)
+	{
+		if(errno == EAGAIN);
+		{
+			DEBUG_PRINTF("Send incomplete, retrying\n");
+			notify_socket(socket);
+			return;
+		}
+		perror("send");
+		dispose_socket(socket);
+		return;
+	}
+	else if(len == 0)
+	{
+		DEBUG_PRINTF("Remote end hung up\n");
+		dispose_socket(socket);
+		return;
+	}
+	
+	socket->outp.pending -= len;
+	socket->outp.buf_cur += len;
+	
+	
+	//Check for send completion
+	if(socket->outp.pending > 0)
+	{
+		if(!notify_socket(socket))
+			dispose_socket(socket);
+		return;
+	}
+	
+	//Send completed
+	if(!socket->message_queue.pop_and_check_empty())
+	{
+		//More to send, so notify socket and loop
+		if(!notify_socket(socket))
+			dispose_socket(socket);
+		return;		
+	}
+}
+
+WebSocket::WebSocket(HttpServer* server_, 
+	WebSocketQueue_Impl* send_q_, 
+	WebSocketQueue_Impl* recv_q_, 
+	int send_fd_, 
+	Socket* send_socket_) :
+	server(server_),
+	send_q(send_q_),
+	recv_q(recv_q_),
+	send_fd(send_fd_),
+	send_socket(send_socket_)
+{
+}
+
+WebSocket::~WebSocket()
+{
+	//Wake up the send queue and kill it if it exists
+	send_packet(NULL);
+}
+
+bool WebSocket::send_packet(Network::ServerPacket* packet)
+{
+	bool empty = send_q.push_and_check_empty(packet);
+	if(empty)
+		notify_websocket_send(server, send_fd, send_socket);
+	return true;
+}
+
+bool WebSocket::recv_packet(Network::ClientPacket*& packet)
+{
+	google::protobuf::Message* msg = NULL;
+	bool result = recv_q.pop_if_full(msg);
+	packet = (Network::ClientPacket*)msg;
+	return result;
+}
+
+
+
+//-------------------------------------------------------------------
+// Http event handlers
 //-------------------------------------------------------------------
 
 
@@ -509,7 +873,6 @@ void HttpServer::process_header(Socket* socket)
 		if(socket->request.content_length <= 0 || 
 			socket->request.content_length + header_size > socket->inp.size)
 		{
-			//FIXME: Send error reply
 			dispose_socket(socket);
 			return;
 		}
@@ -549,22 +912,18 @@ void HttpServer::process_header(Socket* socket)
 		}
 		
 		//Create the handshake packet
-		auto ws_handshake = http_websocket_handshake(socket->request);
-		if(ws_handshake.buf == NULL)
+		socket->outp.size = SEND_BUFFER_SIZE;
+		socket->outp.buf_start = (char*)malloc(SEND_BUFFER_SIZE);
+		socket->outp.buf_cur = socket->outp.buf_start;
+		
+		if(!http_websocket_handshake(socket->request, socket->outp.buf_start, &(socket->outp.pending)))
 		{
 			DEBUG_PRINTF("Bad WebSocket handshake\n");
 			dispose_socket(socket);
 			return;
 		}
 		
-		//FIXME: Register web socket with application here
-		
 		socket->state = SocketState_WebSocketHandshake;
-		socket->outp.size = ws_handshake.size;
-		socket->outp.pending = ws_handshake.size;		
-		socket->outp.buf_start = ws_handshake.buf;
-		socket->outp.buf_cur = ws_handshake.buf;
-		
 		if(!notify_socket(socket))
 		{
 			dispose_socket(socket);
@@ -721,10 +1080,7 @@ void HttpServer::process_send(Socket* socket)
 		case SocketState_WebSocketHandshake:
 		{
 			DEBUG_PRINTF("WebSocket handshake complete\n");
-			
-			//FIXME: Implement frame protocol here
-			
-			dispose_socket(socket);
+			initialize_websocket(socket);
 			return;
 		}
 		break;
@@ -743,6 +1099,7 @@ void HttpServer::process_send(Socket* socket)
 	}
 }
 
+
 //Process a post request
 void HttpServer::process_post(Socket* socket)
 {
@@ -758,7 +1115,7 @@ void HttpServer::process_post(Socket* socket)
 	}
 	
 	
-	auto reply = ScopeDelete<Network::ServerPacket>((*command_callback)(P.ptr));
+	auto reply = ScopeDelete<Network::ServerPacket>((*command_callback)(socket->request, P.ptr));
 	if(reply.ptr == NULL)
 	{
 		dispose_socket(socket);
@@ -849,11 +1206,21 @@ void HttpServer::worker_loop()
 					process_recv(socket);
 				break;
 				
+				case SocketState_WebSocketHandshake:
 				case SocketState_PostReply:
 					process_send(socket);
+				break;
+
+				case SocketState_WebSocketPoll:
+					handle_websocket_recv(socket);
+				break;
+				
+				case SocketState_WebSocketSend:
+					handle_websocket_send(socket);
 				break;
 			}
 		}
 	}
 }
 
+}

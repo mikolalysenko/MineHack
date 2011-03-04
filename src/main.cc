@@ -253,7 +253,7 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 }
 
 //Handles an http event
-Network::ServerPacket* callback(Network::ClientPacket* client_packet)
+Network::ServerPacket* post_callback(HttpRequest const& request, Network::ClientPacket* client_packet)
 {
 	DEBUG_PRINTF("Got a packet!\n");
 	if(client_packet->has_login_packet())
@@ -264,6 +264,13 @@ Network::ServerPacket* callback(Network::ClientPacket* client_packet)
 	{
 		return NULL;
 	}
+}
+
+
+//Handles a websocket connection
+bool websocket_callback(HttpRequest const& request, WebSocket* websocket)
+{
+	return false;
 }
 
 //Server initialization
@@ -414,7 +421,7 @@ int main(int argc, char** argv)
 	auto GC = ScopeDelete<Config>(config = new Config("data/config.tc"));
 	auto GW = ScopeDelete<World>(world = new World(config));
 	auto GL = ScopeDelete<LoginDB>(login_db = new LoginDB(config));
-	auto GS = ScopeDelete<HttpServer>(server = new HttpServer(config, callback));
+	auto GS = ScopeDelete<HttpServer>(server = new HttpServer(config, post_callback, websocket_callback));
 
 	init_app();
 	console_loop();

@@ -46,6 +46,18 @@ const char DEFAULT_PROTOBUF_HEADER[] =
 	"Content-Encoding: gzip\r\n"
 	"Content-Length: %d\r\n"
 	"\r\n";
+	
+const char DEFAULT_WEBSOCKET_HEADER[] = 
+	"HTTP/1.1 101 WebSocket Protocol Handshake\r\n"
+	"Upgrade: WebSocket\r\n"
+	"Connection: Upgrade\r\n"	
+	"Sec-WebSocket-Origin: http://%s\r\n"
+	"Sec-WebSocket-Location: ws://%s/%s\r\n"
+	"Sec-WebSocket-Protocol: pbuf\r\n"
+	"\r\n";
+
+//FIXME: This should get read from the config
+const char ORIGIN[] = "127.0.0.1:8081";
 
 void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 {
@@ -146,21 +158,17 @@ void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 		
 		string request_header_name = string(header_start, ptr-1);
 		
-		//Eat more whitespace
-		for(c = *ptr;
-			(c == ' ' || c == '\t') && ptr < end_ptr;
-			c = *(++ptr))
-		{	
-		}
-		if(ptr == end_ptr)
+		//Skip the ': '
+		ptr ++;
+		if(ptr >= end_ptr)
 			break;
 		
-		//Scan to 
+		//Scan to end of line
 		char* data_start = ptr;
 		while(ptr < end_ptr)
 		{
 			c = *(ptr++);
-			if(c == '\n' || c == '\r')
+			if(c == '\r' || c == '\n')
 				break;
 		}
 		if(ptr == end_ptr)
@@ -168,7 +176,7 @@ void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 		
 		string request_data = string(data_start, ptr-1);
 		
-		DEBUG_PRINTF("Got request header: %s, %s\n", request_header_name.c_str(), request_data.c_str());
+		DEBUG_PRINTF("Got request header: %s, '%s'\n", request_header_name.c_str(), request_data.c_str());
 		
 		result.headers[request_header_name] = request_data;
 	}
@@ -251,13 +259,82 @@ HttpResponse http_serialize_protobuf(Network::ServerPacket* message)
 	return result;
 }
 
-//Generates a websocket handshake reply
-HttpResponse http_websocket_handshake(HttpRequest const& request)
+int64_t compute_ws_key(string const& key)
 {
-	HttpResponse result;
-	result.size = 0;
-	result.buf = NULL;
-	return result;
+	int num = 0, n_spaces = 0;
+	
+	for(int i=0; i<key.size(); ++i)
+	{
+		char c = key[i];
+		
+		if('0' <= c && c <= '9')
+		{
+			num = (num * 10) + (c - '0');
+		}
+		else if(c == ' ')
+		{
+			n_spaces++;
+		}
+	}
+	
+	if(n_spaces == 0)
+		return -1;
+	return num / n_spaces;
+}
+
+
+int hex_to_num(char c)
+{
+	if(c >= '0' && c <= '9')
+		return c - '0';
+		
+	if(c >= 'a' && c <= 'f')
+		return c - 'a';
+	
+	if(c >= 'A' && c <= 'F')
+		return c - 'A';
+		
+	return 0;
+}
+
+//Generates a websocket handshake reply
+bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
+{
+	int header_size = sprintf(buf, DEFAULT_WEBSOCKET_HEADER, ORIGIN, ORIGIN, request.url.c_str());
+	*size = 16 + header_size;
+
+	//Compute the request hash for each private key
+	auto iter1 = request.headers.find("Sec-WebSocket-Key1");	
+	if(iter1 == request.headers.end())
+		return false;
+	int64_t k1 = compute_ws_key(iter1->second);
+	if(k1 < 0)
+		return false;
+	
+	auto iter2 = request.headers.find("Sec-WebSocket-Key2");	
+	if(iter2 == request.headers.end())
+		return false;
+	int64_t k2 = compute_ws_key(iter2->second);
+	if(k2 < 0)
+		return false;
+	
+	//Copy the buffer
+	char buffer[16];
+	*((uint32_t*)buffer) = (uint32_t)k1;
+	*((uint32_t*)(buffer+4)) = (uint32_t)k1;
+	memcpy(buffer+8, request.content_ptr, 8);
+		
+	//This is kind of dumb, but whatever
+	char md5[64];
+	tcmd5hash(buffer, 16, md5);
+	uint8_t *mptr = (uint8_t*)(buf + header_size);
+	for(int i=0; i<16; ++i)
+	{
+		char h = md5[2*i], l = md5[2*i+1];
+		*(mptr++) = hex_to_num(h)*16 + hex_to_num(l);
+	}
+	
+	return true;
 }
 
 
