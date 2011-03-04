@@ -6,17 +6,16 @@ importScripts(
 	'misc.js', 
 	'chunk_common.js');
 
-const MAX_NET_CHUNKS	= 512;
+var MAX_NET_CHUNKS		= 512,
+	VERT_SIZE			= 12,
 
-const VERT_SIZE			= 12;
+	PACK_X_STRIDE		= 1,
+	PACK_Y_STRIDE		= CHUNK_X * 3,
+	PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9,
 
-const PACK_X_STRIDE		= 1;
-const PACK_Y_STRIDE		= CHUNK_X * 3;
-const PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9;
-
-const PACK_X_OFFSET		= CHUNK_X;
-const PACK_Y_OFFSET		= CHUNK_Y;
-const PACK_Z_OFFSET		= CHUNK_Z;
+	PACK_X_OFFSET		= CHUNK_X,
+	PACK_Y_OFFSET		= CHUNK_Y,
+	PACK_Z_OFFSET		= CHUNK_Z;
 
 var 
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update

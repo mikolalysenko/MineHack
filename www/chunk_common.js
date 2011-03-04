@@ -1,6 +1,6 @@
 "use strict";
 
-const BlockType =
+var BlockType =
 [
 	"Air",
 	"Stone",
@@ -18,7 +18,7 @@ const BlockType =
 // 1 = side
 // 2 = bottom
 //Indices into tile map are of the form (row x column)
-const BlockTexCoords =
+var BlockTexCoords =
 [
 	[ [0,0], [0,0], [0,0] ], //Air
 	[ [0,1], [0,1], [0,1] ], //Stone
@@ -32,7 +32,7 @@ const BlockTexCoords =
 ];
 
 //If true, then block type is transparent
-const Transparent =
+var Transparent =
 [
 	true,	//Air
 	false,	//Stone

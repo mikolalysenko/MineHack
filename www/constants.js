@@ -1,5 +1,3 @@
-"use strict";
-
 //Chunk parameters
 const CHUNK_X_S		= 4;
 const CHUNK_Y_S		= 4;

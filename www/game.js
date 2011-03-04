@@ -36,7 +36,7 @@ var Game =
 	
 	wait_for_heartbeat : false,
 	
-	show_shadows : true,
+	show_shadows : false,
 };
 
 Game.resize = function()
