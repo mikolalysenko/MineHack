@@ -64,6 +64,23 @@ namespace Game
 			++impl->ref_count;
 		}
 		
+		bool detach_and_check_empty()
+		{
+			if(impl == NULL)
+				return false;
+				
+			tbb::spin_mutex::scoped_lock L(impl->lock);
+			if((--impl->ref_count) == 0)
+			{
+				delete impl;
+				return false;
+			}
+			
+			bool res = impl->msg_queue.empty();
+			impl = NULL;
+			return res;
+		}
+		
 		bool pop_if_full(google::protobuf::Message*& res)
 		{
 			if(impl == NULL)

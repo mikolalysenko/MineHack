@@ -32,6 +32,7 @@ namespace Game {
 		WebSocket(HttpServer*, WebSocketQueue_Impl*, WebSocketQueue_Impl*, int, Socket*);
 		~WebSocket();
 	
+		bool alive();
 		bool send_packet(Network::ServerPacket*);
 		bool recv_packet(Network::ClientPacket*&);
 		

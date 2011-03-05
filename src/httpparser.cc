@@ -261,11 +261,11 @@ HttpResponse http_serialize_protobuf(Network::ServerPacket* message)
 
 int64_t compute_ws_key(string const& key)
 {
-	int num = 0, n_spaces = 0;
+	uint64_t num = 0, n_spaces = 0;
 	
 	for(int i=0; i<key.size(); ++i)
 	{
-		char c = key[i];
+		uint8_t c = key[i];
 		
 		if('0' <= c && c <= '9')
 		{
@@ -277,13 +277,15 @@ int64_t compute_ws_key(string const& key)
 		}
 	}
 	
+	DEBUG_PRINTF("Num spaces = %ld, key base = %ld\n", n_spaces, num);
+	
 	if(n_spaces == 0)
 		return -1;
 	return num / n_spaces;
 }
 
 
-int hex_to_num(char c)
+int hex_to_num(uint8_t c)
 {
 	if(c >= '0' && c <= '9')
 		return c - '0';
@@ -304,19 +306,40 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 	*size = 16 + header_size;
 
 	//Compute the request hash for each private key
+	DEBUG_PRINTF("Checking key 1\n");
 	auto iter1 = request.headers.find("Sec-WebSocket-Key1");	
 	if(iter1 == request.headers.end())
+	{
+		DEBUG_PRINTF("Missing key 1\n");
 		return false;
+	}
 	int64_t k1 = compute_ws_key(iter1->second);
 	if(k1 < 0)
 		return false;
+	DEBUG_PRINTF("Key 1 = %ld\n", k1);
+		
 	
+	DEBUG_PRINTF("Checking key 2\n");
 	auto iter2 = request.headers.find("Sec-WebSocket-Key2");	
 	if(iter2 == request.headers.end())
+	{
+		DEBUG_PRINTF("Missing key 2\n");
 		return false;
+	}
 	int64_t k2 = compute_ws_key(iter2->second);
 	if(k2 < 0)
 		return false;
+	DEBUG_PRINTF("Key 2 = %ld\n", k2);
+	
+	DEBUG_PRINTF("Key 3 = %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
+		(uint8_t)request.content_ptr[0],
+		(uint8_t)request.content_ptr[1],
+		(uint8_t)request.content_ptr[2],
+		(uint8_t)request.content_ptr[3],
+		(uint8_t)request.content_ptr[4],
+		(uint8_t)request.content_ptr[5],
+		(uint8_t)request.content_ptr[6],
+		(uint8_t)request.content_ptr[7]);
 	
 	//Copy the buffer
 	char buffer[16];

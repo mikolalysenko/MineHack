@@ -372,7 +372,7 @@ void HttpServer::cleanup_sockets()
 //-------------------------------------------------------------------
 // Web socket event handlers
 // This situation is kind of a bastardized version of producer-consumer synchronization
-//	The problem is that the consumers and producers can spont aneously die, and so we have to
+//	The problem is that both the consumers and producers can spontaneously die, and so we have to
 //	deal with destruction of these objects in some nice way without garbage collection.
 //	Blah.
 //-------------------------------------------------------------------
@@ -430,15 +430,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 		send_q_impl,
 		sender->socket_fd,
 		sender);
-	
-	//Try to register the websocket with the client
-	if(!(websocket_callback)(socket->request, websocket))
-	{
-		dispose_socket(socket);
-		dispose_socket(sender);
-		delete websocket;
-		return;
-	}
 
 	//Add the sender to epoll
 	epoll_event ev;
@@ -450,13 +441,26 @@ void HttpServer::initialize_websocket(Socket* socket)
 		perror("epoll_add");
 		dispose_socket(socket);
 		dispose_socket(sender);
+		delete websocket;
 		return;
 	}
 	
-	//Notify receiver
+	//Try to register the websocket with the client
+	if(!(websocket_callback)(socket->request, websocket))
+	{
+		DEBUG_PRINTF("Application rejected socket\n");
+		dispose_socket(socket);
+		dispose_socket(sender);
+		delete websocket;
+		return;
+	}
+	
+	//Wake up receiver
 	if(!notify_socket(socket))
 	{
 		dispose_socket(socket);
+		
+		//Failed, but can't dispose either sender or websocket, so just have to wait for them to timeout
 	}
 }
 
@@ -707,8 +711,14 @@ WebSocket::WebSocket(HttpServer* server_,
 
 WebSocket::~WebSocket()
 {
-	//Wake up the send queue and kill it if it exists
-	send_packet(NULL);
+	if(send_q.detach_and_check_empty())
+		notify_websocket_send(server, send_fd, send_socket);
+}
+
+
+bool WebSocket::alive()
+{
+	return (send_q.ref_count() == 2) && (recv_q.ref_count() == 2);
 }
 
 bool WebSocket::send_packet(Network::ServerPacket* packet)
