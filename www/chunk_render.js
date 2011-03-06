@@ -47,11 +47,19 @@ Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 	}
 }
 
+//Start preloading the map
+Map.preload = function()
+{
+	Map.init_worker();
+}
+
+
 //Initialize the map
-Map.init = function(gl)
+Map.init = function()
 {
 	//Initialize chunk shader
-	var res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs"), i;
+	var gl = Game.gl,
+		res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs"), i;
 	if(res[0] != "Ok")
 	{
 		return res[1];

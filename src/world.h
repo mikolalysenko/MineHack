@@ -30,9 +30,11 @@ namespace Game
 		
 		//Player management functions
 		bool player_create(std::string const& player_name);
-		void player_delete(std::string const& player_name);
-		bool player_join(std::string const& player_name, SessionID const& session_id);
-		void player_leave(SessionID const& session_id);
+		bool player_delete(std::string const& player_name);
+		bool player_join(std::string const& player_name, SessionID& session_id);
+		bool player_leave(SessionID const& session_id);
+		bool player_attach_update_socket(SessionID const& session_id, WebSocket*);
+		bool player_attach_map_socket(SessionID const& session_id, WebSocket*);
 		
 	private:
 

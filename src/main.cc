@@ -146,7 +146,10 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 			return error_response("Invalid user name/password");
 		}
 
-		//FIXME: Try adding character to game world
+		if(!world->player_create(login_req.character_name()))
+		{
+			return error_response("Character name already in use");
+		}
 		
 		//Add character
 		Login::Account next_account;
@@ -156,7 +159,7 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 		//Update database
 		if(!login_db->update_account(login_req.user_name(), account, next_account))
 		{
-			//FIXME: Remove character from game world
+			world->player_delete(login_req.character_name());
 			return error_response("Could not update account");
 		}
 		
@@ -194,7 +197,11 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 			return error_response("Character does not exist");
 		}
 		
-		//FIXME: Try deleting from world
+		//Remove player from world
+		if(!world->player_delete(login_req.character_name()))
+		{
+			return error_response("Could not delete character");
+		}
 		
 		//Remove character
 		Login::Account next_account;
@@ -243,6 +250,11 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 		}
 
 		//FIXME: Allocate session id for character and return it
+		SessionID session_id;
+		if(!world->player_join(login_req.character_name(), session_id))
+		{
+			return error_response("Player is already logged in");
+		}
 		
 		response->set_success(true);
 	}
@@ -270,6 +282,56 @@ Network::ServerPacket* post_callback(HttpRequest const& request, Network::Client
 //Handles a websocket connection
 bool websocket_callback(HttpRequest const& request, WebSocket* websocket)
 {
+	//Parse out portname and session id from request
+	int last_slash=-1, last_qmark = -1, last_equals = -1;
+	for(int i=request.url.size()-1; i>=0; --i)
+	{
+		char c = request.url[i];
+	
+		if(c == '?')
+			last_qmark = i;
+		if(c == '=')
+			last_equals = i;
+		if(c == '/')
+		{
+			last_slash = i;
+			break;
+		}
+	}
+	
+	if(last_slash == -1 || last_qmark == -1 || last_equals == -1 || 
+		last_qmark <= last_slash ||
+		last_equals + 16 <= request.url.size() )
+	{
+		DEBUG_PRINTF("Invalid web socket connection\n");
+		return false;
+	}
+	
+	string portname = request.url.substr(last_slash, last_qmark);
+	
+	//Parse out the session id
+	uint64_t session_id = 0;
+	for(int i=0; i<16; ++i)
+	{
+		session_id = session_id*16 + (request.url[last_qmark+i+1] - 'A');
+	}
+	
+	DEBUG_PRINTF("Got socket, portname = %s, session id = %ld\n", portname.c_str(), session_id);
+	
+	//Attach the socket
+	if(portname == "map")
+	{
+		DEBUG_PRINTF("Attaching map socket\n");
+		return world->player_attach_map_socket((SessionID)session_id, websocket);
+	}
+	else if(portname == "update")
+	{
+		DEBUG_PRINTF("Attaching update socket\n");
+		return world->player_attach_update_socket((SessionID)session_id, websocket);
+	}
+	
+	DEBUG_PRINTF("Unrecognized port name\n");
+
 	return false;
 }
 

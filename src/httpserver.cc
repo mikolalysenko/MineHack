@@ -450,7 +450,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 	{
 		DEBUG_PRINTF("Application rejected socket\n");
 		dispose_socket(socket);
-		dispose_socket(sender);
 		delete websocket;
 		return;
 	}

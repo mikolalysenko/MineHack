@@ -31,30 +31,42 @@ World::~World()
 	delete entity_db;
 }
 
-
-
 //Creates a player
 bool World::player_create(string const& player_name)
 {
-	return false;
+	return true;
 }
 
 //Called to delete a player
-void World::player_delete(string const& player_name)
+bool World::player_delete(string const& player_name)
 {
+	return true;
 }
 
 //Attempt to add player to the game
-bool World::player_join(string const& player_id, SessionID const& session_id)
+bool World::player_join(string const& player_name, SessionID& session_id)
 {
-	return false;
+	return session_manager->create_session(player_name, session_id);
 }
-
 
 //Handle a player leave event
-void World::player_leave(SessionID const& session_id)
+bool World::player_leave(SessionID const& session_id)
 {
+	return true;
 }
+
+//Attach an update socket
+bool World::player_attach_update_socket(SessionID const& session_id, WebSocket* socket)
+{
+	return session_manager->attach_update_socket(session_id, socket);
+}
+
+//Attach a map socket
+bool World::player_attach_map_socket(SessionID const& session_id, WebSocket* socket)
+{
+	return session_manager->attach_map_socket(session_id, socket);
+}
+
 
 //Starts the world thread
 bool World::start()

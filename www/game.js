@@ -37,6 +37,10 @@ var Game =
 	draw_interval : null,
 	shadow_interval : null,
 	
+	//Temporary stuff for the sockets
+	update_socket : null,
+	map_socket : null,
+	
 	//Used for debugging
 	show_shadows : false,
 	
@@ -70,6 +74,9 @@ var Game =
 		}
 	
 		Game.gl = gl;
+		
+		//Start preloading the map
+		Map.preload();
 		
 		//Start the tick interval
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
@@ -127,7 +134,7 @@ var Game =
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
 		Game.draw_interval = setInterval(Game.draw, DRAW_RATE);
 		Game.shadow_interval = setInterval(Game.update_shadows, SHADOW_RATE);
-	
+			
 		return 'Ok';
 	},
 
