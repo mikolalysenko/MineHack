@@ -46,7 +46,7 @@ var Session =
 		
 		if(typeof(response.login_response.session_id) != "undefined")
 		{
-			Session.session_id = response.login_action.session_id;
+			Session.session_id = response.login_response.session_id;
 			Session.logged_in = true;
 		}
 		

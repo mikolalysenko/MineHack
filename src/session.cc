@@ -63,8 +63,8 @@ bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket
 	
 	if(acc->second->map_socket != NULL)
 	{
-		auto piter = sessions.insert(make_pair(session_id, acc->second));
-		assert(piter.second);
+		auto L = spin_mutex::scoped_lock(session_lock);
+		sessions.insert(make_pair(session_id, acc->second));
 		pending_sessions.erase(acc);
 	}
 	
@@ -85,6 +85,7 @@ bool SessionManager::attach_map_socket(SessionID const& session_id, WebSocket* s
 	
 	if(acc->second->update_socket != NULL)
 	{
+		auto L = spin_mutex::scoped_lock(session_lock);
 		sessions.insert(make_pair(session_id, acc->second));
 		pending_sessions.erase(acc);
 	}
@@ -109,6 +110,7 @@ void SessionManager::remove_session(SessionID const& session_id)
 //pending deletes to the session data set
 void SessionManager::process_pending_deletes()
 {
+	auto L = spin_mutex::scoped_lock(session_lock);
 	SessionID session_id;
 	while(pending_erase.try_pop(session_id))
 	{

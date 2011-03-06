@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <tbb/tick_count.h>
+#include <tbb/spin_mutex.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_hash_map.h>
@@ -67,6 +68,9 @@ namespace Game
 		tbb::concurrent_unordered_map<SessionID, Session*> sessions;
 		
 	private:
+
+		//The session manager lock.  Is held during the delete
+		tbb::spin_mutex session_lock;
 
 		//Pending session list
 		tbb::concurrent_hash_map<SessionID, Session*>		pending_sessions;

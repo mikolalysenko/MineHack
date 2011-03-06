@@ -495,8 +495,16 @@ int main(int argc, char** argv)
 	auto GS = ScopeDelete<HttpServer>(server = new HttpServer(config, post_callback, websocket_callback));
 
 	init_app();
-	console_loop();
-	shutdown_app();
+	
+	if(app_running)
+	{
+		console_loop();
+		shutdown_app();
+	}
+	else
+	{
+		printf("Error initiailizing server, shutting down\n");
+	}
 	
 	//Kill protocol buffer library
 	google::protobuf::ShutdownProtobufLibrary();

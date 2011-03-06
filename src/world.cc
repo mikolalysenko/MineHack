@@ -136,6 +136,8 @@ void World::main_loop()
 			DEBUG_PRINTF("Processing session, %ld\n", session->session_id);
 		});
 		
+		//Process all pending deletes
+		session_manager->process_pending_deletes();
 	}
 }
 

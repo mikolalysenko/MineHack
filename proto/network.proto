@@ -11,9 +11,9 @@ message ErrorResponse {
 // Login messages (these occur without any session id)
 //--------------------------------------------------------
 message LoginResponse {
-	optional bool 	success = 1;
-	optional uint64	session_id = 2;
-	repeated string character_names = 3;
+	optional bool 		success = 1;
+	optional fixed64	session_id = 2;
+	repeated string 	character_names = 3;
 }
 
 message LoginRequest {
@@ -48,7 +48,6 @@ message ServerPacket {
 // Client Request Packet
 //--------------------------------------------------------
 message ClientPacket {
-	optional uint64	session_id = 1;
-	optional LoginRequest login_packet = 2;
+	optional LoginRequest login_packet = 1;
 }
 
