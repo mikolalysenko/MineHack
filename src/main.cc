@@ -8,6 +8,8 @@
 
 #include <tcutil.h>
 
+#include <tbb/task_scheduler_init.h>
+
 #include "network.pb.h"
 #include "login.pb.h"
 
@@ -18,6 +20,7 @@
 #include "misc.h"
 #include "world.h"
 
+using namespace tbb;
 using namespace std;
 using namespace Game;
 
@@ -223,6 +226,7 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 
 	case Network::LoginRequest_LoginAction_Join:
 	{
+		DEBUG_PRINTF("Character logging in\n");
 		if(!login_req.has_character_name())
 		{
 			return error_response("Missing character name");
@@ -253,9 +257,11 @@ Network::ServerPacket* handle_login(Network::LoginRequest const& login_req)
 		SessionID session_id;
 		if(!world->player_join(login_req.character_name(), session_id))
 		{
+			DEBUG_PRINTF("Creating session id\n");
 			return error_response("Player is already logged in");
 		}
 		
+		response->set_session_id(session_id);
 		response->set_success(true);
 	}
 	break;
@@ -478,6 +484,9 @@ int main(int argc, char** argv)
 
 	//Randomize timer
 	srand(time(NULL));
+	
+	//Initialize task scheduler
+	task_scheduler_init init;
 
 	printf("Allocating objects\n");
 	auto GC = ScopeDelete<Config>(config = new Config("data/config.tc"));

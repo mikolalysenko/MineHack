@@ -8,6 +8,8 @@
 
 #include <tcutil.h>
 
+#include <tbb/task.h>
+
 #include "constants.h"
 #include "config.h"
 #include "entity.h"
@@ -36,11 +38,17 @@ namespace Game
 		bool player_attach_update_socket(SessionID const& session_id, WebSocket*);
 		bool player_attach_map_socket(SessionID const& session_id, WebSocket*);
 		
+		//Task function
+		void main_loop();
+		
 	private:
 
 		//State variables
 		bool			running;
 		uint64_t		ticks;
+	
+		//The world update task
+		tbb::task*			world_task;
 	
 		//Subsystems
 		Config			*config;

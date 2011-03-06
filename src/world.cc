@@ -1,5 +1,11 @@
 #include <string>
+#include <cstdio>
+
 #include <stdint.h>
+
+#include <tbb/task.h>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 
 #include "constants.h"
 #include "misc.h"
@@ -7,8 +13,19 @@
 #include "session.h"
 #include "world.h"
 
+using namespace tbb;
 using namespace std;
 using namespace Game;
+
+//Uncomment this line to get dense logging for the web server
+#define WORLD_DEBUG 1
+
+#ifndef WORLD_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
 
 namespace Game
 {
@@ -68,20 +85,59 @@ bool World::player_attach_map_socket(SessionID const& session_id, WebSocket* soc
 }
 
 
+
 //Starts the world thread
 bool World::start()
 {
+	//The world task
+	struct WorldTask : task
+	{
+		World* instance;
+		
+		WorldTask(World* inst) : instance(inst) {}
+	
+		task* execute()
+		{
+			instance->main_loop();
+			return NULL;
+		}
+	};
+	
+	running = true;
+	world_task = new(task::allocate_root()) WorldTask(this);
+	world_task->set_ref_count(1);
+    task::spawn(*world_task); 
+
 	return true;
 }
 
 //Stops the world
 void World::stop()
 {
+	running = false;
+	world_task->wait_for_all();
 }
 
 //Synchronize world state
 void World::sync()
 {
 }
+
+void World::main_loop()
+{
+	while(running)
+	{
+		//Iterate over the player set
+		parallel_for(session_manager->sessions.range(), 
+			[](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
+		{
+			auto session = sessions.begin()->second;
+		
+			DEBUG_PRINTF("Processing session, %ld\n", session->session_id);
+		});
+		
+	}
+}
+
 
 };
