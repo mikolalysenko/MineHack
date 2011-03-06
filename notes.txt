@@ -1,3 +1,6 @@
+Chromium nightly:
+http://build.chromium.org/f/chromium/continuous/linux64/LATEST/
+
 Intel c compiler set up:
 http://software.intel.com/en-us/articles/using-intel-compilers-for-linux-with-ubuntu/
 
