@@ -162,15 +162,16 @@ var LoadState = {
 
 	init : function()
 	{
-		Game.preload();
-	
-		if(Loader.finished)
+		if(Game.preload())
 		{
-			App.set_state(Game);
-		}
-		else
-		{
-			document.getElementById('progressPane').style.display = 'block';
+			if(Loader.finished)
+			{
+				App.set_state(Game);
+			}
+			else
+			{
+				document.getElementById('progressPane').style.display = 'block';
+			}
 		}
 	},
 
@@ -186,7 +187,7 @@ var LoadState = {
 	
 		if(Loader.finished && App.state == LoadState)
 		{
-			App.set_state(GameState);
+			App.set_state(Game);
 		}
 	}
 };

@@ -51,16 +51,18 @@ var Game =
 		var gl;
 		try
 		{
-			gl = canvas.getContext("experimental-webgl");
+			gl = Game.canvas.getContext("experimental-webgl");
 		}
 		catch(e)
 		{
-			return 'Browser does not support WebGL,';
+			App.crash('Browser does not support WebGL');
+			return false;
 		}
 	
 		if(!gl)
 		{
-			return 'Invalid WebGL object';
+			App.crash('Invalid WebGL object');
+			return false;
 		}
 	
 		//Get extensions
@@ -70,7 +72,8 @@ var Game =
 	
 		if(!Game.EXT_FPTex)
 		{
-			return "WebGL implementation does not support floating point textures";
+			App.crash("WebGL implementation does not support floating point textures");
+			return false;
 		}
 	
 		Game.gl = gl;
@@ -81,7 +84,7 @@ var Game =
 		//Start the tick interval
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
 		
-		return "Ok";
+		return true;
 	},
 
 	//Start the actual game, initializes graphics stuff
@@ -134,8 +137,6 @@ var Game =
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
 		Game.draw_interval = setInterval(Game.draw, DRAW_RATE);
 		Game.shadow_interval = setInterval(Game.update_shadows, SHADOW_RATE);
-			
-		return 'Ok';
 	},
 
 	//Stop all intervals
@@ -146,9 +147,7 @@ var Game =
 		if(Game.draw_interval)		clearInterval(Game.draw_interval);
 		if(Game.shadow_interval)	clearInterval(Game.shadow_interval);
 		
-		Player.shutdown();
 		Map.shutdown();
-		Shadows.shutdown();
 		Debug.shutdown();		
 	},
 

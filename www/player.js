@@ -284,12 +284,12 @@ Player.view_matrix = function()
 	var orient	= Player.orientation(),
 		pos 	= Player.position(),
 
-	var cp = Math.cos(orient[0]);
-	var sp = Math.sin(orient[0]);
-	var cy = Math.cos(orient[1]);
-	var sy = Math.sin(orient[1]);
-	var cr = Math.cos(orient[2]);
-	var sr = Math.sin(orient[2]);
+		cp = Math.cos(orient[0]),
+		sp = Math.sin(orient[0]),
+		cy = Math.cos(orient[1]),
+		sy = Math.sin(orient[1]),
+		cr = Math.cos(orient[2]),
+		sr = Math.sin(orient[2]);
 	
 	var rotp = [
 		 1,   0,  0, 0,
