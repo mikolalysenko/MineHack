@@ -306,33 +306,32 @@ int hex_2_num(char c)
 bool websocket_callback(HttpRequest const& request, WebSocket* websocket)
 {
 	DEBUG_PRINTF("GOT A WEBSOCKET\n");
+	return false;
 
 	//Parse out portname and session id from request
-	int last_slash=-1, last_qmark = -1, last_equals = -1;
+	int last_qmark = -1, last_equals = -1;
 	for(int i=request.url.size()-1; i>=0; --i)
 	{
 		char c = request.url[i];
 	
 		if(c == '?')
-			last_qmark = i;
-		if(c == '=')
-			last_equals = i;
-		if(c == '/')
 		{
-			last_slash = i;
+			last_qmark = i;
 			break;
 		}
+		if(c == '=')
+			last_equals = i;
 	}
 	
-	if(last_slash == -1 || last_qmark == -1 || last_equals == -1 || 
-		last_qmark <= last_slash ||
-		last_equals + 16 <= request.url.size() )
+	DEBUG_PRINTF("url = %s, len = %d, last_qmark = %d, last_equals = %d\n", request.url.c_str(), request.url.size(), last_qmark, last_equals);
+	
+	if(last_qmark == -1 || last_equals == -1 || last_equals + 16 >= request.url.size() )
 	{
 		DEBUG_PRINTF("Invalid web socket connection\n");
 		return false;
 	}
 	
-	string portname = request.url.substr(last_slash, last_qmark);
+	string portname = request.url.substr(0, last_qmark);
 	
 	//Parse out the session id
 	uint64_t session_id = 0;

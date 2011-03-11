@@ -229,7 +229,7 @@ fftest: $(exe) $(datadir)  $(protojs)
 	
 gdb: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
-	gdb ./$(exe)
+	idbc ./$(exe)
 
 testmap: $(exe) $(datadir)  $(protojs)
 	rm -f data/* *.log

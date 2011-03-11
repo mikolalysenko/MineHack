@@ -51,19 +51,8 @@ namespace Game {
 //-------------------------------------------------------------------
 
 //Initialize SocketEvent fields
-Socket::Socket(int fd, bool listener) : socket_fd(fd)
+Socket::Socket(int fd) : socket_fd(fd)
 {
-	if(listener)
-	{
-		state = SocketState_Listening;
-	}
-	else
-	{
-		state = SocketState_WaitForHeader;
-		inp.size = RECV_BUFFER_SIZE;
-		inp.buf_start = (char*)malloc(RECV_BUFFER_SIZE);
-		inp.buf_cur = inp.buf_start;
-	}
 }
 
 //Destroy http event
@@ -111,9 +100,10 @@ bool HttpServer::start()
 	}
 
 	//Bind socket address
+	auto port = htons(config->readInt("listenport"));
 	sockaddr_in addr;
 	addr.sin_addr.s_addr	= INADDR_ANY;
-	addr.sin_port 			= htons(config->readInt("listenport"));
+	addr.sin_port 			= port;
 	addr.sin_family			= AF_INET;
 	
 	int optval = 1;
@@ -267,15 +257,27 @@ bool HttpServer::get_cached_response(string const& request, concurrent_hash_map<
 //Creates an http event
 Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 {
-	Socket* result = new Socket(fd, listener);
-	result->socket_fd = fd;
-	
+	DEBUG_PRINTF("Allocating socket\n");
+
+	Socket* result = new Socket(fd);
 	if(addr != NULL)
 	{
 		result->addr = *addr;
 	}
+
+	if(!listener)
+	{
+		DEBUG_PRINTF("Allocating buffer\n");
+		result->state = SocketState_WaitForHeader;
+		result->inp.init_buffer(RECV_BUFFER_SIZE);
+	}
+	else
+	{
+		result->state = SocketState_Listening;
+	}
 	
 	//Set socket to non blocking
+	DEBUG_PRINTF("Setting non-blocking\n");
 	int flags = fcntl(fd, F_GETFL, 0);
 	if (flags == -1)
 		flags = 0;
@@ -287,6 +289,7 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 	}
 	
 	//Store pointer in map
+	DEBUG_PRINTF("Inserting into socket set\n");
 	if(!socket_set.insert(make_pair(fd, result)))
 	{
 		DEBUG_PRINTF("File descriptor is already in use!\n");
@@ -294,15 +297,27 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 		return NULL;
 	}
 	
+	DEBUG_PRINTF("Adding to epoll\n");
 	epoll_event ev;
-	ev.events = (EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP) | (listener ? 0 : (EPOLLET | EPOLLONESHOT));
+	
+	if(listener)
+	{
+		ev.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP; 
+	}
+	else
+	{
+		ev.events =  EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+	}
+	
 	ev.data.fd = fd;
 	ev.data.ptr = result;
 
 	if(epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1)
 	{
 		perror("epoll_add");
-		dispose_socket(result);
+		
+
+		delete result;
 		return NULL;
 	}
 
@@ -321,7 +336,7 @@ bool HttpServer::notify_socket(Socket* socket)
 			ev.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 		break;
 		
-		case SocketState_WebSocketPoll:
+		case SocketState_WebSocketRecv:
 		case SocketState_PostRecv:
 		case SocketState_WaitForHeader:
 			ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
@@ -350,9 +365,11 @@ bool HttpServer::notify_socket(Socket* socket)
 //Disposes of an http event
 void HttpServer::dispose_socket(Socket* socket)
 {
-	DEBUG_PRINTF("Disposing socket\n");
+	DEBUG_PRINTF("Disposing socket: %016lx\n", socket);
 	socket_set.erase(socket->socket_fd);
+	DEBUG_PRINTF("Removing from epoll\n");
 	epoll_ctl(epollfd, EPOLL_CTL_DEL, socket->socket_fd, NULL);	
+	DEBUG_PRINTF("Freeing socket\n");
 	delete socket;
 }
 
@@ -387,10 +404,10 @@ void HttpServer::initialize_websocket(Socket* socket)
 		dispose_socket(socket);
 	}
 
-	auto sender = new Socket(send_fd, true);
+	auto sender = new Socket(send_fd);
 	
 	//Initialize state
-	socket->state = SocketState_WebSocketPoll;
+	socket->state = SocketState_WebSocketRecv;
 	sender->state = SocketState_WebSocketSend;
 	
 	//Update buffers
@@ -398,11 +415,15 @@ void HttpServer::initialize_websocket(Socket* socket)
 	sender->outp.pending = 0;
 	sender->outp.buf_cur = sender->outp.buf_start = socket->outp.buf_start;
 	
+	DEBUG_PRINTF("Sender buffers: inp = %016lx, outp = %016lx\n", sender->inp.buf_start, sender->outp.buf_start);
+	
 	//Clear out socket's send buffer
 	socket->outp.size = 0;
 	socket->outp.pending = 0;
 	socket->outp.buf_cur = socket->outp.buf_start = NULL;
-		
+
+	DEBUG_PRINTF("Receiver buffers: inp = %016lx, outp = %016lx\n", socket->inp.buf_start, socket->outp.buf_start);
+			
 	//Store pointer in map
 	if(!socket_set.insert(make_pair(sender->socket_fd, sender)))
 	{
@@ -430,6 +451,8 @@ void HttpServer::initialize_websocket(Socket* socket)
 		send_q_impl,
 		sender->socket_fd,
 		sender);
+		
+	DEBUG_PRINTF("rc_recv = %d, rc_send = %d\n", recv_q_impl->ref_count, send_q_impl->ref_count);
 
 	//Add the sender to epoll
 	epoll_event ev;
@@ -451,6 +474,10 @@ void HttpServer::initialize_websocket(Socket* socket)
 		DEBUG_PRINTF("Application rejected socket\n");
 		dispose_socket(socket);
 		delete websocket;
+		
+		//Wake up sender
+		notify_websocket_send(this, send_fd, sender);
+		
 		return;
 	}
 	
@@ -760,6 +787,8 @@ void HttpServer::process_accept(Socket* socket)
 			return;
 		}
 		
+		DEBUG_PRINTF("Accept complete, fd = %d\n", conn_fd);
+		
 		//FIXME: Maybe check black list here, deny connections from ahole ip addresses
 	
 		auto res = create_socket(conn_fd, false, &addr);
@@ -925,9 +954,8 @@ void HttpServer::process_header(Socket* socket)
 		}
 		
 		//Create the handshake packet
-		socket->outp.size = SEND_BUFFER_SIZE;
-		socket->outp.buf_start = (char*)malloc(SEND_BUFFER_SIZE);
-		socket->outp.buf_cur = socket->outp.buf_start;
+		DEBUG_PRINTF("Initialize socket handshake reply buffer\n");
+		socket->outp.init_buffer(SEND_BUFFER_SIZE);
 		
 		if(!http_websocket_handshake(socket->request, socket->outp.buf_start, &(socket->outp.pending)))
 		{
@@ -1099,7 +1127,8 @@ void HttpServer::process_send(Socket* socket)
 		break;
 		}
 		
-		dispose_socket(socket);
+		DEBUG_PRINTF("THIS SHOULD NOT HAPPEN!");
+		assert(false);
 		return;
 	}
 	
@@ -1194,6 +1223,8 @@ void HttpServer::worker_loop()
 		{
 			Socket* socket = (Socket*)events[i].data.ptr;
 			
+			DEBUG_PRINTF("Processing request from socket: %016lx\n", socket);
+			
 			if( (events[i].events & EPOLLHUP) ||
 				(events[i].events & EPOLLERR) ||
 				(events[i].events & EPOLLRDHUP) )
@@ -1224,7 +1255,7 @@ void HttpServer::worker_loop()
 					process_send(socket);
 				break;
 
-				case SocketState_WebSocketPoll:
+				case SocketState_WebSocketRecv:
 					handle_websocket_recv(socket);
 				break;
 				

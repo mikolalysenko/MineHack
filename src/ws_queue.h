@@ -1,6 +1,7 @@
 #ifndef WEBSOCKET_QUEUE_H
 #define WEBSOCKET_QUEUE_H
 
+#include <cstdio>
 #include <cassert>
 #include <list>
 #include <tbb/spin_mutex.h>
@@ -14,10 +15,16 @@ namespace Game
 		
 		~WebSocketQueue_Impl()
 		{
+			printf("Destructing ws_queue %016lx\n", this);
 			for(auto iter = msg_queue.begin(); iter != msg_queue.end(); ++iter)
 			{
-				delete *iter;
+				if(*iter != NULL)
+				{
+					printf("Deleting %016lx\n", *iter);
+					delete *iter;
+				}
 			}
+			printf("Destruction complete\n");
 		}
 	
 		int ref_count;	
@@ -33,7 +40,7 @@ namespace Game
 		WebSocketQueue(WebSocketQueue_Impl* impl_) : impl(impl_)
 		{
 			tbb::spin_mutex::scoped_lock L(impl->lock);
-			++impl->ref_count;
+			impl->ref_count++;
 		}
 		
 		~WebSocketQueue()
@@ -41,7 +48,7 @@ namespace Game
 			if(impl != NULL)
 			{
 				tbb::spin_mutex::scoped_lock L(impl->lock);
-				if((--impl->ref_count) == 0)
+				if(impl->ref_count-- == 1)
 				{
 					delete impl;
 				}
@@ -61,7 +68,7 @@ namespace Game
 			
 			impl = impl_;
 			tbb::spin_mutex::scoped_lock L(impl->lock);
-			++impl->ref_count;
+			impl->ref_count++;
 		}
 		
 		bool detach_and_check_empty()

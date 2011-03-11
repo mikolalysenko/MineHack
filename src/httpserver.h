@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <cstdio>
 
 #include <stdint.h>
 
@@ -55,7 +56,7 @@ namespace Game {
 		SocketState_PostRecv			= 4,
 		SocketState_PostReply			= 5,
 		SocketState_WebSocketHandshake	= 6,
-		SocketState_WebSocketPoll		= 7,
+		SocketState_WebSocketRecv		= 7,
 		SocketState_WebSocketSend		= 8,
 	};
 
@@ -63,21 +64,34 @@ namespace Game {
 	struct SocketSide
 	{
 		int size, pending;
-		char *buf_start, *buf_cur, *frame_start;
+		char *buf_start, *buf_cur;
 		
 		SocketSide() : size(0), pending(0), buf_start(NULL), buf_cur(NULL) { }
+		
+		void init_buffer(int sz)
+		{
+			assert(buf_start == NULL);
+			size = sz;
+			pending = 0;
+			buf_start = buf_cur = (char*)malloc(sz);
+			printf("Created buffer; size = %ld, ptr = %016lx\n", sz, buf_start);
+		}
 		
 		~SocketSide() 
 		{
 			if(buf_start != NULL)
+			{
+				printf("Releasing buffer %016lx\n", buf_start);
 				free(buf_start);
+			}
+			printf("Buffer released\n");
 		}
 	};
 
 	//The internal HTTP client event packet structure
 	struct Socket
 	{
-		Socket(int fd, bool listener);
+		Socket(int fd);
 		~Socket();
 	
 		//Socket descriptors
