@@ -1,9 +1,9 @@
 "use strict";
 
 
-function getShader(gl, url)
+function getShader(url)
 {
-	var script = Loader.data[url];
+	var gl = Game.gl, script = Loader.data[url];
 	if(!script)
 		return ["Fail", "Error requesting document"];
 
@@ -35,10 +35,10 @@ function getShader(gl, url)
 	return ["Ok", shader];
 }
 
-function getProgram(gl, fs_url, vs_url)
+function getProgram(fs_url, vs_url)
 {
 	//Load chunk vertex/frag shaders
-	var res = getShader(gl, fs_url);
+	var gl = Game.gl, res = getShader(gl, fs_url);
 	if(res[0] != "Ok")
 		return ["Fail", "Fragment shader " + fs_url + " compile error:\n" + res[1]];
 	var fs = res[1];
@@ -62,9 +62,9 @@ function getProgram(gl, fs_url, vs_url)
 	return ["Ok", fs, vs, prog];
 }
 
-function getProgramFromSource(gl, fs_source, vs_source)
+function getProgramFromSource(fs_source, vs_source)
 {
-	var vshader, fshader, prog;
+	var gl = Game.gl, vshader, fshader, prog;
 
 	vshader = gl.createShader(gl.VERTEX_SHADER);
 	gl.shaderSource(vshader, vs_source);
@@ -82,9 +82,9 @@ function getProgramFromSource(gl, fs_source, vs_source)
 	return prog;
 }
 
-function getTexture(gl, url)
+function getTexture(url)
 {
-	var img = Loader.data[url];
+	var gl = Game.gl, img = Loader.data[url];
 	if(!img)
 	{
 		return ["Fail", "Could not load image " + url];

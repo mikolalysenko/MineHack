@@ -345,7 +345,10 @@ Map.init_worker = function()
 	};
 
 	//Start the worker	
-	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
+	Map.vb_worker.postMessage({ 
+		type: EV_START, 
+		lsw: Session.session_id.lsw, 
+		msw: Session.session_id.msw });
 }
 
 

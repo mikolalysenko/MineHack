@@ -1,12 +1,23 @@
 "use strict";
 
-function encode_session_id(session_id)
+function pad_hex(w)
 {
+	var r = Number(w).toString(16);
+	while(r.length < 16)
+	{
+		r = "0" + r;
+	}
+	return r;
 }
 
-function Socket(portname, session_id, onmessage, onerror)
+function encode_session_id(lsw, msw)
 {
-	var url = "ws://127.0.0.1:8081/" + portname + "?=" + encode_session_id(session_id);
+	return pad_hex(msw) + pad_hex(lsw);
+}
+
+function Socket(portname, session_id_lsw, session_id_msw, onmessage, onerror)
+{
+	var url = "ws://127.0.0.1:8081/" + portname + "?=" + encode_session_id(session_id_lsw, session_id_msw);
 
 	this.onmessage = onmessage;
 	this.websocket = new WebSocket(url);
@@ -30,17 +41,11 @@ Socket.prototype.process_recv = function(event)
 
 Socket.prototype.send = function(pbuf)
 {
-	//Encode protocol buffer
-	var data = new PROTO.ByteArrayStream;
-	pbuf.SerializeToStream(data);
+	this.websocket.send(pbuf_to_raw(pbuf));
+}
 
-	//Serialize data to string (bleh)
-	var str = "";
-	for(var i=0; i<data.array_.length; ++i)
-	{
-		str += String.fromCharCode(data.array_[i]);
-	}
-
-	this.websocket.send(data);
+Socket.prototype.send_from_raw = function(raw)
+{
+	this.websocket.send(raw);
 }
 

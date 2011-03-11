@@ -104,7 +104,7 @@ var CharacterSelectState = {
 		}
 		else
 		{
-			CharacterSelectState.set_select_error(result);
+			App.post_error(result);
 		}
 	},
 
@@ -186,7 +186,7 @@ var LoadState = {
 	
 		if(Loader.finished && App.state == LoadState)
 		{
-			App.set_state(GameState);
+			App.set_state(Game);
 		}
 	}
 };
@@ -229,10 +229,33 @@ var DefaultState = {
 var App = {
 	state : DefaultState,
 	
+	
+	do_test : function()
+	{
+		//Generate dummy account
+		var user_txt = document.getElementById('userName');
+		var pass_txt = document.getElementById('password');
+	
+		user_txt.value = "user" + Math.floor(Math.random()*10000000);
+		pass_txt.value = "p" + Math.floor(Math.random()*10000000) + "." + Math.floor(Math.random()*10000000);
+	
+		App.state.do_create();
+	
+		//Create player
+		var player_name = "player" + Math.floor(Math.random()*10000000);
+		var player_txt = document.getElementById('characterName');
+		player_txt.value = player_name;
+		App.state.do_create_character();
+	
+		//Join game
+		App.state.do_join_game(player_name);
+	},
+	
 	init : function()
 	{
 		Loader.start(LoadState.update_progress, App.crash);
 		App.set_state(LoginState);
+		App.do_test();
 	},
 
 	shutdown : function()

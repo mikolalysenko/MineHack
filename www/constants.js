@@ -4,6 +4,7 @@ const GAME_DRAW_RATE		= 40;
 const GAME_SHADOW_RATE		= 80;
 
 
+const DOMAIN_NAME = "127.0.0.1:8081"
 
 //Chunk parameters
 const CHUNK_X_S		= 4;
@@ -28,4 +29,16 @@ const CHUNK_SIZE	= CHUNK_X * CHUNK_Y * CHUNK_Z;
 
 const CHUNK_DIMS	= [ CHUNK_X, CHUNK_Y, CHUNK_Z ];
 
-
+//Event types
+const EV_START				= 0;
+const EV_SET_BLOCK			= 1;
+const EV_FETCH_CHUNK		= 2;
+const EV_VB_UPDATE			= 3;
+const EV_CHUNK_UPDATE		= 4;
+const EV_PRINT				= 5;
+const EV_FORGET_CHUNK		= 6;
+const EV_SET_THROTTLE		= 7;
+const EV_VB_COMPLETE		= 8;
+const EV_RECV_PBUF			= 9;
+const EV_CRASH				= 10;
+const EV_SEND				= 11;

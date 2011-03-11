@@ -910,6 +910,7 @@ void HttpServer::process_header(Socket* socket)
 	
 	case HttpRequestType_WebSocket:
 	{
+		DEBUG_PRINTF("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 		DEBUG_PRINTF("Got a web socket connection\n");
 		
 		//Make sure we read the extra 8 bytes for the connection key

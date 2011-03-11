@@ -4,19 +4,25 @@
 importScripts(
 	'constants.js', 
 	'misc.js', 
+	'protobuf.js',
+	'pbj.js',
 	'chunk_common.js');
 
-const MAX_NET_CHUNKS	= 512;
+var MAX_NET_CHUNKS	= 512;
 
-const VERT_SIZE			= 12;
+var VB_GEN_RATE		 	= 30;
+var FETCH_RATE			= 100;
+var MAX_VB_UPDATES		= 3;
 
-const PACK_X_STRIDE		= 1;
-const PACK_Y_STRIDE		= CHUNK_X * 3;
-const PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9;
+var VERT_SIZE			= 12;
 
-const PACK_X_OFFSET		= CHUNK_X;
-const PACK_Y_OFFSET		= CHUNK_Y;
-const PACK_Z_OFFSET		= CHUNK_Z;
+var PACK_X_STRIDE		= 1;
+var PACK_Y_STRIDE		= CHUNK_X * 3;
+var PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9;
+
+var PACK_X_OFFSET		= CHUNK_X;
+var PACK_Y_OFFSET		= CHUNK_Y;
+var PACK_Z_OFFSET		= CHUNK_Z;
 
 var 
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
@@ -26,6 +32,7 @@ var
 	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
 	fetch_interval = null,					 //Interval timer for chunk fetch events
+	socket = null,							 //The websocket
 	
 	v_ptr = 0,
 	i_ptr = 0,
@@ -72,7 +79,7 @@ function calc_light(
 	return [ao, ao, ao];
 }
 
-//Construct vertex buffer for this chunk
+//varruct vertex buffer for this chunk
 // This code makes me want to barf - Mik
 function gen_vb()
 {
@@ -668,25 +675,41 @@ function set_block(x, y, z, b)
 	}
 }
 
-//Starts the worker
-function worker_start(key)
+
+function on_recv(event)
 {
-	print("starting worker");
+}
 
-	session_id.set(key);
+function on_send(pbuf)
+{
+}
 
-	print("key = " 
-		+ session_id[0] + "," 
-		+ session_id[1] + "," 
-		+ session_id[2] + "," 
-		+ session_id[3] + "," 
-		+ session_id[4] + "," 
-		+ session_id[5] + "," 
-		+ session_id[6] + "," 
-		+ session_id[7]);
+function on_socket_error()
+{
+}
 
+//Starts the worker
+function worker_start(lsw, msw)
+{
+	function pad_hex(w)
+	{
+		var r = Number(w).toString(16);
+		while(r.length < 16)
+		{
+			r = "0" + r;
+		}
+		return r;
+	}
+
+	socket = new WebSocket("ws://"+DOMAIN_NAME+"map?k="+pad_hex(msw)+pad_hex(lsw));
+	socket.onmessage = on_recv;
+	socket.onerror = on_socket_error;
+	socket.onclose = on_socket_error;
+	
 	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
-	fetch_interval = setInterval(grab_vis_buffer, 800);
+	//fetch_interval = setInterval(grab_vis_buffer, 800);
+	
+	//Send an initial protobuf containing the contents of the cache (maybe)
 
 	for(var i=0; i<CHUNK_SIZE; ++i)
 	{
@@ -703,7 +726,7 @@ self.onmessage = function(ev)
 	switch(ev.data.type)
 	{
 		case EV_START:
-			worker_start(ev.data.key);
+			worker_start(ev.data.lsw, ev.data.msw);
 		break;
 
 		case EV_SET_BLOCK:

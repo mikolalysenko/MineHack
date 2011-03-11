@@ -81,3 +81,20 @@ function sendProtoBuf_sync(pbuf, timeout_val)
 	return result;
 }
 
+
+function pbuf_to_raw(pbuf)
+{
+	//Encode protocol buffer
+	var data = new PROTO.ByteArrayStream;
+	pbuf.SerializeToStream(data);
+
+	//Serialize data to string (bleh)
+	var str = "";
+	for(var i=0; i<data.array_.length; ++i)
+	{
+		str += String.fromCharCode(data.array_[i]);
+	}
+
+	return str;
+}
+

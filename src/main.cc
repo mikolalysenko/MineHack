@@ -284,10 +284,29 @@ Network::ServerPacket* post_callback(HttpRequest const& request, Network::Client
 	}
 }
 
+int hex_2_num(char c)
+{
+	if(c >= '0' && c <= '9')
+	{
+		return c - '0';
+	}
+	if(c >= 'a' && c <= 'f')
+	{
+		return 10 + (c - 'a');
+	}
+	if(c >= 'A' && c <= 'F')
+	{
+		return 10 + (c - 'A');
+	}
+	return 0;
+}
+
 
 //Handles a websocket connection
 bool websocket_callback(HttpRequest const& request, WebSocket* websocket)
 {
+	DEBUG_PRINTF("GOT A WEBSOCKET\n");
+
 	//Parse out portname and session id from request
 	int last_slash=-1, last_qmark = -1, last_equals = -1;
 	for(int i=request.url.size()-1; i>=0; --i)
@@ -319,7 +338,7 @@ bool websocket_callback(HttpRequest const& request, WebSocket* websocket)
 	uint64_t session_id = 0;
 	for(int i=0; i<16; ++i)
 	{
-		session_id = session_id*16 + (request.url[last_qmark+i+1] - 'A');
+		session_id = session_id*16 + hex_2_num(request.url[last_qmark+i+1]);
 	}
 	
 	DEBUG_PRINTF("Got socket, portname = %s, session id = %ld\n", portname.c_str(), session_id);
@@ -472,6 +491,10 @@ void console_loop()
 		else if(command == "help")
 		{
 			printf("Read source code for documentation\n");
+		}
+		else
+		{
+			printf("Unknown command\n");
 		}
 	}
 }

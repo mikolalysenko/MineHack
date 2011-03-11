@@ -37,9 +37,8 @@ var Game =
 	draw_interval : null,
 	shadow_interval : null,
 	
-	//Temporary stuff for the sockets
-	update_socket : null,
-	map_socket : null,
+	//Update worker
+	update_worker : null,
 	
 	//Used for debugging
 	show_shadows : false,
@@ -48,17 +47,8 @@ var Game =
 	preload : function()
 	{
 		Game.canvas = document.getElementById("gameCanvas");
-		var gl;
-		try
-		{
-			gl = canvas.getContext("experimental-webgl");
-		}
-		catch(e)
-		{
-			return 'Browser does not support WebGL,';
-		}
-	
-		if(!gl)
+		var gl = Game.canvas.getContext("experimental-webgl");
+		if(gl == null)
 		{
 			return 'Invalid WebGL object';
 		}
@@ -78,15 +68,41 @@ var Game =
 		//Start preloading the map
 		Map.preload();
 		
-		//Start the tick interval
-		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
+		//Start the update worker
+		Game.update_worker = new Worker("update_worker.js");
+		Game.update_worker.onmessage = function(ev)
+		{
+			switch(ev.data.type)
+			{
+				case EV_PRINT:
+					console.log(ev.data.str);				
+				break;
+
+				case EV_RECV_PBUF:
+					var stream = new PROTO.ByteArrayStream(ev.data.raw),
+						pbuf = new Network.ServerPacket;
+					pbuf.ParseFromStream(stream);
+					recvProtoBuf(pbuf);
+				break;
+			
+				case EV_CRASH:
+					//alert("Update thread crashed");
+					console.log("blah");
+				break;
+			}
+		};
+		Game.update_worker.postMessage({
+			type: EV_START, 
+			lsw: Session.session_id.lsw, 
+			msw: Session.session_id.msw});
 		
 		return "Ok";
 	},
-
+	
 	//Start the actual game, initializes graphics stuff
 	init : function()
 	{
+	/*
 		Game.local_ticks = 0;
 		Game.crashed = false;
 		Game.ready = false;
@@ -134,8 +150,7 @@ var Game =
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
 		Game.draw_interval = setInterval(Game.draw, DRAW_RATE);
 		Game.shadow_interval = setInterval(Game.update_shadows, SHADOW_RATE);
-			
-		return 'Ok';
+	*/
 	},
 
 	//Stop all intervals
@@ -168,6 +183,17 @@ var Game =
 		//Set UI position
 		var uiPanel = document.getElementById("uiPanel");
 	},
+	
+	
+	sendProtoBuf : function(pbuf)
+	{
+		update_worker.postMessage(pbuf_to_raw(pbuf));
+	},
+	
+	recvProtoBuf : function(pbuf)
+	{
+	},
+	
 	
 	proj_matrix : function(w, h, fov, zfar, znear)
 	{
