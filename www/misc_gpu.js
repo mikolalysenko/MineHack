@@ -43,13 +43,13 @@ function getProgram(fs_url, vs_url)
 		return ["Fail", "Fragment shader " + fs_url + " compile error:\n" + res[1]];
 	var fs = res[1];
 
-	res = getShader(gl, vs_url);
+	res = getShader(vs_url);
 	if(res[0] != "Ok")
 		return ["Fail", "Vertex shader " + vs_url + " compile error:\n" + res[1]];
 	var vs = res[1];
 
 	//Create the chunk shader
-	var prog = gl.createProgram();
+	var gl = Game.gl, prog = gl.createProgram();
 	gl.attachShader(prog, vs);
 	gl.attachShader(prog, fs);
 	gl.linkProgram(prog);
@@ -90,7 +90,8 @@ function getTexture(url)
 		return ["Fail", "Could not load image " + url];
 	}
 
-	var tex = gl.createTexture();
+	var gl = Game.gl, 
+		tex = gl.createTexture();
 	gl.bindTexture(gl.TEXTURE_2D, tex);
 	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);

@@ -116,6 +116,7 @@ void World::stop()
 {
 	running = false;
 	world_task->wait_for_all();
+	session_manager->clear_all_sessions();
 }
 
 //Synchronize world state

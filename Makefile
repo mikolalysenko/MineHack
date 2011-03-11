@@ -212,6 +212,11 @@ valgrind: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
 	valgrind -v --track-origins=yes --leak-check=full --log-file=valgrind.log ./$(exe)
 
+helgrind: $(exe) $(datadir)  $(protojs)
+	(sleep 2; $(BROWSER) $(URL)) &
+	valgrind -v --tool=helgrind --log-file=helgrind.log ./$(exe)
+
+
 test: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)

@@ -6,7 +6,7 @@ Debug.init = function()
 {
     //Create debug shader
 	var gl = Game.gl,
-		res = getProgram(gl, "shaders/simple.fs", "shaders/simple.vs");
+		res = getProgram("shaders/simple.fs", "shaders/simple.vs");
 		
 	if(res[0] != "Ok")
 	{

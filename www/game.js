@@ -47,10 +47,21 @@ var Game =
 	preload : function()
 	{
 		Game.canvas = document.getElementById("gameCanvas");
-		var gl = Game.canvas.getContext("experimental-webgl");
-		if(gl == null)
+		var gl;
+		try
 		{
-			return 'Invalid WebGL object';
+			gl = Game.canvas.getContext("experimental-webgl");
+		}
+		catch(e)
+		{
+			App.crash('Browser does not support WebGL');
+			return false;
+		}
+	
+		if(!gl)
+		{
+			App.crash('Invalid WebGL object');
+			return false;
 		}
 	
 		//Get extensions
@@ -60,7 +71,8 @@ var Game =
 	
 		if(!Game.EXT_FPTex)
 		{
-			return "WebGL implementation does not support floating point textures";
+			App.crash("WebGL implementation does not support floating point textures");
+			return false;
 		}
 	
 		Game.gl = gl;
@@ -96,7 +108,7 @@ var Game =
 			lsw: Session.session_id.lsw, 
 			msw: Session.session_id.msw});
 		
-		return "Ok";
+		return true;
 	},
 	
 	//Start the actual game, initializes graphics stuff
@@ -150,7 +162,10 @@ var Game =
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
 		Game.draw_interval = setInterval(Game.draw, DRAW_RATE);
 		Game.shadow_interval = setInterval(Game.update_shadows, SHADOW_RATE);
+<<<<<<< HEAD
 	*/
+=======
+>>>>>>> e946c1d5cf1515673f4194040754efe17e56c57d
 	},
 
 	//Stop all intervals
@@ -161,9 +176,7 @@ var Game =
 		if(Game.draw_interval)		clearInterval(Game.draw_interval);
 		if(Game.shadow_interval)	clearInterval(Game.shadow_interval);
 		
-		Player.shutdown();
 		Map.shutdown();
-		Shadows.shutdown();
 		Debug.shutdown();		
 	},
 
