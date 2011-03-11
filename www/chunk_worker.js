@@ -701,7 +701,7 @@ function worker_start(lsw, msw)
 		return r;
 	}
 
-	socket = new WebSocket("ws://"+DOMAIN_NAME+"map?k="+pad_hex(msw)+pad_hex(lsw));
+	socket = new WebSocket("ws://"+DOMAIN_NAME+"/map?k="+pad_hex(msw)+pad_hex(lsw));
 	socket.onmessage = on_recv;
 	socket.onerror = on_socket_error;
 	socket.onclose = on_socket_error;

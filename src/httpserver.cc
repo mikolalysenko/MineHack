@@ -747,26 +747,29 @@ void HttpServer::process_accept(Socket* socket)
 {
 	DEBUG_PRINTF("Got connection\n");
 
-	//Accept connection
-	sockaddr_storage addr;
-	int addr_size = sizeof(addr), conn_fd = -1;
-	
-	conn_fd = accept(socket->socket_fd, (sockaddr*)&(addr), (socklen_t*)&addr_size);
-	if(conn_fd == -1)
+	while(true)
 	{
-		DEBUG_PRINTF("Accept error, errno = %d\n", errno);
-		return;
-	}
+		//Accept connection
+		sockaddr_storage addr;
+		int addr_size = sizeof(addr), conn_fd = -1;
+	
+		conn_fd = accept(socket->socket_fd, (sockaddr*)&(addr), (socklen_t*)&addr_size);
+		if(conn_fd == -1)
+		{
+			DEBUG_PRINTF("Accept error, errno = %d\n", errno);
+			return;
+		}
 		
-	//FIXME: Maybe check black list here, deny connections from ahole ip addresses
+		//FIXME: Maybe check black list here, deny connections from ahole ip addresses
 	
-	auto res = create_socket(conn_fd, false, &addr);
-	if(res == NULL)
-	{
-		DEBUG_PRINTF("Error accepting connection\n");
+		auto res = create_socket(conn_fd, false, &addr);
+		if(res == NULL)
+		{
+			DEBUG_PRINTF("Error accepting connection\n");
+		}
+	
+		DEBUG_PRINTF("Connection successfully accepted, fd = %d\n", conn_fd);
 	}
-	
-	DEBUG_PRINTF("Connection successfully accepted, fd = %d\n", conn_fd);
 }
 
 

@@ -162,10 +162,7 @@ var Game =
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
 		Game.draw_interval = setInterval(Game.draw, DRAW_RATE);
 		Game.shadow_interval = setInterval(Game.update_shadows, SHADOW_RATE);
-<<<<<<< HEAD
 	*/
-=======
->>>>>>> e946c1d5cf1515673f4194040754efe17e56c57d
 	},
 
 	//Stop all intervals
