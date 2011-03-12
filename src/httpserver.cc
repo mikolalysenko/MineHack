@@ -441,18 +441,16 @@ void HttpServer::initialize_websocket(Socket* socket)
 	socket->message_queue.attach(recv_q_impl);
 	sender->message_queue.attach(send_q_impl);
 	
-	//Push a bum event into the sender queue for initialization purposes
-	sender->message_queue.push_and_check_empty(NULL);
-	
 	//Create web socket
 	auto websocket = new WebSocket(
 		this,
-		recv_q_impl,
 		send_q_impl,
+		recv_q_impl,
 		sender->socket_fd,
 		sender);
-		
-	DEBUG_PRINTF("rc_recv = %d, rc_send = %d\n", recv_q_impl->ref_count, send_q_impl->ref_count);
+	
+	//Push a bum event into the sender queue for initialization purposes
+	sender->message_queue.push_and_check_empty(NULL);
 
 	//Add the sender to epoll
 	epoll_event ev;
@@ -467,6 +465,8 @@ void HttpServer::initialize_websocket(Socket* socket)
 		delete websocket;
 		return;
 	}
+
+	DEBUG_PRINTF("rc_recv = %d, rc_send = %d\n", recv_q_impl->ref_count, send_q_impl->ref_count);	
 	
 	//Try to register the websocket with the client
 	if(!(websocket_callback)(socket->request, websocket))
@@ -474,10 +474,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 		DEBUG_PRINTF("Application rejected socket\n");
 		dispose_socket(socket);
 		delete websocket;
-		
-		//Wake up sender
-		notify_websocket_send(this, send_fd, sender);
-		
 		return;
 	}
 	
@@ -619,124 +615,134 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 
 void HttpServer::handle_websocket_send(Socket* socket)
 {
-	if(socket->message_queue.ref_count() < 2)
+	while(true)
 	{
-		DEBUG_PRINTF("Web socket died\n");
-		dispose_socket(socket);
-		return;
-	}
-
-	//Check pending bytes
-	if(socket->outp.pending == 0)
-	{
-		
-		//Check if there are any messages left to send
-		google::protobuf::Message* msg = NULL;
-		while(msg == NULL)
+		if(socket->message_queue.ref_count() < 2)
 		{
+			DEBUG_PRINTF("Web socket died\n");
+			dispose_socket(socket);
+			return;
+		}
+
+		//Check pending bytes
+		if(socket->outp.pending == 0)
+		{
+			//Check if there are any messages left to send
+			google::protobuf::Message* msg = NULL;
 			if(!socket->message_queue.peek_if_full(msg))
 				return;
-		}
-		
-		auto packet = (Network::ServerPacket*)msg;
-		
-		int message_size = packet->ByteSize();
-		
-		socket->outp.buf_cur = socket->outp.buf_start;
-		*(socket->outp.buf_cur++) = 0x80;
-		int nb = 0;
-		
-		for(int ml=message_size; ml!=0; ml>>=7)
-		{
-			*(socket->outp.buf_cur++) = ml & 0x7f;
-			nb++;
-		}
-		
-		//Reverse length bits and set varint flags
-		for(int i=0; i<nb-1; ++i)
-		{
-			if(i < (nb>>1))
+			
+			//Ignore null messages
+			if(msg == NULL)
 			{
-				uint8_t tmp = socket->outp.buf_start[i+1];
-				socket->outp.buf_start[i+1] = socket->outp.buf_start[nb-i-1];
-				socket->outp.buf_start[nb-i-1] = tmp;
+				if(socket->message_queue.pop_and_check_empty())
+					return;
+				continue;
 			}
-			socket->outp.buf_start[i+1] |= 0x80;
-		}
 		
-		//Serialize the actual packet
-		if(!packet->SerializeToArray(socket->outp.buf_cur, message_size))
-		{
-			DEBUG_PRINTF("Could not serialize packet, destroying connection\n");
-			dispose_socket(socket);
-			return;
-		}
+			//Serialize packet to output stream
+			auto packet = (Network::ServerPacket*)msg;
+			int message_size = packet->ByteSize();
 		
-		//Set pointers and go
-		socket->outp.pending = message_size + nb + 1;
-		socket->outp.buf_cur = socket->outp.buf_start;
-	}
+			//Write packet header
+			socket->outp.buf_cur = socket->outp.buf_start;
+			*(socket->outp.buf_cur++) = 0x80;	//Start of frame byte 
+			
+			//Write the message size bits
+			int nb = 0;
+			for(int ml=message_size; ml!=0; ml>>=7)
+			{
+				*(socket->outp.buf_cur++) = ml & 0x7f;
+				nb++;
+			}
+		
+			//Need to reverse and set var-int flags
+			for(int i=0; i<nb-1; ++i)
+			{
+				if(i < (nb>>1))
+				{
+					uint8_t tmp = socket->outp.buf_start[i+1];
+					socket->outp.buf_start[i+1] = socket->outp.buf_start[nb-i-1];
+					socket->outp.buf_start[nb-i-1] = tmp;
+				}
+				socket->outp.buf_start[i+1] |= 0x80;
+			}
+		
+			//Serialize the actual packet
+			if(!packet->SerializeToArray(socket->outp.buf_cur, message_size))
+			{
+				DEBUG_PRINTF("Could not serialize packet, destroying connection\n");
+				delete packet;
+				dispose_socket(socket);
+				return;
+			}
+			
+			//Free packet buffer
+			delete packet;
+		
+			//Set pointers and go
+			socket->outp.pending = message_size + nb + 1;
+			socket->outp.buf_cur = socket->outp.buf_start;
+		}
 	
 
-	//Write pending bytes
-	int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, 0);
+		//Write pending bytes
+		int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, 0);
 	
-	if(len < 0)
-	{
-		if(errno == EAGAIN);
+		if(len < 0)
 		{
-			DEBUG_PRINTF("Send incomplete, retrying\n");
-			notify_socket(socket);
+			if(errno == EAGAIN);
+			{
+				DEBUG_PRINTF("Send incomplete, retrying\n");
+				notify_socket(socket);
+				return;
+			}
+			perror("send");
+			dispose_socket(socket);
 			return;
 		}
-		perror("send");
-		dispose_socket(socket);
-		return;
-	}
-	else if(len == 0)
-	{
-		DEBUG_PRINTF("Remote end hung up\n");
-		dispose_socket(socket);
-		return;
-	}
-	
-	socket->outp.pending -= len;
-	socket->outp.buf_cur += len;
-	
-	
-	//Check for send completion
-	if(socket->outp.pending > 0)
-	{
-		if(!notify_socket(socket))
+		else if(len == 0)
+		{
+			DEBUG_PRINTF("Remote end hung up\n");
 			dispose_socket(socket);
-		return;
-	}
+			return;
+		}
 	
-	//Send completed
-	if(!socket->message_queue.pop_and_check_empty())
-	{
-		//More to send, so notify socket and loop
-		if(!notify_socket(socket))
-			dispose_socket(socket);
-		return;		
+		socket->outp.pending -= len;
+		socket->outp.buf_cur += len;
+	
+		//Check for send completion
+		if(socket->outp.pending > 0)
+		{
+			if(!notify_socket(socket))
+				dispose_socket(socket);
+			return;
+		}
+	
+		//Send completed
+		if(socket->message_queue.pop_and_check_empty())
+			return;
 	}
 }
 
 WebSocket::WebSocket(HttpServer* server_, 
-	WebSocketQueue_Impl* send_q_, 
-	WebSocketQueue_Impl* recv_q_, 
+	WebSocketQueue_Impl* send_q_impl, 
+	WebSocketQueue_Impl* recv_q_impl, 
 	int send_fd_, 
 	Socket* send_socket_) :
 	server(server_),
-	send_q(send_q_),
-	recv_q(recv_q_),
+	send_q(send_q_impl),
+	recv_q(recv_q_impl),
 	send_fd(send_fd_),
 	send_socket(send_socket_)
 {
+	DEBUG_PRINTF("Constructing websocket %016lx\n", this);
 }
 
 WebSocket::~WebSocket()
 {
+	DEBUG_PRINTF("Destructing websocket %016lx\n", this);
+
 	if(send_q.detach_and_check_empty())
 		notify_websocket_send(server, send_fd, send_socket);
 }
@@ -942,7 +948,7 @@ void HttpServer::process_header(Socket* socket)
 	
 	case HttpRequestType_WebSocket:
 	{
-		DEBUG_PRINTF("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+		DEBUG_PRINTF("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 		DEBUG_PRINTF("Got a web socket connection\n");
 		
 		//Make sure we read the extra 8 bytes for the connection key
@@ -957,7 +963,7 @@ void HttpServer::process_header(Socket* socket)
 		DEBUG_PRINTF("Initialize socket handshake reply buffer\n");
 		socket->outp.init_buffer(SEND_BUFFER_SIZE);
 		
-		if(!http_websocket_handshake(socket->request, socket->outp.buf_start, &(socket->outp.pending)))
+		if(!http_websocket_handshake(socket->request, socket->outp.buf_start, &socket->outp.pending))
 		{
 			DEBUG_PRINTF("Bad WebSocket handshake\n");
 			dispose_socket(socket);

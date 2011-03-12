@@ -15,16 +15,15 @@ namespace Game
 		
 		~WebSocketQueue_Impl()
 		{
-			printf("Destructing ws_queue %016lx\n", this);
+			printf("Destructing ws_queue_impl %016lx\n", this);
 			for(auto iter = msg_queue.begin(); iter != msg_queue.end(); ++iter)
 			{
 				if(*iter != NULL)
 				{
-					printf("Deleting %016lx\n", *iter);
+					printf("Deleting packet %016lx\n", *iter);
 					delete *iter;
 				}
 			}
-			printf("Destruction complete\n");
 		}
 	
 		int ref_count;	
@@ -47,8 +46,15 @@ namespace Game
 		{
 			if(impl != NULL)
 			{
-				tbb::spin_mutex::scoped_lock L(impl->lock);
-				if(impl->ref_count-- == 1)
+				printf("Destructing ws_queue %016lx, attached to %016lx\n", this, impl);
+				
+				int nrefs = -1;
+				{
+					tbb::spin_mutex::scoped_lock L(impl->lock);
+					nrefs = --impl->ref_count;
+				}
+				
+				if(nrefs == 0)
 				{
 					delete impl;
 				}
@@ -73,17 +79,26 @@ namespace Game
 		
 		bool detach_and_check_empty()
 		{
+			printf("Detaching ws_queue %016lx, attached to %016lx\n", this, impl);
+		
 			if(impl == NULL)
 				return false;
-				
-			tbb::spin_mutex::scoped_lock L(impl->lock);
-			if((--impl->ref_count) == 0)
+			
+			int nrefs = -1;
+			bool res;
+			{
+				tbb::spin_mutex::scoped_lock L(impl->lock);
+				nrefs = --impl->ref_count;
+				res = impl->msg_queue.empty();
+			}
+			
+			if(nrefs == 0)
 			{
 				delete impl;
+				impl = NULL;
 				return false;
 			}
 			
-			bool res = impl->msg_queue.empty();
 			impl = NULL;
 			return res;
 		}
