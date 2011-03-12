@@ -694,14 +694,14 @@ function worker_start(lsw, msw)
 	function pad_hex(w)
 	{
 		var r = Number(w).toString(16);
-		while(r.length < 16)
+		while(r.length < 8)
 		{
 			r = "0" + r;
 		}
 		return r;
 	}
 
-	socket = new WebSocket("ws://"+DOMAIN_NAME+"/map?k="+pad_hex(msw)+pad_hex(lsw));
+	socket = new WebSocket("ws://"+DOMAIN_NAME+"/map/"+pad_hex(msw)+pad_hex(lsw));
 	socket.onmessage = on_recv;
 	socket.onerror = on_socket_error;
 	socket.onclose = on_socket_error;

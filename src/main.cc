@@ -306,35 +306,31 @@ int hex_2_num(char c)
 bool websocket_callback(HttpRequest const& request, WebSocket* websocket)
 {
 	//Parse out portname and session id from request
-	int last_qmark = -1, last_equals = -1;
-	for(int i=request.url.size()-1; i>=0; --i)
+	int slash_pos = -1;
+	for(int i=0; i<request.url.size(); ++i)
 	{
 		char c = request.url[i];
 	
-		if(c == '?')
+		if(c == '/')
 		{
-			last_qmark = i;
+			slash_pos = i;
 			break;
 		}
-		if(c == '=')
-			last_equals = i;
 	}
 	
-	DEBUG_PRINTF("url = %s, len = %d, last_qmark = %d, last_equals = %d\n", request.url.c_str(), request.url.size(), last_qmark, last_equals);
-	
-	if(last_qmark == -1 || last_equals == -1 || last_equals + 16 >= request.url.size() )
+	if(slash_pos == -1 || slash_pos + 16 >= request.url.size() )
 	{
 		DEBUG_PRINTF("Invalid web socket connection\n");
 		return false;
 	}
 	
-	string portname = request.url.substr(0, last_qmark);
+	string portname = request.url.substr(0, slash_pos);
 	
 	//Parse out the session id
 	uint64_t session_id = 0;
 	for(int i=0; i<16; ++i)
 	{
-		session_id = session_id*16 + hex_2_num(request.url[last_qmark+i+1]);
+		session_id = session_id*16 + hex_2_num(request.url[slash_pos+i+1]);
 	}
 	
 	DEBUG_PRINTF("Got socket, portname = %s, session id = %ld\n", portname.c_str(), session_id);

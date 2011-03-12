@@ -16,7 +16,7 @@
 #include "httpparser.h"
 
 //Uncomment this line to get dense logging for the web server
-//#define HTTP_DEBUG 1
+#define HTTP_DEBUG 1
 
 #ifndef HTTP_DEBUG
 #define DEBUG_PRINTF(...)
@@ -53,7 +53,6 @@ const char DEFAULT_WEBSOCKET_HEADER[] =
 	"Connection: Upgrade\r\n"	
 	"Sec-WebSocket-Origin: http://%s\r\n"
 	"Sec-WebSocket-Location: ws://%s/%s\r\n"
-	"Sec-WebSocket-Protocol: pbuf\r\n"
 	"\r\n";
 
 //FIXME: This should get read from the config
@@ -291,10 +290,10 @@ int hex_to_num(uint8_t c)
 		return c - '0';
 		
 	if(c >= 'a' && c <= 'f')
-		return c - 'a';
+		return c - 'a' + 10;
 	
 	if(c >= 'A' && c <= 'F')
-		return c - 'A';
+		return c - 'A' + 10;
 		
 	return 0;
 }
@@ -342,13 +341,22 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 		(uint8_t)request.content_ptr[7]);
 	
 	//Copy the buffer
-	char buffer[16];
-	*((uint32_t*)buffer) = (uint32_t)k1;
-	*((uint32_t*)(buffer+4)) = (uint32_t)k1;
+	uint8_t buffer[16];
+	
+	buffer[3] =  k1       & 0xff;
+	buffer[2] = (k1 >> 8) & 0xff;
+	buffer[1] = (k1 >>16) & 0xff;
+	buffer[0] = (k1 >>24) & 0xff;
+
+	buffer[7] =  k2       & 0xff;
+	buffer[6] = (k2 >> 8) & 0xff;
+	buffer[5] = (k2 >>16) & 0xff;
+	buffer[4] = (k2 >>24) & 0xff;
+	
 	memcpy(buffer+8, request.content_ptr, 8);
 		
 	//This is kind of dumb, but whatever
-	char md5[64];
+	char md5[68];
 	tcmd5hash(buffer, 16, md5);
 	uint8_t *mptr = (uint8_t*)(buf + header_size);
 	for(int i=0; i<16; ++i)
@@ -356,6 +364,28 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 		char h = md5[2*i], l = md5[2*i+1];
 		*(mptr++) = hex_to_num(h)*16 + hex_to_num(l);
 	}
+	
+	DEBUG_PRINTF("Md5 sum = %s\n", md5);
+	
+	DEBUG_PRINTF("Handshake response = %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
+		mptr[-16],
+		mptr[-15],
+		mptr[-14],
+		mptr[-13],
+		mptr[-12],
+		mptr[-11],
+		mptr[-10],
+		mptr[-9],
+		mptr[-8],
+		mptr[-7],
+		mptr[-6],
+		mptr[-5],
+		mptr[-4],
+		mptr[-3],
+		mptr[-2],
+		mptr[-1]);
+	
+	DEBUG_PRINTF("WebSocket reply = %s\n", buf);
 	
 	return true;
 }

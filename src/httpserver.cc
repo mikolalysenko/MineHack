@@ -35,7 +35,7 @@ using namespace tbb;
 
 
 //Uncomment this line to get dense logging for the web server
-//#define SERVER_DEBUG 1
+#define SERVER_DEBUG 1
 
 #ifndef SERVER_DEBUG
 #define DEBUG_PRINTF(...)
@@ -480,10 +480,15 @@ void HttpServer::initialize_websocket(Socket* socket)
 	//Wake up receiver
 	if(!notify_socket(socket))
 	{
+		DEBUG_PRINTF("Failed to notify receiver socket\n");
+	
 		dispose_socket(socket);
 		
 		//Failed, but can't dispose either sender or websocket, so just have to wait for them to timeout
+		return;
 	}
+	
+	DEBUG_PRINTF("Web socket initialized\n");
 }
 
 void notify_websocket_send(HttpServer* server, int send_fd, Socket* socket)
