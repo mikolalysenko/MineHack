@@ -305,9 +305,6 @@ int hex_2_num(char c)
 //Handles a websocket connection
 bool websocket_callback(HttpRequest const& request, WebSocket* websocket)
 {
-	DEBUG_PRINTF("GOT A WEBSOCKET\n");
-	return false;
-
 	//Parse out portname and session id from request
 	int last_qmark = -1, last_equals = -1;
 	for(int i=request.url.size()-1; i>=0; --i)

@@ -74,17 +74,14 @@ namespace Game {
 			size = sz;
 			pending = 0;
 			buf_start = buf_cur = (char*)malloc(sz);
-			printf("Created buffer; size = %ld, ptr = %016lx\n", sz, buf_start);
 		}
 		
 		~SocketSide() 
 		{
 			if(buf_start != NULL)
 			{
-				printf("Releasing buffer %016lx\n", buf_start);
 				free(buf_start);
 			}
-			printf("Buffer released\n");
 		}
 	};
 
