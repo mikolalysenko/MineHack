@@ -7,6 +7,8 @@
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 
+#include "network.pb.h"
+
 #include "constants.h"
 #include "misc.h"
 #include "config.h"
@@ -130,11 +132,62 @@ void World::main_loop()
 	{
 		//Iterate over the player set
 		parallel_for(session_manager->sessions.range(), 
-			[](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
+			[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
 		{
 			auto session = sessions.begin()->second;
 		
-			DEBUG_PRINTF("Processing session, %ld\n", session->session_id);
+			if(!session->update_socket->alive() || !session->map_socket->alive())
+			{
+				DEBUG_PRINTF("Socket died, client lost connection\n");
+				session_manager->remove_session(session->session_id);
+				return;
+			}
+			
+			//Handle input
+			bool active = false;
+			Network::ClientPacket *input_packet;
+			while(session->update_socket->recv_packet(input_packet))
+			{
+				DEBUG_PRINTF("Got an update packet from session %ld\n", session->session_id);
+				
+				if(input_packet->has_test())
+				{
+					DEBUG_PRINTF("Got test packet: %s\n", input_packet->test().msg().c_str());
+				}
+				
+				active = true;
+				delete input_packet;
+			}
+			
+			while(session->update_socket->recv_packet(input_packet))
+			{
+				DEBUG_PRINTF("Got a map packet from session %ld\n", session->session_id);
+
+				if(input_packet->has_test())
+				{
+					DEBUG_PRINTF("Got test packet: %s\n", input_packet->test().msg().c_str());
+				}
+				
+				active = true;
+				delete input_packet;
+			}
+			
+			//Update the activity
+			if(active)
+			{
+				session->last_activity = tick_count::now();
+			}
+			
+			//Check for time out
+			if((tick_count::now() - session->last_activity).seconds() > SESSION_TIMEOUT)
+			{
+				DEBUG_PRINTF("Session timeout, session id = %ld", session->session_id);
+				session_manager->remove_session(session->session_id);
+				return;
+			}
+			
+			//Update player state
+			
 		});
 		
 		//Process all pending deletes

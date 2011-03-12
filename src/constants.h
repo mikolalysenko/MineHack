@@ -13,6 +13,8 @@
 #define SEND_BUFFER_SIZE		0x100000
 #define EPOLL_TIMEOUT			400
 
+#define SESSION_TIMEOUT			30.0
+
 
 //Chunk dimensions
 #define CHUNK_X_S				4

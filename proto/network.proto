@@ -1,5 +1,14 @@
 package Network;
 
+
+//--------------------------------------------------------
+// Test packet
+//--------------------------------------------------------
+message TestMessage {
+	optional string msg = 1;
+}
+
+
 //--------------------------------------------------------
 // An error response
 //--------------------------------------------------------
@@ -42,6 +51,8 @@ message ServerPacket {
 	optional LoginResponse login_response = 1;
 	
 	optional ErrorResponse error_response = 100;
+	
+	optional TestMessage test = 200;
 }
 
 //--------------------------------------------------------
@@ -49,5 +60,7 @@ message ServerPacket {
 //--------------------------------------------------------
 message ClientPacket {
 	optional LoginRequest login_packet = 1;
+	
+	optional TestMessage test = 200;
 }
 
