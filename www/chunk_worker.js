@@ -707,7 +707,6 @@ function worker_start(lsw, msw)
 	socket.onclose = on_socket_error;
 	
 	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
-	//fetch_interval = setInterval(grab_vis_buffer, 800);
 	
 	//Send an initial protobuf containing the contents of the cache (maybe)
 

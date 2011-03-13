@@ -35,7 +35,7 @@ using namespace tbb;
 
 
 //Uncomment this line to get dense logging for the web server
-#define SERVER_DEBUG 1
+//#define SERVER_DEBUG 1
 
 #ifndef SERVER_DEBUG
 #define DEBUG_PRINTF(...)
@@ -421,6 +421,10 @@ void HttpServer::initialize_websocket(Socket* socket)
 	socket->outp.size = 0;
 	socket->outp.pending = 0;
 	socket->outp.buf_cur = socket->outp.buf_start = NULL;
+	
+	//Reset input pointer
+	socket->inp.pending = 0;
+	socket->inp.buf_cur = socket->inp.buf_start;
 
 	DEBUG_PRINTF("Receiver buffers: inp = %016lx, outp = %016lx\n", socket->inp.buf_start, socket->outp.buf_start);
 			
@@ -481,7 +485,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 	if(!notify_socket(socket))
 	{
 		DEBUG_PRINTF("Failed to notify receiver socket\n");
-	
 		dispose_socket(socket);
 		
 		//Failed, but can't dispose either sender or websocket, so just have to wait for them to timeout
@@ -508,6 +511,8 @@ void notify_websocket_send(HttpServer* server, int send_fd, Socket* socket)
 
 void HttpServer::handle_websocket_recv(Socket* socket)
 {
+	DEBUG_PRINTF("Processing web socket recv, fd = %d\n", socket->socket_fd);
+
 	//While there are still frames to process:
 	while(true)
 	{
@@ -517,6 +522,8 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 			dispose_socket(socket);
 			return;
 		}
+		
+		DEBUG_PRINTF("Reading from websocket, fd = %d\n", socket->socket_fd);
 	
 		//Try reading some bytes from the web socket
 		int len = recv(socket->socket_fd, 
@@ -529,7 +536,10 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 			if(errno == EAGAIN);
 			{
 				DEBUG_PRINTF("Recv incomplete, retrying\n");
-				notify_socket(socket);
+				if(!notify_socket(socket))
+				{
+					dispose_socket(socket);
+				}
 				return;
 			}
 			perror("recv");
@@ -544,82 +554,57 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 		}
 	
 		socket->inp.buf_cur += len;
-	
+		
 		//Check frame start
-		uint8_t frame_type = (uint8_t)socket->inp.buf_start[0];
-		if(frame_type < 0x80)
+		while(true)
 		{
-			DEBUG_PRINTF("Server does not accept UTF-8 frames\n");
-			dispose_socket(socket);
-			return;
-		}
+			uint8_t frame_type = (uint8_t)socket->inp.buf_start[0];
 		
-		if(frame_type == 0xff)
-		{
-			DEBUG_PRINTF("Connection closed\n");
-			dispose_socket(socket);
-			return;
-		}
+			DEBUG_PRINTF("Attempting to parse out frame, frame_type = %d\n", (int)frame_type);
 		
-		//Check frame size
-		if(socket->inp.buf_start + 2 > socket->inp.buf_cur)
-		{
-			DEBUG_PRINTF("Frame header not finished, continuing\n");
-			notify_socket(socket);
-			return;
-		}
-		
-		//Calculate frame length and start of pointer
-		char* frame_start_ptr = socket->inp.buf_start+1;
-		uint64_t frame_len = 0;
-		while(frame_start_ptr < socket->inp.buf_cur)
-		{
-			uint8_t v = (uint8_t)(*(frame_start_ptr++));
-			frame_len = (frame_len<<7ULL) + (uint64_t)(v&0x7f);
-			
-			if(frame_len > socket->inp.size - 32)
+			if(frame_type == 0xff)
 			{
-				DEBUG_PRINTF("Packet size overflow\n");
+				DEBUG_PRINTF("Connection closed\n");
 				dispose_socket(socket);
 				return;
 			}
 			
-			if((v & 0x80) == 0)
+			//Scan for end of frame packet
+			char* end_of_frame = socket->inp.buf_start + 1;
+			while(end_of_frame < socket->inp.buf_cur)
+			{
+				if(*(end_of_frame++) == 0xff)
+					break;
+			}
+			
+			//Process the input frame
+			if(end_of_frame > socket->inp.buf_cur)
 				break;
+				
+			int frame_size = end_of_frame - socket->inp.buf_start;
+			auto packet = parse_ws_frame(socket->inp.buf_start+1, frame_size - 2);
+			
+			if(packet != NULL)
+			{
+				socket->message_queue.push_and_check_empty(packet);
+			}
+			else
+			{
+				DEBUG_PRINTF("Bad packet\n");
+			}
+	
+			//Shift queue backwards
+			int extra_bytes = socket->inp.buf_cur - end_of_frame;
+			memmove(socket->inp.buf_start, end_of_frame, extra_bytes);
+			socket->inp.buf_cur -= frame_size;
 		}
-		
-		int buf_size = (int)(socket->inp.buf_cur - frame_start_ptr);
-		
-		if(frame_len > buf_size)
-		{
-			DEBUG_PRINTF("Frame body incomplete, continuing\n");
-			notify_socket(socket);
-			return;
-		}
-		
-		//Is frame complete?  If so, then do this:
-		auto packet = new Network::ClientPacket();
-		if(!packet->ParseFromArray(frame_start_ptr, frame_len))
-		{
-			DEBUG_PRINTF("Bad packet, killing connection\n");
-			dispose_socket(socket);
-			return;
-		}
-		
-		//Add frame to queue
-		socket->message_queue.push_and_check_empty(packet);
-		
-		//Shift queue backwards
-		char* frame_end_ptr = frame_start_ptr + frame_len;
-		int extra_bytes = socket->inp.buf_cur - frame_end_ptr;
-		int frame_size = frame_end_ptr - socket->inp.buf_start;
-		memmove(socket->inp.buf_start, frame_end_ptr, extra_bytes);
-		socket->inp.buf_cur -= frame_size;
 	}
 }
 
 void HttpServer::handle_websocket_send(Socket* socket)
 {
+	DEBUG_PRINTF("Processing web socket send, fd = %d\n", socket->socket_fd);
+
 	while(true)
 	{
 		if(socket->message_queue.ref_count() < 2)
@@ -644,50 +629,15 @@ void HttpServer::handle_websocket_send(Socket* socket)
 					return;
 				continue;
 			}
-		
+			
 			//Serialize packet to output stream
 			auto packet = (Network::ServerPacket*)msg;
-			int message_size = packet->ByteSize();
-		
-			//Write packet header
+			socket->outp.pending = serialize_ws_frame(packet, socket->outp.buf_start, socket->outp.size);
 			socket->outp.buf_cur = socket->outp.buf_start;
-			*(socket->outp.buf_cur++) = 0x80;	//Start of frame byte 
-			
-			//Write the message size bits
-			int nb = 0;
-			for(int ml=message_size; ml!=0; ml>>=7)
-			{
-				*(socket->outp.buf_cur++) = ml & 0x7f;
-				nb++;
-			}
-		
-			//Need to reverse and set var-int flags
-			for(int i=0; i<nb-1; ++i)
-			{
-				if(i < (nb>>1))
-				{
-					uint8_t tmp = socket->outp.buf_start[i+1];
-					socket->outp.buf_start[i+1] = socket->outp.buf_start[nb-i-1];
-					socket->outp.buf_start[nb-i-1] = tmp;
-				}
-				socket->outp.buf_start[i+1] |= 0x80;
-			}
-		
-			//Serialize the actual packet
-			if(!packet->SerializeToArray(socket->outp.buf_cur, message_size))
-			{
-				DEBUG_PRINTF("Could not serialize packet, destroying connection\n");
-				delete packet;
-				dispose_socket(socket);
-				return;
-			}
-			
-			//Free packet buffer
 			delete packet;
-		
-			//Set pointers and go
-			socket->outp.pending = message_size + nb + 1;
-			socket->outp.buf_cur = socket->outp.buf_start;
+			
+			if(socket->outp.pending == 0)
+				continue;
 		}
 	
 
@@ -1234,7 +1184,7 @@ void HttpServer::worker_loop()
 		{
 			Socket* socket = (Socket*)events[i].data.ptr;
 			
-			DEBUG_PRINTF("Processing request from socket: %016lx\n", socket);
+			DEBUG_PRINTF("Processing event from socket: %016lx\n", socket);
 			
 			if( (events[i].events & EPOLLHUP) ||
 				(events[i].events & EPOLLERR) ||

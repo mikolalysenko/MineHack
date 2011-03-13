@@ -16,7 +16,7 @@
 #include "httpparser.h"
 
 //Uncomment this line to get dense logging for the web server
-#define HTTP_DEBUG 1
+//#define HTTP_DEBUG 1
 
 #ifndef HTTP_DEBUG
 #define DEBUG_PRINTF(...)
@@ -389,6 +389,60 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 	
 	return true;
 }
+
+
+//Parses an input frame
+//FIXME: This all uses base64 encoding, which is hideously inefficient.  However, due to limitations in the websocket API, it is impossible to transmit raw binary data.  So, for the moment it is built using this kludge.  It is expected that the API will ultimately change in the future to allow raw binary / compressed frames, so this situation is still farily temporary.  If the situation does not change before release, then a better method will need to be found.
+Network::ClientPacket* parse_ws_frame(char* base64_buffer, int length)
+{
+	//Null terminate buffer
+	base64_buffer[length] = '\0';
+	int size;
+	ScopeFree buffer(tcbasedecode(base64_buffer, &size));
+
+	DEBUG_PRINTF("Got input packet: ");
+	for(int i=0; i<size; ++i)
+	{
+		DEBUG_PRINTF("%02x,", ((uint8_t*)buffer.ptr)[i]);
+	}	
+	DEBUG_PRINTF("\n");
+	
+	auto packet = new Network::ClientPacket();
+	if(!packet->ParseFromArray(buffer.ptr, size))
+	{
+		delete packet;
+		return NULL;	
+	}
+	
+	return packet;
+}
+
+//Serializes an output frame
+int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
+{
+	int bs = packet->ByteSize();
+	if(bs > length)
+		return 0;
+
+	packet->SerializeToArray(buffer, bs);
+	
+	DEBUG_PRINTF("Serializing output packet: ");
+	for(int i=0; i<length; ++i)
+	{
+		DEBUG_PRINTF("%02x,", ((uint8_t*)buffer)[i]);
+	}	
+	DEBUG_PRINTF("\n");	
+	
+	ScopeFree base64(tcbaseencode(buffer, bs));
+	int base64_len = (bs * 4 + 2) / 3;
+	memcpy(buffer+1, base64.ptr, base64_len);
+	
+	*((uint8_t*)buffer) = 0x76;
+	*((uint8_t*)buffer + base64_len) = 0xff;
+	
+	return base64_len + 2;
+}
+
 
 
 //Recursively enumerates all files in a directory

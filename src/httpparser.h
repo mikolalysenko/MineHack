@@ -39,6 +39,12 @@ namespace Game
 	//Parses an http header
 	void parse_http_request(char* buf_start, char* buf_end, HttpRequest&);
 	
+	//Parses an input frame
+	Network::ClientPacket* parse_ws_frame(char* buffer, int length);
+	
+	//Serializes an output frame
+	int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length);
+	
 	//Generates a protocol buffer base http serialized packet
 	HttpResponse http_serialize_protobuf(Network::ServerPacket* message);
 	

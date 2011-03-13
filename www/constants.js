@@ -39,6 +39,6 @@ const EV_PRINT				= 5;
 const EV_FORGET_CHUNK		= 6;
 const EV_SET_THROTTLE		= 7;
 const EV_VB_COMPLETE		= 8;
-const EV_RECV_PBUF			= 9;
+const EV_RECV				= 9;
 const EV_CRASH				= 10;
 const EV_SEND				= 11;

@@ -24,7 +24,6 @@ using namespace tbb;
 using namespace std;
 using namespace Game;
 
-
 //Uncomment this line to get dense logging for the web server
 #define APP_DEBUG 1
 

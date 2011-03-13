@@ -1,9 +1,19 @@
 #include <cstdlib>
+#include <cstdio>
 #include "session.h"
 
 using namespace std;
 using namespace tbb;
 using namespace Game;
+
+#define SESSION_DEBUG 1
+
+#ifndef SESSION_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
 
 
 Session::Session(SessionID const& id, string const& name) :
@@ -40,6 +50,8 @@ bool SessionManager::create_session(string const& player_name, SessionID& sessio
 {
 	session_id = generate_session_id();
 	
+	DEBUG_PRINTF("Created session, id = %ld\n", session_id);
+	
 	concurrent_hash_map<SessionID, Session*>::accessor acc;
 	if(!pending_sessions.insert(acc, session_id))
 		return false;
@@ -57,6 +69,9 @@ bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket
 		
 	if(acc->second->update_socket != NULL)
 		return false;
+		
+		
+	DEBUG_PRINTF("Attached update socket, id = %ld\n", session_id);
 		
 	acc->second->last_activity = tick_count::now();
 	acc->second->update_socket = socket;
@@ -79,6 +94,8 @@ bool SessionManager::attach_map_socket(SessionID const& session_id, WebSocket* s
 		
 	if(acc->second->map_socket != NULL)
 		return false;
+
+	DEBUG_PRINTF("Attached map socket, id = %ld\n", session_id);
 		
 	acc->second->last_activity = tick_count::now();
 	acc->second->map_socket = socket;
@@ -134,6 +151,6 @@ void SessionManager::clear_all_sessions()
 //FIXME:  This is not thread safe and is stupid
 SessionID SessionManager::generate_session_id()
 {
-	return mrand48();
+	return ((uint64_t)rand()) | ((uint64_t)rand()<<32ULL);
 }
 

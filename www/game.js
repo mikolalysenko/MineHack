@@ -90,8 +90,8 @@ var Game =
 					console.log(ev.data.str);				
 				break;
 
-				case EV_RECV_PBUF:
-					var stream = new PROTO.ByteArrayStream(ev.data.raw),
+				case EV_RECV:
+					var stream = new PROTO.Base64Stream(ev.data.raw),
 						pbuf = new Network.ServerPacket;
 					pbuf.ParseFromStream(stream);
 					recvProtoBuf(pbuf);
@@ -197,7 +197,7 @@ var Game =
 	
 	sendProtoBuf : function(pbuf)
 	{
-		update_worker.postMessage(pbuf_to_raw(pbuf));
+		Game.update_worker.postMessage({type:EV_SEND, raw:pbuf_to_raw(pbuf)});
 	},
 	
 	recvProtoBuf : function(pbuf)

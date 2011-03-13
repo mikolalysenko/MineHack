@@ -12,25 +12,13 @@ var socket;
 //Sends the raw data to the socket
 function on_send(arr)
 {
-	var str = "";
-	for(var i=0; i<data.array_.length; ++i)
-	{
-		str += String.fromCharCode(arr[i]);
-	}
-
 	socket.send(arr);
 }
 
 //Called when receiving a protocol buffer
 function on_recv(event)
 {
-	var arr = new Array(event.data.length);
-	for(var i=0; i<data.array_.length; ++i)
-	{
-		arr[i] = event.data.charCodeAt(i) & 0xff;
-	}
-
-	postMessage({type:EV_RECV_PBUF, 'raw':arr});
+	postMessage({type:EV_RECV, 'raw':event.data});
 }
 
 //Socket error
