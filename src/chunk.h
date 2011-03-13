@@ -6,8 +6,6 @@
 #include <cstdlib>
 #include <cstdint>
 
-#include <tbb/
-
 #include "constants.h"
 #include "network.pb.h"
 
@@ -29,6 +27,9 @@ namespace Game
 	//The transparency data for a block type
 	extern const bool BLOCK_TRANSPARENCY[];
 
+	//Number of state bytes per block
+	extern const int BLOCK_STATE_BYTES[];
+
 	//A block object
 	#pragma pack(push)
 	#pragma pack(1)	
@@ -36,6 +37,29 @@ namespace Game
 	{
 		std::uint8_t 	type;
 		std::uint8_t	state[3];
+		
+		Block() : type(BlockType_Air) { }
+		
+		Block(uint8_t t, uint8_t* s) : type(t)
+		{
+			for(int i=0; i<BLOCK_STATE_BYTES[t]; ++i)
+				state[i] = s[i];
+		}
+		
+		Block(const Block& other) : type(t)
+		{
+			for(int i=0; i<3; ++i)
+				state[i] = other.state[i];
+		}
+		
+		Block& operator=(const Block& other)
+		{
+			type = other.type;
+			for(int i=0; i<3; ++i)
+				state[i] = other.state[i];
+		}
+		
+		bool operator==(const Block& other) const;
 	};
 	#pragma pack(pop)
 
@@ -55,7 +79,26 @@ namespace Game
 		std::uint32_t x, y, z;
 		
 		ChunkID() : x(0), y(0), z(0) {}
-		ChunkID(uint32_t x_, uint32_t y_, uint32_t z_) : x(x_), y(y_), z(z_) {}		
+		ChunkID(uint32_t x_, uint32_t y_, uint32_t z_) : x(x_), y(y_), z(z_) {}
+		ChunkID(const ChunkID& other) : x(other.x), y(other.y), z(other.z) {]
+		bool operator=(const ChunkID& other)
+		{
+			x = other.x;
+			y = other.y;
+			z = other.z;
+		}
+		
+		bool operator==(const ChunkID& other) const
+		{
+			return x == other.x && y == other.y && z == other.z;
+		}
+	};
+	
+	//Hash comparison for chunk IDs
+	struct ChunkIDHashCompare
+	{
+		bool operator==(const ChunkID& A, const ChunkID& B) const { return A == B; }		
+		size_t hash(const ChunkID& chunk_id) const;
 	};
 	
 	
@@ -101,7 +144,7 @@ namespace Game
 		
 	//Chunk compression/decompression
 	uint8_t* compress_chunk(Block* chunk, int stride_x, int stride_xy, int* size);
-	void decompress_chunk(Block* chunk, int stride_x, int stride_xy, uint8_t* buffer, int size);
+	void decompress_chunk(Block* chunk, int stride_x, int stride_xy, uint8_t* buffer);
 };
 
 #endif
