@@ -6,14 +6,12 @@
 //Server stuff
 #define NUM_HTTP_WORKERS		3
 #define MAX_EPOLL_EVENTS		10
-#define MAX_CONNECTIONS			3000
+#define MAX_CONNECTIONS			10000
 #define LISTEN_BACKLOG			3
 #define RECV_BUFFER_SIZE		0x10000
-#define WEBSOCKET_RECV_SIZE		0x100000
 #define SEND_BUFFER_SIZE		0x100000
 #define EPOLL_TIMEOUT			400
-
-#define SESSION_TIMEOUT			30.0
+#define SESSION_TIMEOUT			100.0
 
 
 //Chunk dimensions
@@ -21,21 +19,20 @@
 #define CHUNK_Y_S				4
 #define CHUNK_Z_S				4
 
-#define CHUNK_XY_S				(CHUNK_X_S + CHUNK_Y_S)
-
 #define CHUNK_X					(1<<CHUNK_X_S)
 #define CHUNK_Y					(1<<CHUNK_Y_S)
 #define CHUNK_Z					(1<<CHUNK_Z_S)
 
-#define CHUNK_X_MASK			(CHUNK_X-1)
-#define CHUNK_Y_MASK			(CHUNK_Y-1)
-#define CHUNK_Z_MASK			(CHUNK_Z-1)
+#define CHUNK_SIZE				(CHUNK_X*CHUNK_Y*CHUNK_Z)
 
-//Index within a chunk
-#define CHUNK_OFFSET(X,Y,Z)		((X)+((Y)<<CHUNK_X_S)+((Z)<<(CHUNK_X_S+CHUNK_Y_S)))
 
-//Maximum length for a compressed chunk
-#define MAX_CHUNK_BUFFER_LEN	(CHUNK_X*CHUNK_Y*CHUNK_Z*16)
+
+//Coordinate origin
+#define ORIGIN_X				(1<<19)
+#define ORIGIN_Y				(1<<19)
+#define ORIGIN_Z				(1<<19)
+
+
 
 //Number of bits for a chunk index
 #define CHUNK_IDX_S				19ULL

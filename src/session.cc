@@ -1,5 +1,17 @@
-#include <cstdlib>
-#include <cstdio>
+#include <string>
+#include <stdint.h>
+
+#include <tbb/tick_count.h>
+#include <tbb/spin_rw_mutex.h>
+#include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_hash_map.h>
+
+#include "constants.h"
+#include "config.h"
+#include "httpserver.h"
+#include "chunk.h"
+#include "entity.h"
 #include "session.h"
 
 using namespace std;
@@ -14,16 +26,13 @@ using namespace Game;
 #define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
 #endif
 
-
-
 Session::Session(SessionID const& id, string const& name) :
 	session_id(id),
 	dead(false),
 	last_activity(tick_count::now()),
 	player_name(name),
 	update_socket(NULL),
-	map_socket(NULL),
-	map_worker(NULL)
+	map_socket(NULL)
 {
 }
 
@@ -80,7 +89,7 @@ bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket
 	
 	if(acc->second->map_socket != NULL)
 	{
-		auto L = spin_rw_lock::scoped_lock(session_lock, false);
+		spin_rw_mutex::scoped_lock L(session_lock, false);
 		sessions.insert(make_pair(session_id, acc->second));
 		pending_sessions.erase(acc);
 	}
@@ -104,7 +113,7 @@ bool SessionManager::attach_map_socket(SessionID const& session_id, WebSocket* s
 	
 	if(acc->second->update_socket != NULL)
 	{
-		auto L = spin_rw_lock::scoped_lock(session_lock, false);
+		spin_rw_mutex::scoped_lock L(session_lock, false);
 		sessions.insert(make_pair(session_id, acc->second));
 		pending_sessions.erase(acc);
 	}
@@ -130,7 +139,7 @@ void SessionManager::remove_session(SessionID const& session_id)
 void SessionManager::process_pending_deletes()
 {
 	SessionID session_id;
-	auto L = spin_rw_lock::scoped_lock(session_lock, true);
+	spin_rw_mutex::scoped_lock L(session_lock, true);
 	while(pending_erase.try_pop(session_id))
 	{
 		auto iter = sessions.find(session_id);
@@ -142,7 +151,7 @@ void SessionManager::process_pending_deletes()
 //Clears all pending sessions
 void SessionManager::clear_all_sessions()
 {
-	auto L = spin_rw_lock::scoped_lock(session_lock, true);
+	spin_rw_mutex::scoped_lock L(session_lock, true);
 	for(auto iter = sessions.begin(); iter!=sessions.end(); ++iter)
 	{
 		delete iter->second;

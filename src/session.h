@@ -1,8 +1,6 @@
 #ifndef SESSION_H
 #define SESSION_H
 
-#include <pthread.h>
-
 #include <string>
 #include <stdint.h>
 
@@ -14,21 +12,14 @@
 
 #include "constants.h"
 #include "config.h"
-#include "entity.h"
 #include "httpserver.h"
-
+#include "chunk.h"
+#include "entity.h"
 
 namespace Game
 {
 	//Session ID
 	typedef uint64_t SessionID;
-	
-	//A chunk observation record
-	struct ChunkRecord
-	{
-		uint64_t	tick_count;
-		ChunkID		chunk_id;
-	};
 	
 	//A player's session information
 	struct Session
@@ -43,10 +34,11 @@ namespace Game
 	
 		//Player state/entity information
 		std::string			player_name;
-		Coordinate			player_coord;
+		Coord				player_coord;
 		
 		//Map state information
-		tbb::task*				map_worker;
+		typedef tbb::concurrent_unordered_map<ChunkID, uint64_t, ChunkIDHashCompare> chunk_records_t;
+		chunk_records_t known_chunks;
 		
 		//Web socket connections
 		WebSocket			*update_socket;

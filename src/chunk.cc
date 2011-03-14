@@ -1,15 +1,25 @@
+#include <stdint.h>
+#include <cstdlib>
+
 #include <tbb/task.h>
 
+#include "constants.h"
+#include "misc.h"
 #include "chunk.h"
 
 using namespace std;
 using namespace tbb;
 
+#define CHUNK_DEBUG 1
+
+#ifndef CHUNK_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
 namespace Game
 {
-
-//Chunk compression buffers
-uint8_t		chunk_compress_buffers[32][CHUNK_SIZE * 5];
 
 //Block data
 const bool BLOCK_TRANSPARENCY[] =
@@ -41,7 +51,7 @@ const int BLOCK_STATE_BYTES[] =
 
 
 //Checks if two blocks are equal
-bool operator==(const Block& other) const
+bool Block::operator==(const Block& other) const
 {
 	if(type != other.type) return false;
 	for(int i=0; i<BLOCK_STATE_BYTES[type]; ++i)
@@ -71,9 +81,14 @@ size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 //Chunk compression
 ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 {
-	auto buf_start	= chunk_compress_buffers[FIXME];
+	uint8_t compress_buffer[CHUNK_SIZE * 5];
+
+	auto buf_start	= compress_buffer;
 	auto buf_ptr	= buf_start;
 	auto data_ptr	= chunk;
+
+	stride_xy -= stride_x * CHUNK_Y - 1;
+	stride_x  -= CHUNK_X - 1;
 	
 	size_t i;
 	for(i = 0; i<CHUNK_SIZE; )
@@ -84,13 +99,15 @@ ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 		for(l=0; i<CHUNK_SIZE && *data_ptr == cur; ++l)
 		{
 			++i;
-			if((i & (CHUNK_X*CHUNK_Y-1))
+			if( i & (CHUNK_X - 1) )
 				data_ptr += 1;
-			else if( (i & (CHUNK_X-1) )
+			else if( i & (CHUNK_X*CHUNK_Y - 1) )
 				data_ptr += stride_x;
 			else
 				data_ptr += stride_xy;
 		}
+		
+		DEBUG_PRINTF("Got run: cs = %d, i = %d, l = %d, c = %d\n", i, l, cur.type);
 		
 		//Write run length as a var int in little endian
 		for(size_t p=l; p>0x80; p>>=7)
@@ -148,9 +165,9 @@ void decompress_chunk(ChunkBuffer const& buffer, Block* chunk, int stride_x, int
 			*data_ptr = cur;
 			
 			++i;
-			if((i & (CHUNK_X*CHUNK_Y-1))
+			if( i & (CHUNK_X - 1) )
 				data_ptr += 1;
-			else if( (i & (CHUNK_X-1) )
+			else if( i & (CHUNK_X*CHUNK_Y - 1) )
 				data_ptr += stride_x;
 			else
 				data_ptr += stride_xy;

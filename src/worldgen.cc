@@ -1,12 +1,27 @@
+#include <stdint.h>
+#include <cstdlib>
+#include <cstdio>
+
+#include <tbb/task.h>
 
 #include "constants.h"
+#include "config.h"
 #include "chunk.h"
 #include "noise.h"
-
-#include <string.h>
+#include "worldgen.h"
 
 using namespace tbb;
 using namespace std;
+
+//Uncomment this line to get dense logging for the world generator
+#define GEN_DEBUG 1
+
+#ifndef GEN_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
 
 namespace Game
 {
@@ -15,9 +30,14 @@ WorldGen::WorldGen(Config* cfg) : config(cfg)
 {
 }
 
+WorldGen::~WorldGen()
+{
+}
 
 void WorldGen::generate_chunk(ChunkID const& chunk_id, Block* data, int stride_x, int stride_xy)
 {
+	DEBUG_PRINTF("Generating chunk: %d, %d, %d\n", chunk_id.x, chunk_id.y, chunk_id.z);
+
 	for(int k=0; k<CHUNK_Z; ++k)
 	for(int j=0; j<CHUNK_Y; ++j)
 	for(int i=0; i<CHUNK_X; ++i)
@@ -31,9 +51,9 @@ void WorldGen::generate_chunk(ChunkID const& chunk_id, Block* data, int stride_x
 		auto ptr = data + i + j * stride_x + k * stride_xy;
 			
 		//Determine block type
-		if(y > (1<<20))
+		if(y > ORIGIN_Y)
 			*ptr = BlockType_Air;
-		else if(y == (1<<20))
+		else if(y == ORIGIN_Y)
 			*ptr = BlockType_Grass;
 		else
 			*ptr = BlockType_Stone;

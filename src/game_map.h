@@ -2,7 +2,6 @@
 #define GAME_MAP_H
 
 #include <stdint.h>
-#include <cstdlib>
 
 #include <tbb/concurrent_hash_map.h>
 
@@ -28,7 +27,7 @@ namespace Game
 			int stride_xy = CHUNK_X * CHUNK_Y);
 
 		//Retrieves a raw buffer associated with the given chunk
-		Network::Chunk* get_net_chunk();
+		Network::ServerPacket* get_net_chunk(ChunkID const&, uint64_t timestamp);
 		
 	private:
 		//The world generator and config stuff

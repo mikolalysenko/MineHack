@@ -39,7 +39,7 @@ namespace Game
 		bool player_leave(SessionID const& session_id);
 		bool player_attach_update_socket(SessionID const& session_id, WebSocket*);
 		bool player_attach_map_socket(SessionID const& session_id, WebSocket*);
-		
+				
 		//Task function
 		void main_loop();
 		
@@ -57,6 +57,12 @@ namespace Game
 		SessionManager	*session_manager;
 		EntityDB		*entity_db;
 		GameMap			*game_map;
+		
+		//Player update stuff
+		void send_chunk_updates(Session* session);
+		
+		//Broadcasts a console message
+		void broadcast_message(std::string const& str);
 	};
 };
 

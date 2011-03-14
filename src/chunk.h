@@ -8,6 +8,11 @@
 
 namespace Game
 {
+	//Forward declarations
+	class Block;
+	class Coord;
+	class ChunkID;
+
 	//The block type
 	enum BlockType {
 		BlockType_Air,
@@ -32,18 +37,24 @@ namespace Game
 	#pragma pack(1)	
 	struct Block
 	{
-		std::uint8_t 	type;
-		std::uint8_t	state[3];
+		uint8_t 	type;
+		uint8_t	state[3];
 		
 		Block() : type(BlockType_Air) { }
-		
+		Block(uint8_t t) : type(t) { }
+		Block(uint8_t t, uint8_t s0, uint8_t s1=0, uint8_t s2=0) : type(t)
+		{
+			state[0] = s0;
+			state[1] = s1;
+			state[2] = s2;
+		}
 		Block(uint8_t t, uint8_t* s) : type(t)
 		{
 			for(int i=0; i<BLOCK_STATE_BYTES[t]; ++i)
 				state[i] = s[i];
 		}
 		
-		Block(const Block& other) : type(t)
+		Block(const Block& other) : type(other.type)
 		{
 			for(int i=0; i<3; ++i)
 				state[i] = other.state[i];
@@ -54,6 +65,13 @@ namespace Game
 			type = other.type;
 			for(int i=0; i<3; ++i)
 				state[i] = other.state[i];
+			return *this;
+		}
+		
+		Block& operator=(uint8_t t)
+		{
+			type = t;
+			return *this;
 		}
 		
 		bool operator==(const Block& other) const;
@@ -72,28 +90,40 @@ namespace Game
 	#pragma pack(pop)
 
 	//A map coordinate
+	
 	struct Coord
 	{
 		double x, y, z;
 		
-		Coord();
-		Coord(double x_, double y_, double z_);
+		Coord() : x(ORIGIN_X), y(ORIGIN_Y), z(ORIGIN_Z) {}
+		Coord(const Coord& c) : x(c.x), y(c.y), z(c.z) {}
+		Coord(double x_, double y_, double z_) : x(x_), y(y_), z(z_) {}
+		
+		Coord& operator=(Coord const& other)
+		{
+			x = other.x;
+			y = other.y;
+			z = other.z;
+			return *this;
+		}
 	};
 	
 	//A chunk index into the map
 	struct ChunkID
 	{
 		//Chunk coordinates are 21-bit unsigned ints
-		std::uint32_t x, y, z;
+		uint32_t x, y, z;
 		
 		ChunkID() : x(0), y(0), z(0) {}
 		ChunkID(uint32_t x_, uint32_t y_, uint32_t z_) : x(x_), y(y_), z(z_) {}
-		ChunkID(const ChunkID& other) : x(other.x), y(other.y), z(other.z) {]
-		bool operator=(const ChunkID& other)
+		ChunkID(const Coord& c) : x(c.x), y(c.y), z(c.z) {}
+		ChunkID(const ChunkID& other) : x(other.x), y(other.y), z(other.z) {}
+		ChunkID& operator=(const ChunkID& other)
 		{
 			x = other.x;
 			y = other.y;
 			z = other.z;
+			return *this;
 		}
 		
 		bool operator==(const ChunkID& other) const
@@ -105,8 +135,9 @@ namespace Game
 	//Hash comparison for chunk IDs
 	struct ChunkIDHashCompare
 	{
-		bool operator==(const ChunkID& A, const ChunkID& B) const { return A == B; }		
+		bool equal(const ChunkID& A, const ChunkID& B) const { return A == B; }
 		size_t hash(const ChunkID& chunk_id) const;
+		size_t operator()(ChunkID const& chunk_id) const { return hash(chunk_id); }
 	};
 	
 	
@@ -160,8 +191,8 @@ namespace Game
 	};
 		
 	//Chunk compression/decompression
-	ChunkBuffer compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y;
-	void decompress_chunk(ChunkBuffer const&, Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y;
+	ChunkBuffer compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y);
+	void decompress_chunk(ChunkBuffer const&, Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y);
 };
 
 #endif

@@ -5,6 +5,7 @@
 
 #include <tbb/task.h>
 #include <tbb/blocked_range.h>
+#include <tbb/blocked_range3d.h>
 #include <tbb/parallel_for.h>
 
 #include "network.pb.h"
@@ -125,6 +126,7 @@ void World::stop()
 //Synchronize world state
 void World::sync()
 {
+	//FIXME: Implement this
 }
 
 void World::main_loop()
@@ -133,6 +135,11 @@ void World::main_loop()
 
 	while(running)
 	{
+		//Increment the global tick count
+		++ticks;
+		
+		//FIXME: Update map physics in parallel
+	
 		//Iterate over the player set
 		parallel_for(session_manager->sessions.range(), 
 			[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
@@ -153,23 +160,35 @@ void World::main_loop()
 			{
 				DEBUG_PRINTF("Got an update packet from session %ld\n", session->session_id);
 				
-				if(input_packet->has_test())
+				if(input_packet->has_player_update())
 				{
-					DEBUG_PRINTF("Got test packet: %s\n", input_packet->test().msg().c_str());
+					//Unpack update and set the new coordinate for the player
+					if(input_packet->player_update().has_x())
+						session->player_coord.x = input_packet->player_update().x();
+					if(input_packet->player_update().has_y())
+						session->player_coord.y = input_packet->player_update().y();
+					if(input_packet->player_update().has_z())
+						session->player_coord.z = input_packet->player_update().z();
+				}
+				else if(input_packet->has_chat_message())
+				{
+					//Broadcast chat message
+					ScopeFree escape_str(tcxmlescape(input_packet->chat_message().c_str()));
+					string chat_string = "<color='yellow'>" + session->player_name + "</color>: <color='white'>" + string((char*)escape_str.ptr) + "<br/>";
+					broadcast_message(chat_string);
 				}
 				
 				active = true;
 				delete input_packet;
 			}
 			
-			
-			//Update the activity
+			//Update the activity flag
 			if(active)
 			{
 				session->last_activity = tick_count::now();
 			}
 			
-			//Check for time out
+			//Check for time out condition
 			if((tick_count::now() - session->last_activity).seconds() > SESSION_TIMEOUT)
 			{
 				DEBUG_PRINTF("Session timeout, session id = %ld", session->session_id);
@@ -177,17 +196,10 @@ void World::main_loop()
 				return;
 			}
 			
-			//Spawn map worker
-			if(session->worker == NULL)
-			{
-				auto self = task::self();
-				session->worker = new(self->allocate_child) MapWorker();
-				self->increment_ref_count();
-				self->spawn(session->worker);
-			}
+			//Send chunk updates to player
+			send_chunk_updates(session);
 		});
 		
-		//FIXME: Update map physics here in parallel
 		
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
@@ -196,5 +208,55 @@ void World::main_loop()
 	session_manager->clear_all_sessions();
 }
 
+//Send a list of session updates to the user in parallel
+void World::send_chunk_updates(Session* session)
+{
+	//Figure out which chunks are visible
+	ChunkID chunk(session->player_coord);
+	
+	//Scan all chunks in visible radius
+	int r = config->readInt("vis_radius");
+	parallel_for(blocked_range3d<int,int,int>(
+		chunk.x-r, chunk.x+r,
+		chunk.y-r, chunk.y+r,
+		chunk.z-r, chunk.y+r), [=](blocked_range3d<int,int,int> rng)
+	{
+		for(auto iz = rng.cols().begin();  iz!=rng.cols().end();  ++iz)
+		for(auto iy = rng.rows().begin();  iy!=rng.rows().end();  ++iy)
+		for(auto ix = rng.pages().begin(); ix!=rng.pages().end(); ++ix)
+		{
+			ChunkID chunk_id(ix, iy, iz);
+			
+			//Check if ID is known by player
+			auto iter = session->known_chunks.find(chunk_id);
+			uint64_t last_seen = 0;
+			if(iter != session->known_chunks.end())
+				last_seen = iter->second;
+			
+			//If not, send the packet to the player
+			auto packet = game_map->get_net_chunk(chunk_id, last_seen);
+			if(packet != NULL)
+			{
+				session->known_chunks.insert(make_pair(chunk_id, packet->chunk_response().last_modified()));
+				session->map_socket->send_packet(packet);
+			}
+		}
+	});
+}
+
+//Broadcasts a chat message to all players
+void World::broadcast_message(std::string const& str)
+{
+	printf("%s\n", str.c_str());
+	
+	for(auto iter = session_manager->sessions.begin();
+		iter != session_manager->sessions.end();
+		++iter)
+	{
+		auto packet = new Network::ServerPacket();
+		packet->set_chat_message(str);
+		iter->second->update_socket->send_packet(packet);
+	}
+}
 
 };
