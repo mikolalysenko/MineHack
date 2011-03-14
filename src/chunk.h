@@ -1,10 +1,7 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include <cassert>
-#include <iostream>
-#include <cstdlib>
-#include <cstdint>
+#include <stdint.h>
 
 #include "constants.h"
 #include "network.pb.h"
@@ -60,6 +57,17 @@ namespace Game
 		}
 		
 		bool operator==(const Block& other) const;
+		
+		//Encodes a block as a uint32
+		uint32_t to_uint() const
+		{
+			uint32_t result = type;
+			for(int i=0; i<BLOCK_STATE_BYTES[type]; ++i)
+			{
+				result |= (state[i]<<((i+1)*8));
+			}
+			return result;
+		}
 	};
 	#pragma pack(pop)
 
@@ -141,10 +149,19 @@ namespace Game
 			hi[2] = hi_z;
 		}
 	};
+	
+	
+	//A compressed chunk record
+	struct ChunkBuffer
+	{
+		int 		size;
+		uint64_t	last_modified;
+		uint8_t* 	data;
+	};
 		
 	//Chunk compression/decompression
-	uint8_t* compress_chunk(Block* chunk, int stride_x, int stride_xy, int* size);
-	void decompress_chunk(Block* chunk, int stride_x, int stride_xy, uint8_t* buffer);
+	ChunkBuffer compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y;
+	void decompress_chunk(ChunkBuffer const&, Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y;
 };
 
 #endif

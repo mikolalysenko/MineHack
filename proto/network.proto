@@ -5,6 +5,17 @@ package Network;
 // Chunk information
 //--------------------------------------------------------
 
+message Chunk {
+	optional uint32 	x = 1;
+	optional uint32 	y = 2;
+	optional uint32 	z = 3;
+	optional uint64		last_modified = 4;
+	optional bytes		data = 5;
+}
+
+message ChunkResponse {
+	repeated Chunk chunks = 1;
+}
 
 //--------------------------------------------------------
 // Test packet
@@ -53,7 +64,12 @@ message LoginRequest {
 //--------------------------------------------------------
 message ServerPacket {
 
+
 	optional LoginResponse login_response = 1;
+
+	optional ChunkResponse chunk_response = 2;
+	
+		
 	
 	optional ErrorResponse error_response = 100;
 	

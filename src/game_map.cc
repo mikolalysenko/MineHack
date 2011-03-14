@@ -1,8 +1,3 @@
-#include <pthread.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-
 #include <map>
 #include <string>
 
@@ -10,11 +5,9 @@
 #include <cstdlib>
 #include <cstdint>
 
-#include <tcutil.h>
-#include <tchdb.h>
-
-
-#include "misc.h"
+#include "constants.h"
+#include "config.h"
+#include "chunk.h"
 #include "map.h"
 
 using namespace std;
@@ -23,32 +16,48 @@ using namespace std;
 namespace Game
 {
 
-Map::Map(WorldGen* gen, Config* cfg) : world_gen(gen), config(cfg)
+GameMap::GameMap(Config* cfg) : world_gen(new WorldGen(cfg)), config(cfg)
 {
 }
 
-Map::~Map()
+GameMap::~GameMap()
 {
-	//FIXME: Release all old chunk buffers
+	//Iterate over all chunk buffers and deallocate
+	for(auto iter = chunks.begin(); iter != chunks.end(); ++iter)
+	{
+		free(iter->second.data);
+	}
+
+	delete world_gen;
 }
 
 
 //Retrieves a chunk
 void GameMap::get_chunk(
-	ChunkID const&, 
-	Block* buffer, 
-	int stride_x = CHUNK_X, 
-	int stride_xy = CHUNK_X * CHUNK_Y)
+	ChunkID const& chunk_id, 
+	Block* data, 
+	int stride_x, 
+	int stride_xy)
 {
+	
+	chunk_map_t::accessor acc;
+	
+	if(!chunks.find(acc, chunk_id))
+	{
+		//Generate chunk
+		if(chunks.insert(acc, chunk_id))
+		{
+			world_gen->generate_chunk(chunk_id, data, stride_x, stride_xy);
+			acc->second = compress_chunk(data, stride_x, stride_xy);
+			return;
+		}
+		
+		//Weird situation, thread got preempted before we could insert new key
+		chunks.find(acc, chunk_id);
+	}
+	
+	//Decompress the chunk
+	decompress_chunk(acc->second, data, stride_x, stride_xy);
 }
-
-//Retrieves a chunk
-void GameMap::get_chunk_raw(
-	ChunkID const&, 
-	uint8_t* buffer,
-	int* length)
-{
-}
-
 
 };

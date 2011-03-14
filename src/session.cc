@@ -22,7 +22,8 @@ Session::Session(SessionID const& id, string const& name) :
 	last_activity(tick_count::now()),
 	player_name(name),
 	update_socket(NULL),
-	map_socket(NULL)
+	map_socket(NULL),
+	map_worker(NULL)
 {
 }
 
@@ -72,13 +73,14 @@ bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket
 		
 		
 	DEBUG_PRINTF("Attached update socket, id = %ld\n", session_id);
-		
+	
+	
 	acc->second->last_activity = tick_count::now();
 	acc->second->update_socket = socket;
 	
 	if(acc->second->map_socket != NULL)
 	{
-		auto L = spin_mutex::scoped_lock(session_lock);
+		auto L = spin_rw_lock::scoped_lock(session_lock, false);
 		sessions.insert(make_pair(session_id, acc->second));
 		pending_sessions.erase(acc);
 	}
@@ -102,7 +104,7 @@ bool SessionManager::attach_map_socket(SessionID const& session_id, WebSocket* s
 	
 	if(acc->second->update_socket != NULL)
 	{
-		auto L = spin_mutex::scoped_lock(session_lock);
+		auto L = spin_rw_lock::scoped_lock(session_lock, false);
 		sessions.insert(make_pair(session_id, acc->second));
 		pending_sessions.erase(acc);
 	}
@@ -127,8 +129,8 @@ void SessionManager::remove_session(SessionID const& session_id)
 //pending deletes to the session data set
 void SessionManager::process_pending_deletes()
 {
-	auto L = spin_mutex::scoped_lock(session_lock);
 	SessionID session_id;
+	auto L = spin_rw_lock::scoped_lock(session_lock, true);
 	while(pending_erase.try_pop(session_id))
 	{
 		auto iter = sessions.find(session_id);
@@ -140,6 +142,7 @@ void SessionManager::process_pending_deletes()
 //Clears all pending sessions
 void SessionManager::clear_all_sessions()
 {
+	auto L = spin_rw_lock::scoped_lock(session_lock, true);
 	for(auto iter = sessions.begin(); iter!=sessions.end(); ++iter)
 	{
 		delete iter->second;

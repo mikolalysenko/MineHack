@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 #include <tbb/tick_count.h>
-#include <tbb/spin_mutex.h>
+#include <tbb/spin_rw_mutex.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_hash_map.h>
@@ -17,11 +17,19 @@
 #include "entity.h"
 #include "httpserver.h"
 
+
 namespace Game
 {
 	//Session ID
 	typedef uint64_t SessionID;
-
+	
+	//A chunk observation record
+	struct ChunkRecord
+	{
+		uint64_t	tick_count;
+		ChunkID		chunk_id;
+	};
+	
 	//A player's session information
 	struct Session
 	{
@@ -34,7 +42,11 @@ namespace Game
 		tbb::tick_count		last_activity;
 	
 		//Player state/entity information
-		std::string			player_name;	
+		std::string			player_name;
+		Coordinate			player_coord;
+		
+		//Map state information
+		tbb::task*				map_worker;
 		
 		//Web socket connections
 		WebSocket			*update_socket;
@@ -64,13 +76,12 @@ namespace Game
 		//Erases all sessions
 		void clear_all_sessions();
 		
-		//The session data set
+		//The session data set (only accessed directly from the world class, do not ever touch this)
 		tbb::concurrent_unordered_map<SessionID, Session*> sessions;
 		
 	private:
-
-		//The session manager lock.  Is held during the delete
-		tbb::spin_mutex session_lock;
+		//The session manager lock.  Is held during the delete, and must be read-locked before accessing a session
+		tbb::spin_rw_mutex session_lock;
 
 		//Pending session list
 		tbb::concurrent_hash_map<SessionID, Session*>		pending_sessions;

@@ -12,8 +12,10 @@
 
 #include "constants.h"
 #include "config.h"
+#include "chunk.h"
 #include "entity.h"
 #include "session.h"
+#include "game_map.h"
 
 namespace Game
 {
@@ -54,6 +56,7 @@ namespace Game
 		Config			*config;
 		SessionManager	*session_manager;
 		EntityDB		*entity_db;
+		GameMap			*game_map;
 	};
 };
 

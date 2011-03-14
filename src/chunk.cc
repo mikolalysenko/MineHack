@@ -54,13 +54,22 @@ bool operator==(const Block& other) const
 	return true;
 }
 
+//Hashes chunk indices
 size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 {
+	uint64_t h = 0ULL;
+	for(uint64_t i=0ULL; i<64ULL; i+=3)
+	{
+		h |= (((uint64_t)chunk_id.x&1ULL)<<i) +
+			 (((uint64_t)chunk_id.y&1ULL)<<(i+1)) +
+			 (((uint64_t)chunk_id.z&1ULL)<<(i+2));
+	}
+	return (size_t)h;
 }
 
 
 //Chunk compression
-uint8_t* compress_chunk(Block* chunk, int stride_x, int stride_xy, int* size)
+ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 {
 	auto buf_start	= chunk_compress_buffers[FIXME];
 	auto buf_ptr	= buf_start;
@@ -100,17 +109,20 @@ uint8_t* compress_chunk(Block* chunk, int stride_x, int stride_xy, int* size)
 
 	//Return resulting run-length encoded stream
 	int buf_size = (int)(buf_ptr - buf_start);
-	auto result = (uint8_t*)malloc(buf_size);
-	memcpy(result, buf_start, buf_size);
+	auto ptr = (uint8_t*)malloc(buf_size);
+	memcpy(ptr, buf_start, buf_size);
 	
-	*size = buf_size;
+	ChunkBuffer result;
+	result.size = buf_size;
+	result.last_modified = 0;
+	result.data = ptr;
 	return result;
 }
 
 //Decompresses a chunk
-void decompress_chunk(Block* chunk, int stride_x, int stride_xy, uint8_t* buffer)
+void decompress_chunk(ChunkBuffer const& buffer, Block* chunk, int stride_x, int stride_xy)
 {
-	auto buf_ptr = buffer;
+	auto buf_ptr = buffer.data;
 	auto data_ptr = chunk;
 	size_t i = 0;
 	

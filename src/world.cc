@@ -41,6 +41,7 @@ World::World(Config* cfg) : config(cfg)
 	
 	session_manager = new SessionManager();
 	entity_db = new EntityDB(config);
+	game_map = new GameMap(config);
 }
 
 //Clean up/saving stuff
@@ -48,6 +49,7 @@ World::~World()
 {
 	delete session_manager;
 	delete entity_db;
+	delete game_map;
 }
 
 //Creates a player
@@ -118,7 +120,6 @@ void World::stop()
 {
 	running = false;
 	world_task->wait_for_all();
-	session_manager->clear_all_sessions();
 }
 
 //Synchronize world state
@@ -128,6 +129,8 @@ void World::sync()
 
 void World::main_loop()
 {
+	//FIXME: Spawn the map precache worker
+
 	while(running)
 	{
 		//Iterate over the player set
@@ -159,18 +162,6 @@ void World::main_loop()
 				delete input_packet;
 			}
 			
-			while(session->update_socket->recv_packet(input_packet))
-			{
-				DEBUG_PRINTF("Got a map packet from session %ld\n", session->session_id);
-
-				if(input_packet->has_test())
-				{
-					DEBUG_PRINTF("Got test packet: %s\n", input_packet->test().msg().c_str());
-				}
-				
-				active = true;
-				delete input_packet;
-			}
 			
 			//Update the activity
 			if(active)
@@ -186,13 +177,23 @@ void World::main_loop()
 				return;
 			}
 			
-			//Update player state
-			
+			//Spawn map worker
+			if(session->worker == NULL)
+			{
+				auto self = task::self();
+				session->worker = new(self->allocate_child) MapWorker();
+				self->increment_ref_count();
+				self->spawn(session->worker);
+			}
 		});
+		
+		//FIXME: Update map physics here in parallel
 		
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
 	}
+	
+	session_manager->clear_all_sessions();
 }
 
 

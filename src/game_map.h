@@ -7,8 +7,8 @@
 #include <tbb/concurrent_hash_map.h>
 
 #include "constants.h"
-#include "chunk.h"
 #include "config.h"
+#include "chunk.h"
 #include "worldgen.h"
 
 namespace Game
@@ -17,7 +17,7 @@ namespace Game
 	struct GameMap
 	{
 		//Map constructor
-		GameMap(WorldGen *w, Config* config);
+		GameMap(Config* config);
 		~GameMap();
 		
 		//Retrieves a chunk
@@ -28,13 +28,7 @@ namespace Game
 			int stride_xy = CHUNK_X * CHUNK_Y);
 
 		//Retrieves a raw buffer associated with the given chunk
-		void get_chunk_raw(
-			ChunkID const&, 
-			uint8_t* buffer,
-			int* size);
-		
-		//Precaches a chunk
-		void precache_chunk(ChunkID const&);
+		Network::Chunk* get_net_chunk();
 		
 	private:
 		//The world generator and config stuff
@@ -42,7 +36,8 @@ namespace Game
 		Config* config;
 		
 		//The game map
-		tbb::concurrent_hash_map<ChunkID, std::pair<uint8_t*, int>, ChunkIDHashCompare> chunks;
+		typedef tbb::concurrent_hash_map<ChunkID, ChunkBuffer, ChunkIDHashCompare> chunk_map_t;
+		chunk_map_t chunks;
 	};
 	
 };
