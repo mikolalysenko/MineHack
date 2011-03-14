@@ -289,7 +289,10 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 		return NULL;
 	}
 	
-
+	linger L;
+	L.l_onoff = true;
+	L.l_linger = 10;
+	setsockopt(fd, SOL_SOCKET, SO_LINGER, &L, sizeof(L));
 	
 	//Store pointer in map
 	DEBUG_PRINTF("Inserting into socket set\n");

@@ -114,7 +114,6 @@ var Game =
 	//Start the actual game, initializes graphics stuff
 	init : function()
 	{
-	/*
 		Game.local_ticks = 0;
 		Game.crashed = false;
 		Game.ready = false;
@@ -162,7 +161,9 @@ var Game =
 		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
 		Game.draw_interval = setInterval(Game.draw, DRAW_RATE);
 		Game.shadow_interval = setInterval(Game.update_shadows, SHADOW_RATE);
-	*/
+		
+		//Set player input handlers
+		Player.init();
 	},
 
 	//Stop all intervals
@@ -202,6 +203,7 @@ var Game =
 	
 	recvProtoBuf : function(pbuf)
 	{
+		//FIXME: Process protocol buffer from server here
 	},
 	
 	
@@ -267,8 +269,9 @@ var Game =
 			++Game.game_ticks;
 		}
 	
-		//Update player
+		//Update player input
 		Player.tick();
+		
 	},
 
 	//Draw the game

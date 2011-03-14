@@ -38,7 +38,7 @@ function getShader(url)
 function getProgram(fs_url, vs_url)
 {
 	//Load chunk vertex/frag shaders
-	var gl = Game.gl, res = getShader(gl, fs_url);
+	var gl = Game.gl, res = getShader(fs_url);
 	if(res[0] != "Ok")
 		return ["Fail", "Fragment shader " + fs_url + " compile error:\n" + res[1]];
 	var fs = res[1];
