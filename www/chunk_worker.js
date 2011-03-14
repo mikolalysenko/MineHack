@@ -449,128 +449,63 @@ function pack_buffer(cx, cy, cz)
 				packed_buffer[buf_offset++] = data[data_offset++];
 		}
 	}
-	
-	//print("Packed: " + packed_buffer);
 }
 
 
 
 //Decodes a run-length encoded chunk
-function decompress_chunk(arr, data)
+function decompress_chunk(buffer, data)
 {
-	if(arr.length == 0)
-		return -1;
-
-	var i = 0, j, k = 0, l, c;
-	while(k<arr.length)
+	var i = 0, j, k = 0, l, b;
+	
+	while(i < CHUNK_SIZE)
 	{
-		l = arr[k];
-		if(l == 0xff)
+		//Decode size
+		l = 0;
+		for(j=0; j<32; j+=7)
 		{
-			l = arr[k+1] + (arr[k+2] << 8);
-			c = arr[k+3];
-			k += 4;
-		}
-		else
-		{
-			c = arr[k+1];
-			k += 2;
+			c = buffer[k++];
+			l += (c & 0x7f) << j;
+			if(c < 0x80)
+				break;
 		}
 		
-		if(i + l > CHUNK_SIZE)
-		{
-			return -1;
-		}
+		//Decode block (assume no state bits for now, this may get nasty later)
+		b = buffer[i++];
 		
-		for(j=0; j<=l; ++j)
+		//Write block to stream
+		for(j=0; j<l; ++j)
 		{
-			data[i++] = c;
+			data[i++] = cur;
 		}
-		
-		if(i == CHUNK_SIZE)
-			return k;
 	}
 }
 
 
-function unpack_vis_buffer(arr)
+function unpack_chunk_pbuffer(pbuf)
 {
-	wait_chunks = false;
-	if(arr.length == 0)
-		return;
+	var ox = pbuf.x,
+		oy = pbuf.y,
+		oz = pbuf.z,	
+		chunk = Map.add_chunk(ox, oy, oz),
+		res = -1;
 		
-	var cx = (arr[0] + (arr[1]<<8) + ((arr[2] & 15)<<16))*8,
-		cy = ((arr[2]>>4) + (arr[3]<<4) + ((arr[4]&63)<<12))*4,
-		cz = (arr[5] + (arr[6]<<8) + (arr[7]<<16))*8,
-		count = arr[8],
-		chunk_ids = arr.subarray(9),
-		chunk_data = arr.subarray(9+count);
+	decompress_chunk(pbuf.data, chunk.data);
 		
-	
-	print("Base chunk = " + cx + ',' + cy + ',' + cz);
-	
-	for(var i=0; i<count; ++i)
-	{
-		var offs = chunk_ids[i],
-			ox = cx + (offs&7),
-			oy = cy + ((offs>>3)&3),
-			oz = cz + (offs>>5),
-				
-			chunk = Map.add_chunk(ox, oy, oz),
-			res = -1;
-			
-			
-		//print("Got chunk: " + ox + "," + oy + "," + oz);
-			
-		if(chunk_data.length > 0)
-			res = decompress_chunk(chunk_data, chunk.data);
-			
-		if(res < 0)
-		{
-			print("Failure!  Could not read chunk");
-			return;
-		}
-			
-		//Handle any pending writes
-		chunk.pending = false;
-		chunk.is_air = false;
+	//Handle any pending writes
+	chunk.pending = false;
 
-		//Resize array
-		chunk_data = chunk_data.subarray(res);
+	//Set dirty flags on neighboring chunks
+	set_dirty(chunk.x, chunk.y, chunk.z);
+	set_dirty(chunk.x-1, chunk.y, chunk.z);
+	set_dirty(chunk.x+1, chunk.y, chunk.z);
+	set_dirty(chunk.x, chunk.y-1, chunk.z);
+	set_dirty(chunk.x, chunk.y+1, chunk.z);
+	set_dirty(chunk.x, chunk.y, chunk.z-1);
+	set_dirty(chunk.x, chunk.y, chunk.z+1);
 
-		//Set dirty flags on neighboring chunks
-		set_dirty(chunk.x, chunk.y, chunk.z);
-		set_dirty(chunk.x-1, chunk.y, chunk.z);
-		set_dirty(chunk.x+1, chunk.y, chunk.z);
-		set_dirty(chunk.x, chunk.y-1, chunk.z);
-		set_dirty(chunk.x, chunk.y+1, chunk.z);
-		set_dirty(chunk.x, chunk.y, chunk.z-1);
-		set_dirty(chunk.x, chunk.y, chunk.z+1);
-
-		//Send result to main thread
-		send_chunk(chunk);
-	}
-}
-
-function grab_vis_buffer()
-{
-	if(wait_chunks)
-		return;
-
-	print("Grabbing visible chunks");
-	
-	
-	var bb = new BlobBuilder();
-	bb.append(session_id.buffer);
-	wait_chunks = true;
-	
-	asyncGetBinary("v", unpack_vis_buffer,
-	function()
-	{
-		wait_chunks = false;
-		print("Error retreiving vis buffer");
-	},
-	bb.getBlob("application/octet-stream"));
+	//Send result to main thread
+	send_chunk(chunk);
 }
 
 //Marks a chunk as dirty
@@ -583,10 +518,6 @@ function set_dirty(x, y, z, priority)
 		if(chunk.pending)
 		{
 			return;
-		}
-		else if(chunk.is_air)
-		{
-			send_vb(chunk.x, chunk.y, chunk.z, [[], [], []]);
 		}
 		else if(priority)
 		{
@@ -629,7 +560,7 @@ function generate_vbs()
 //Sets a block
 function set_block(x, y, z, b)
 {
-	print("setting block: " + x + "," + y + "," + z + " <- " + b);
+	printf("setting block: " + x + "," + y + "," + z + " <- " + b);
 
 	var cx = (x >> CHUNK_X_S), 
 		cy = (y >> CHUNK_Y_S), 
@@ -654,7 +585,6 @@ function set_block(x, y, z, b)
 			return;
 
 		c.data[idx] = b;
-		c.is_air = false;
 		c.set_block(bx, by, bz, b);
 
 		set_dirty(cx, cy, cz, true);
@@ -678,6 +608,19 @@ function set_block(x, y, z, b)
 
 function on_recv(event)
 {
+	var stream = new Base64Stream(event.data),
+		packet = new Network.ServerPacket;
+		
+	if(!packet.ParseFromStream(stream))
+	{
+		printf("Error parsing packet");
+		return;
+	}
+	
+	if(packet.chunk_response)
+	{
+		unpack_chunk_buffer(packet.chunk_response);
+	}
 }
 
 function on_send(pbuf)
@@ -686,6 +629,7 @@ function on_send(pbuf)
 
 function on_socket_error()
 {
+	printf("BLARG!  We died!");
 }
 
 //Starts the worker
@@ -741,7 +685,7 @@ function send_vb(vbs)
 	postMessage({ type: EV_VB_UPDATE, 'vbs':vbs });
 }
 
-//Sends a new chunk to the client
+//Sends a new chunk to the main thread
 function send_chunk(chunk)
 {
 	//Convert data to an array (bleh)

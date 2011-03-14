@@ -6,6 +6,7 @@
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <stdint.h>
 #include <cstdio>
@@ -35,7 +36,7 @@ using namespace tbb;
 
 
 //Uncomment this line to get dense logging for the web server
-//#define SERVER_DEBUG 1
+#define SERVER_DEBUG 1
 
 #ifndef SERVER_DEBUG
 #define DEBUG_PRINTF(...)
@@ -258,7 +259,7 @@ bool HttpServer::get_cached_response(string const& request, concurrent_hash_map<
 Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 {
 	DEBUG_PRINTF("Allocating socket\n");
-
+	
 	Socket* result = new Socket(fd);
 	if(addr != NULL)
 	{
@@ -287,6 +288,8 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 		delete result;
 		return NULL;
 	}
+	
+
 	
 	//Store pointer in map
 	DEBUG_PRINTF("Inserting into socket set\n");
@@ -603,10 +606,11 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 
 void HttpServer::handle_websocket_send(Socket* socket)
 {
-	DEBUG_PRINTF("Processing web socket send, fd = %d\n", socket->socket_fd);
 
 	while(true)
 	{
+		DEBUG_PRINTF("Processing web socket send, fd = %d\n", socket->socket_fd);
+	
 		if(socket->message_queue.ref_count() < 2)
 		{
 			DEBUG_PRINTF("Web socket died\n");
@@ -634,6 +638,8 @@ void HttpServer::handle_websocket_send(Socket* socket)
 			auto packet = (Network::ServerPacket*)msg;
 			socket->outp.pending = serialize_ws_frame(packet, socket->outp.buf_start, socket->outp.size);
 			socket->outp.buf_cur = socket->outp.buf_start;
+			
+			DEBUG_PRINTF("Serializing websocket packet\n");
 			delete packet;
 			
 			if(socket->outp.pending == 0)
@@ -642,7 +648,7 @@ void HttpServer::handle_websocket_send(Socket* socket)
 	
 
 		//Write pending bytes
-		int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, 0);
+		int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, MSG_NOSIGNAL);
 	
 		if(len < 0)
 		{
@@ -942,7 +948,7 @@ void HttpServer::process_reply_cached(Socket* socket)
 	auto response = socket->cached_response->second;
 	
 	int offset = response.size - socket->outp.pending;
-	int len = send(socket->socket_fd, response.buf + offset, socket->outp.pending, 0);
+	int len = send(socket->socket_fd, response.buf + offset, socket->outp.pending, MSG_NOSIGNAL);
 	
 	if(len < 0)
 	{
@@ -1043,7 +1049,7 @@ void HttpServer::process_send(Socket* socket)
 {
 	DEBUG_PRINTF("Sending, pending_bytes = %d\n", socket->outp.pending);
 	
-	int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, 0);
+	int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, MSG_NOSIGNAL);
 	
 	if(len < 0)
 	{

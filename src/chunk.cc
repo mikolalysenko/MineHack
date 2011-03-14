@@ -107,8 +107,6 @@ ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 				data_ptr += stride_xy;
 		}
 		
-		DEBUG_PRINTF("Got run: cs = %d, i = %d, l = %d, c = %d\n", i, l, cur.type);
-		
 		//Write run length as a var int in little endian
 		for(size_t p=l; p>0x80; p>>=7)
 		{
