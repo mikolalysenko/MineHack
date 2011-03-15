@@ -139,13 +139,6 @@ var Game =
 			return;
 		}
 	
-		res = Player.init();
-		if(res != "Ok")
-		{
-			App.crash(res);
-			return;
-		}
-	
 		//Initialize screen
 		window.onresize = function(event)
 		{
