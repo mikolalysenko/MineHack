@@ -16,7 +16,7 @@
 #include "httpparser.h"
 
 //Uncomment this line to get dense logging for the web server
-//#define HTTP_DEBUG 1
+#define HTTP_DEBUG 1
 
 #ifndef HTTP_DEBUG
 #define DEBUG_PRINTF(...)
@@ -385,7 +385,7 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 		mptr[-2],
 		mptr[-1]);
 	
-	DEBUG_PRINTF("WebSocket reply = %s\n", buf);
+	//DEBUG_PRINTF("WebSocket reply = %s\n", buf);
 	
 	return true;
 }

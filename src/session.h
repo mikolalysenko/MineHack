@@ -76,6 +76,7 @@ namespace Game
 		tbb::spin_rw_mutex session_lock;
 
 		//Pending session list
+		//This is awkward, should just store sessions in one big list.  Splitting into two maps is dumb
 		tbb::concurrent_hash_map<SessionID, Session*>		pending_sessions;
 		
 		//Pending session removal events

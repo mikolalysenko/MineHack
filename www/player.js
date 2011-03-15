@@ -253,19 +253,19 @@ var Player =
 	},
 
 	//Updates the player's orientation 
-	set_orientation = function()
+	set_orientation : function()
 	{
 		//FIXME: Implement this
 	},
 
 	//Updates the player's position
-	set_position = function()
+	set_position : function()
 	{
 		//FIXME: Implement this
 	},
 
 	//Returns the player's chunk
-	chunk = function()
+	chunk : function()
 	{
 		var pos = Player.position();
 
@@ -276,14 +276,14 @@ var Player =
 	},
 
 	//Retrieves the player's eye ray
-	eye_ray = function()
+	eye_ray : function()
 	{
 		var view_m = Player.view_matrix();
 		return [ Player.position(), [ -view_m[2], -view_m[6], -view_m[10] ] ];
 	},
 
 	//Retrieves the view matrix for the player
-	view_matrix = function()
+	view_matrix : function()
 	{
 		var orient	= Player.orientation(),
 			pos 	= Player.position(),
