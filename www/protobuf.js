@@ -1588,7 +1588,6 @@ PROTO.Extend = function(parent, newproperties) {
 
 //////// DEBUG
 if (typeof(console)=="undefined") console = {};
-if (typeof(console.log)=="undefined") console.log = function(message){
-    if (document && document.body)
-        document.body.appendChild(document.createTextNode(message+"..."));
+if (typeof(console.log)=="undefined") console.log = function(str) {
+	postMessage({type:EV_PRINT, 'str':str});
 };

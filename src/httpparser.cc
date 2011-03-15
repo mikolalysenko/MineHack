@@ -16,7 +16,7 @@
 #include "httpparser.h"
 
 //Uncomment this line to get dense logging for the web server
-//#define HTTP_DEBUG 1
+#define HTTP_DEBUG 1
 
 #ifndef HTTP_DEBUG
 #define DEBUG_PRINTF(...)
