@@ -61,7 +61,6 @@ Socket::~Socket()
 {
 	if(socket_fd != -1)
 	{
-		DEBUG_PRINTF("Closing socket: %d\n", socket_fd);
 		close(socket_fd);
 	}
 }
@@ -91,7 +90,6 @@ bool HttpServer::start()
 	recache();	
 	
 	//Create listen socket
-	DEBUG_PRINTF("Creating listen socket\n");
 	int listen_socket_fd = socket(PF_INET, SOCK_STREAM, 0);
 	if(listen_socket_fd == -1)
 	{
@@ -131,7 +129,6 @@ bool HttpServer::start()
 	
 
 	//Create epoll object
-	DEBUG_PRINTF("Creating epoll object\n");
 	epollfd = epoll_create(MAX_CONNECTIONS);
 	if(epollfd == -1)
 	{
@@ -180,8 +177,6 @@ void HttpServer::stop()
 	//Destroy epoll object
 	if(epollfd != -1)
 	{
-		//FIXME: Purge old sockets here
-		DEBUG_PRINTF("Closing epoll\n");
 		close(epollfd);
 	}
 
@@ -258,8 +253,6 @@ bool HttpServer::get_cached_response(string const& request, concurrent_hash_map<
 //Creates an http event
 Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 {
-	DEBUG_PRINTF("Allocating socket\n");
-	
 	Socket* result = new Socket(fd);
 	if(addr != NULL)
 	{
@@ -268,7 +261,6 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 
 	if(!listener)
 	{
-		DEBUG_PRINTF("Allocating buffer\n");
 		result->state = SocketState_WaitForHeader;
 		result->inp.init_buffer(RECV_BUFFER_SIZE);
 	}
@@ -278,7 +270,6 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 	}
 	
 	//Set socket to non blocking
-	DEBUG_PRINTF("Setting non-blocking\n");
 	int flags = fcntl(fd, F_GETFL, 0);
 	if (flags == -1)
 		flags = 0;
@@ -295,7 +286,6 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 	setsockopt(fd, SOL_SOCKET, SO_LINGER, &L, sizeof(L));
 	
 	//Store pointer in map
-	DEBUG_PRINTF("Inserting into socket set\n");
 	if(!socket_set.insert(make_pair(fd, result)))
 	{
 		DEBUG_PRINTF("File descriptor is already in use!\n");
@@ -303,9 +293,8 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 		return NULL;
 	}
 	
-	DEBUG_PRINTF("Adding to epoll\n");
+	//Add to epoll
 	epoll_event ev;
-	
 	if(listener)
 	{
 		ev.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP; 
@@ -314,15 +303,14 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 	{
 		ev.events =  EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 	}
-	
 	ev.data.fd = fd;
 	ev.data.ptr = result;
 
 	if(epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1)
 	{
+		DEBUG_PRINTF("EPOLL FAILED!?!?!,  This should not happen.\n");
 		perror("epoll_add");
-		
-
+		socket_set.erase(fd);
 		delete result;
 		return NULL;
 	}
@@ -335,7 +323,6 @@ Socket* HttpServer::create_socket(int fd, bool listener, sockaddr_storage *addr)
 bool HttpServer::notify_socket(Socket* socket)
 {
 	epoll_event ev;
-	
 	switch(socket->state)
 	{
 		case SocketState_Listening:
@@ -371,11 +358,9 @@ bool HttpServer::notify_socket(Socket* socket)
 //Disposes of an http event
 void HttpServer::dispose_socket(Socket* socket)
 {
-	DEBUG_PRINTF("Disposing socket: %016lx\n", socket);
+	DEBUG_PRINTF("Disposing socket, fd = %d\n", socket->socket_fd);
 	socket_set.erase(socket->socket_fd);
-	DEBUG_PRINTF("Removing from epoll\n");
 	epoll_ctl(epollfd, EPOLL_CTL_DEL, socket->socket_fd, NULL);	
-	DEBUG_PRINTF("Freeing socket\n");
 	delete socket;
 }
 
@@ -412,6 +397,8 @@ void HttpServer::initialize_websocket(Socket* socket)
 
 	auto sender = new Socket(send_fd);
 	
+	DEBUG_PRINTF("Creating websocket, receiver fd = %d, sender fd = %d\n", socket->socket_fd, sender->socket_fd);
+	
 	//Initialize state
 	socket->state = SocketState_WebSocketRecv;
 	sender->state = SocketState_WebSocketSend;
@@ -420,8 +407,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 	sender->outp.size = socket->outp.size;
 	sender->outp.pending = 0;
 	sender->outp.buf_cur = sender->outp.buf_start = socket->outp.buf_start;
-	
-	DEBUG_PRINTF("Sender buffers: inp = %016lx, outp = %016lx\n", sender->inp.buf_start, sender->outp.buf_start);
 	
 	//Clear out socket's send buffer
 	socket->outp.size = 0;
@@ -432,8 +417,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 	socket->inp.pending = 0;
 	socket->inp.buf_cur = socket->inp.buf_start;
 
-	DEBUG_PRINTF("Receiver buffers: inp = %016lx, outp = %016lx\n", socket->inp.buf_start, socket->outp.buf_start);
-			
 	//Store pointer in map
 	if(!socket_set.insert(make_pair(sender->socket_fd, sender)))
 	{
@@ -476,8 +459,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 		return;
 	}
 
-	DEBUG_PRINTF("rc_recv = %d, rc_send = %d\n", recv_q_impl->ref_count, send_q_impl->ref_count);	
-	
 	//Try to register the websocket with the client
 	if(!(websocket_callback)(socket->request, websocket))
 	{
@@ -496,8 +477,6 @@ void HttpServer::initialize_websocket(Socket* socket)
 		//Failed, but can't dispose either sender or websocket, so just have to wait for them to timeout
 		return;
 	}
-	
-	DEBUG_PRINTF("Web socket initialized\n");
 }
 
 void notify_websocket_send(HttpServer* server, int send_fd, Socket* socket)
@@ -517,19 +496,17 @@ void notify_websocket_send(HttpServer* server, int send_fd, Socket* socket)
 
 void HttpServer::handle_websocket_recv(Socket* socket)
 {
-	DEBUG_PRINTF("Processing web socket recv, fd = %d\n", socket->socket_fd);
-
 	//While there are still frames to process:
 	while(true)
 	{
+		DEBUG_PRINTF("Processing web socket recv, fd = %d\n", socket->socket_fd);
+
 		if(socket->message_queue.ref_count() < 2)
 		{
-			DEBUG_PRINTF("Web socket died\n");
+			DEBUG_PRINTF("Web socket died when receiving, fd = %d\n", socket->socket_fd);
 			dispose_socket(socket);
 			return;
 		}
-		
-		DEBUG_PRINTF("Reading from websocket, fd = %d\n", socket->socket_fd);
 	
 		//Try reading some bytes from the web socket
 		int len = recv(socket->socket_fd, 
@@ -541,7 +518,6 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 		{
 			if(errno == EAGAIN);
 			{
-				DEBUG_PRINTF("Recv incomplete, retrying\n");
 				if(!notify_socket(socket))
 				{
 					dispose_socket(socket);
@@ -554,7 +530,7 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 		}
 		else if(len == 0)
 		{
-			DEBUG_PRINTF("Remote end hung up\n");
+			DEBUG_PRINTF("Remote end hung up during web socket recv, fd = %d\n", socket->socket_fd);
 			dispose_socket(socket);
 			return;
 		}
@@ -565,8 +541,6 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 		while(true)
 		{
 			uint8_t frame_type = (uint8_t)socket->inp.buf_start[0];
-		
-			DEBUG_PRINTF("Attempting to parse out frame, frame_type = %d\n", (int)frame_type);
 		
 			if(frame_type == 0xff)
 			{
@@ -596,7 +570,7 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 			}
 			else
 			{
-				DEBUG_PRINTF("Bad packet\n");
+				DEBUG_PRINTF("Bad packet in websocket recv, fd = %d\n", socket->socket_fd);
 			}
 	
 			//Shift queue backwards
@@ -616,7 +590,7 @@ void HttpServer::handle_websocket_send(Socket* socket)
 	
 		if(socket->message_queue.ref_count() < 2)
 		{
-			DEBUG_PRINTF("Web socket died\n");
+			DEBUG_PRINTF("Web socket died during send, fd = %d\n", socket->socket_fd);
 			dispose_socket(socket);
 			return;
 		}
@@ -632,7 +606,7 @@ void HttpServer::handle_websocket_send(Socket* socket)
 			//Ignore null messages
 			if(msg == NULL)
 			{
-				if(socket->message_queue.pop_and_check_empty())
+				if(socket->message_queue.pop_and_check_empty(msg))
 					return;
 				continue;
 			}
@@ -641,9 +615,6 @@ void HttpServer::handle_websocket_send(Socket* socket)
 			auto packet = (Network::ServerPacket*)msg;
 			socket->outp.pending = serialize_ws_frame(packet, socket->outp.buf_start, socket->outp.size);
 			socket->outp.buf_cur = socket->outp.buf_start;
-			
-			DEBUG_PRINTF("Serializing websocket packet\n");
-			delete packet;
 			
 			if(socket->outp.pending == 0)
 				continue;
@@ -657,7 +628,6 @@ void HttpServer::handle_websocket_send(Socket* socket)
 		{
 			if(errno == EAGAIN);
 			{
-				DEBUG_PRINTF("Send incomplete, retrying\n");
 				notify_socket(socket);
 				return;
 			}
@@ -667,7 +637,7 @@ void HttpServer::handle_websocket_send(Socket* socket)
 		}
 		else if(len == 0)
 		{
-			DEBUG_PRINTF("Remote end hung up\n");
+			DEBUG_PRINTF("Remote end hung up during websocket send, fd = %d\n", socket->socket_fd);
 			dispose_socket(socket);
 			return;
 		}
@@ -683,8 +653,11 @@ void HttpServer::handle_websocket_send(Socket* socket)
 			return;
 		}
 	
-		//Send completed
-		if(socket->message_queue.pop_and_check_empty())
+		//Send completed, release the message
+		google::protobuf::Message* msg;
+		bool done = socket->message_queue.pop_and_check_empty(msg);
+		delete msg;
+		if(done)
 			return;
 	}
 }
@@ -700,13 +673,10 @@ WebSocket::WebSocket(HttpServer* server_,
 	send_fd(send_fd_),
 	send_socket(send_socket_)
 {
-	DEBUG_PRINTF("Constructing websocket %016lx\n", this);
 }
 
 WebSocket::~WebSocket()
 {
-	DEBUG_PRINTF("Destructing websocket %016lx\n", this);
-
 	if(send_q.detach_and_check_empty())
 		notify_websocket_send(server, send_fd, send_socket);
 }
@@ -753,11 +723,8 @@ void HttpServer::process_accept(Socket* socket)
 		conn_fd = accept(socket->socket_fd, (sockaddr*)&(addr), (socklen_t*)&addr_size);
 		if(conn_fd == -1)
 		{
-			DEBUG_PRINTF("Accept error, errno = %d\n", errno);
 			return;
 		}
-		
-		DEBUG_PRINTF("Accept complete, fd = %d\n", conn_fd);
 		
 		//FIXME: Maybe check black list here, deny connections from ahole ip addresses
 	
@@ -765,6 +732,7 @@ void HttpServer::process_accept(Socket* socket)
 		if(res == NULL)
 		{
 			DEBUG_PRINTF("Error accepting connection\n");
+			continue;
 		}
 	
 		DEBUG_PRINTF("Connection successfully accepted, fd = %d\n", conn_fd);
@@ -850,14 +818,14 @@ void HttpServer::process_header(Socket* socket)
 	{
 	case HttpRequestType_Bad:
 	{
-		DEBUG_PRINTF("Bad HTTP header\n");
+		DEBUG_PRINTF("Bad HTTP header, fd = %d\n", socket->socket_fd);
 		dispose_socket(socket);
 	}
 	break;
 	
 	case HttpRequestType_Get:
 	{
-		DEBUG_PRINTF("Got cached HTTP request: %s\n", socket->request.url.c_str());
+		DEBUG_PRINTF("Got cached HTTP request, fd = %d, url = %s\n", socket->socket_fd, socket->request.url.c_str());
 		
 		if(!get_cached_response(socket->request.url, socket->cached_response))
 		{
@@ -877,7 +845,7 @@ void HttpServer::process_header(Socket* socket)
 		
 	case HttpRequestType_Post:
 	{
-		DEBUG_PRINTF("Got post HTTP request\n");
+		DEBUG_PRINTF("Got post HTTP request, fd = %d\n", socket->socket_fd);
 		
 		int total_size = socket->request.content_length + header_size;
 		
@@ -912,8 +880,7 @@ void HttpServer::process_header(Socket* socket)
 	
 	case HttpRequestType_WebSocket:
 	{
-		DEBUG_PRINTF("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-		DEBUG_PRINTF("Got a web socket connection\n");
+		DEBUG_PRINTF("Got a web socket connection, fd = %d\n", socket->socket_fd);
 		
 		//Make sure we read the extra 8 bytes for the connection key
 		if((int)(socket->inp.buf_cur - socket->request.content_ptr) < 8)
@@ -924,9 +891,7 @@ void HttpServer::process_header(Socket* socket)
 		}
 		
 		//Create the handshake packet
-		DEBUG_PRINTF("Initialize socket handshake reply buffer\n");
 		socket->outp.init_buffer(SEND_BUFFER_SIZE);
-		
 		if(!http_websocket_handshake(socket->request, socket->outp.buf_start, &socket->outp.pending))
 		{
 			DEBUG_PRINTF("Bad WebSocket handshake\n");
@@ -946,7 +911,7 @@ void HttpServer::process_header(Socket* socket)
 
 void HttpServer::process_reply_cached(Socket* socket)
 {
-	DEBUG_PRINTF("Sending cached reply, pending_bytes = %d\n", socket->outp.pending);
+	DEBUG_PRINTF("Sending cached reply, fd = %d, pending_bytes = %d\n", socket->socket_fd, socket->outp.pending);
 	
 	auto response = socket->cached_response->second;
 	
@@ -957,7 +922,6 @@ void HttpServer::process_reply_cached(Socket* socket)
 	{
 		if(errno == EAGAIN);
 		{
-			DEBUG_PRINTF("Send incomplete, retrying\n");
 			notify_socket(socket);
 			return;
 		}
@@ -968,7 +932,7 @@ void HttpServer::process_reply_cached(Socket* socket)
 	}
 	else if(len == 0)
 	{
-		DEBUG_PRINTF("Remote end hung up\n");
+		DEBUG_PRINTF("Remote end hung up during reply, fd = %d\n", socket->socket_fd);
 		socket->cached_response.release();
 		dispose_socket(socket);
 		return;
@@ -978,16 +942,14 @@ void HttpServer::process_reply_cached(Socket* socket)
 
 	if(socket->outp.pending <= 0)
 	{
-		DEBUG_PRINTF("Send complete\n");
+		DEBUG_PRINTF("Reply complete, fd = %d\n", socket->socket_fd);
 		socket->cached_response.release();
 		dispose_socket(socket);
 		return;
 	}
 	
-	DEBUG_PRINTF("More to send, continuing\n");	
 	if(!notify_socket(socket))
 	{
-		DEBUG_PRINTF("Notify failed\n");
 		socket->cached_response.release();
 		dispose_socket(socket);
 		return;
@@ -996,7 +958,7 @@ void HttpServer::process_reply_cached(Socket* socket)
 
 void HttpServer::process_recv(Socket* socket)
 {
-	DEBUG_PRINTF("Receiving, pending_bytes = %d\n", socket->inp.pending);
+	DEBUG_PRINTF("Receiving post data, fd=%d,  pending_bytes = %d\n", socket->socket_fd, socket->inp.pending);
 	
 	int len = recv(socket->socket_fd, socket->inp.buf_cur, socket->inp.pending, 0);
 	
@@ -1004,7 +966,6 @@ void HttpServer::process_recv(Socket* socket)
 	{
 		if(errno == EAGAIN);
 		{
-			DEBUG_PRINTF("Recv incomplete, retrying\n");
 			notify_socket(socket);
 			return;
 		}
@@ -1014,7 +975,7 @@ void HttpServer::process_recv(Socket* socket)
 	}
 	else if(len == 0)
 	{
-		DEBUG_PRINTF("Remote end hung up\n");
+		DEBUG_PRINTF("Remote end hung up during recv, fd = %d\n", socket->socket_fd);
 		dispose_socket(socket);
 		return;
 	}
@@ -1024,7 +985,7 @@ void HttpServer::process_recv(Socket* socket)
 
 	if(socket->inp.pending <= 0)
 	{
-		DEBUG_PRINTF("Recv complete\n");
+		DEBUG_PRINTF("Recv complete, fd = %d\n", socket->socket_fd);
 		
 		switch(socket->state)
 		{	
@@ -1034,15 +995,12 @@ void HttpServer::process_recv(Socket* socket)
 		break;
 		}
 
-		DEBUG_PRINTF("Unknown state, destroy socket\n");
 		dispose_socket(socket);		
 		return;
 	}
 	
-	DEBUG_PRINTF("More to recv, continuing\n");
 	if(!notify_socket(socket))
 	{
-		DEBUG_PRINTF("Notify failed\n");
 		dispose_socket(socket);
 		return;
 	}
@@ -1050,7 +1008,7 @@ void HttpServer::process_recv(Socket* socket)
 
 void HttpServer::process_send(Socket* socket)
 {
-	DEBUG_PRINTF("Sending, pending_bytes = %d\n", socket->outp.pending);
+	DEBUG_PRINTF("Sending, fd = %d, pending_bytes = %d\n", socket->socket_fd, socket->outp.pending);
 	
 	int len = send(socket->socket_fd, socket->outp.buf_cur, socket->outp.pending, MSG_NOSIGNAL);
 	
@@ -1058,7 +1016,6 @@ void HttpServer::process_send(Socket* socket)
 	{
 		if(errno == EAGAIN);
 		{
-			DEBUG_PRINTF("Send incomplete, retrying\n");
 			notify_socket(socket);
 			return;
 		}
@@ -1068,7 +1025,7 @@ void HttpServer::process_send(Socket* socket)
 	}
 	else if(len == 0)
 	{
-		DEBUG_PRINTF("Remote end hung up\n");
+		DEBUG_PRINTF("Remote end hung up during send, fd = %d\n", socket->socket_fd);
 		dispose_socket(socket);
 		return;
 	}
@@ -1078,34 +1035,31 @@ void HttpServer::process_send(Socket* socket)
 
 	if(socket->outp.pending <= 0)
 	{
-		DEBUG_PRINTF("Send complete\n");
-		
+		DEBUG_PRINTF("Send complete, fd = %d\n", socket->socket_fd);
 		
 		switch(socket->state)
 		{	
 		case SocketState_PostReply:
+			DEBUG_PRINTF("Post reply complete, fd = %d\n", socket->socket_fd);
 			dispose_socket(socket);
 			return;
 		break;
 		
 		case SocketState_WebSocketHandshake:
 		{
-			DEBUG_PRINTF("WebSocket handshake complete\n");
+			DEBUG_PRINTF("WebSocket handshake complete, fd = %d\n", socket->socket_fd);
 			initialize_websocket(socket);
 			return;
 		}
 		break;
 		}
 		
-		DEBUG_PRINTF("THIS SHOULD NOT HAPPEN!");
 		assert(false);
 		return;
 	}
 	
-	DEBUG_PRINTF("More to send, continuing\n");
 	if(!notify_socket(socket))
 	{
-		DEBUG_PRINTF("Notify failed\n");
 		dispose_socket(socket);
 		return;
 	}
@@ -1115,13 +1069,10 @@ void HttpServer::process_send(Socket* socket)
 //Process a post request
 void HttpServer::process_post(Socket* socket)
 {
-	DEBUG_PRINTF("Processinng a post request, len = %d\n", socket->request.content_length);
-	
 	//Parse client packet
 	auto P = ScopeDelete<Network::ClientPacket>(new Network::ClientPacket());
 	if(!P.ptr->ParseFromArray(socket->request.content_ptr, socket->request.content_length))
 	{
-		DEBUG_PRINTF("Failed to parse post request\n");
 		dispose_socket(socket);
 		return;
 	}
@@ -1184,8 +1135,7 @@ void HttpServer::worker_loop()
 				continue;
 			}
 			perror("epoll");
-			
-			DEBUG_PRINTF("EPOLL WORKER DIED!  OH SHIT THE THING IS GONNA CRASH!!!!");
+			DEBUG_PRINTF("EPOLL DIED!  OH SHIT THE THING IS GONNA CRASH! BAIL OUT!!!!");
 			break;
 		}
 	
@@ -1193,13 +1143,13 @@ void HttpServer::worker_loop()
 		{
 			Socket* socket = (Socket*)events[i].data.ptr;
 			
-			DEBUG_PRINTF("Processing event from socket: %016lx\n", socket);
+			DEBUG_PRINTF("Processing event from socket: fd = %d\n", socket->socket_fd);
 			
 			if( (events[i].events & EPOLLHUP) ||
 				(events[i].events & EPOLLERR) ||
 				(events[i].events & EPOLLRDHUP) )
 			{
-				DEBUG_PRINTF("Remote end hung up\n");
+				DEBUG_PRINTF("Remote end hung up, fd = %d\n", socket->socket_fd);
 				dispose_socket(socket);
 			}
 			else switch(socket->state)

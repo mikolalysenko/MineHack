@@ -120,11 +120,13 @@ bool World::start()
 		}
 	};
 	
+	//Create the thread group
 	running = true;
-	world_task = new(task::allocate_root()) WorldTask(this);
-	world_task->set_ref_count(1);
-    task::spawn(*world_task); 
-
+	world_task = new (tbb::task::allocate_root()) tbb::empty_task;
+	world_task->set_ref_count(2);
+	auto worker = new(world_task->allocate_child()) WorldTask(this);
+	world_task->spawn(*worker);
+	
 	return true;
 }
 
@@ -133,6 +135,9 @@ void World::stop()
 {
 	running = false;
 	world_task->wait_for_all();
+	world_task->destroy(*world_task);
+		
+	DEBUG_PRINTF("World instance stopped\n");
 }
 
 //Synchronize world state
@@ -144,7 +149,7 @@ void World::sync()
 void World::main_loop()
 {
 	//FIXME: Spawn the map precache worker
-
+	DEBUG_PRINTF("Starting world instance\n");
 	while(running)
 	{
 		//Increment the global tick count
@@ -241,6 +246,8 @@ void World::main_loop()
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
 	}
+	
+	DEBUG_PRINTF("Stopping world instance\n");
 	
 	session_manager->clear_all_sessions();
 }

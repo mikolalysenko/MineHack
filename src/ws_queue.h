@@ -37,7 +37,7 @@ namespace Game
 		WebSocketQueue(WebSocketQueue_Impl* impl_) : impl(impl_)
 		{
 			tbb::spin_mutex::scoped_lock L(impl->lock);
-			++impl->ref_count;
+			impl->ref_count++;
 		}
 		
 		~WebSocketQueue()
@@ -47,7 +47,8 @@ namespace Game
 				int nrefs = -1;
 				{
 					tbb::spin_mutex::scoped_lock L(impl->lock);
-					nrefs = --impl->ref_count;
+					impl->ref_count--;
+					nrefs = impl->ref_count;
 				}
 				
 				if(nrefs == 0)
@@ -70,7 +71,7 @@ namespace Game
 			
 			impl = impl_;
 			tbb::spin_mutex::scoped_lock L(impl->lock);
-			++impl->ref_count;
+			impl->ref_count++;
 		}
 		
 		bool detach_and_check_empty()
@@ -79,11 +80,12 @@ namespace Game
 				return false;
 			
 			int nrefs = -1;
-			bool res;
+			bool empty;
 			{
 				tbb::spin_mutex::scoped_lock L(impl->lock);
-				nrefs = --impl->ref_count;
-				res = impl->msg_queue.empty();
+				impl->ref_count--;
+				nrefs = impl->ref_count;
+				empty = impl->msg_queue.empty();
 			}
 			
 			if(nrefs == 0)
@@ -94,7 +96,7 @@ namespace Game
 			}
 			
 			impl = NULL;
-			return res;
+			return empty;
 		}
 		
 		bool pop_if_full(google::protobuf::Message*& res)
@@ -124,12 +126,13 @@ namespace Game
 		}
 		
 		
-		bool pop_and_check_empty()
+		bool pop_and_check_empty(google::protobuf::Message*& res)
 		{
 			if(impl == NULL)
 				return false;
 			tbb::spin_mutex::scoped_lock L(impl->lock);
 			
+			res = impl->msg_queue.front();
 			impl->msg_queue.pop_front();
 			return impl->msg_queue.empty();
 		}

@@ -4,7 +4,7 @@
 //Application wide constants go here
 
 //Server stuff
-#define NUM_HTTP_WORKERS		3
+#define NUM_HTTP_WORKERS		4
 #define MAX_EPOLL_EVENTS		10
 #define MAX_CONNECTIONS			10000
 #define LISTEN_BACKLOG			3

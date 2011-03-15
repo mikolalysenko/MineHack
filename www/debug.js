@@ -1,8 +1,15 @@
 "use strict";
 
 var Debug = {
+	simple_fs : null,
+	simple_vs : null,
+	simple_shader : null,
+	
+	debug_vb : null,
+	debug_tb : null,
+	debug_ib : null,
 
-	Debug.init : function()
+	init : function()
 	{
 		//Create debug shader
 		var gl = Game.gl,
@@ -62,11 +69,11 @@ var Debug = {
 		return "Ok";
 	},
 
-	Debug.shutdown : function()
+	shutdown : function()
 	{
 	},
 	
-	Debug.draw_tex : function(texname)
+	draw_tex : function(texname)
 	{
 		var gl = Game.gl;
 

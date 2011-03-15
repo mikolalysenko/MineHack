@@ -59,7 +59,7 @@ Map.init = function()
 {
 	//Initialize chunk shader
 	var gl = Game.gl,
-		res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs"), i;
+		res = getProgram("shaders/chunk.fs", "shaders/chunk.vs"), i;
 	if(res[0] != "Ok")
 	{
 		return res[1];
@@ -108,7 +108,7 @@ Map.init = function()
 
 
 	//Create terrain texture
-	res = getTexture(gl, "img/terrain.png");
+	res = getTexture("img/terrain.png");
 	if(res[0] != "Ok")
 	{
 		return res[1];
