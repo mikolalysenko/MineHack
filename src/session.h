@@ -21,6 +21,13 @@ namespace Game
 	//Session ID
 	typedef uint64_t SessionID;
 	
+	enum SessionState
+	{
+		SessionState_Pending,
+		SessionState_Active,
+		SessionState_Dead
+	};
+	
 	//A player's session information
 	struct Session
 	{
@@ -29,7 +36,7 @@ namespace Game
 	
 		//Basic session state information
 		SessionID			session_id;
-		bool				dead;				//If set, this session is marked for deletion
+		SessionState		state;
 		tbb::tick_count		last_activity;
 	
 		//Player state/entity information
@@ -74,10 +81,6 @@ namespace Game
 	private:
 		//The session manager lock.  Is held during the delete, and must be read-locked before accessing a session
 		tbb::spin_rw_mutex session_lock;
-
-		//Pending session list
-		//This is awkward, should just store sessions in one big list.  Splitting into two maps is dumb
-		tbb::concurrent_hash_map<SessionID, Session*>		pending_sessions;
 		
 		//Pending session removal events
 		tbb::concurrent_queue<SessionID>	pending_erase;

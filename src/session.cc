@@ -28,7 +28,7 @@ using namespace Game;
 
 Session::Session(SessionID const& id, string const& name) :
 	session_id(id),
-	dead(false),
+	state(SessionState_Pending),
 	last_activity(tick_count::now()),
 	player_name(name),
 	update_socket(NULL),
@@ -62,76 +62,64 @@ bool SessionManager::create_session(string const& player_name, SessionID& sessio
 	
 	DEBUG_PRINTF("Created session, id = %ld\n", session_id);
 	
-	concurrent_hash_map<SessionID, Session*>::accessor acc;
-	if(!pending_sessions.insert(acc, session_id))
+	//Lock database
+	spin_rw_mutex::scoped_lock L(session_lock, false);
+	if(sessions.find(session_id) != sessions.end())
+	{
+		//Just a sanity check, but this should be true
 		return false;
-		
-	acc->second = new Session(session_id, player_name);
+	}
+
+	sessions.insert(make_pair(session_id, new Session(session_id, player_name)));
+	
 	return true;
 }
 
 //Socket attachment
 bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket* socket)
 {
-	concurrent_hash_map<SessionID, Session*>::accessor acc;
-	if(!pending_sessions.find(acc, session_id))
+	spin_rw_mutex::scoped_lock L(session_lock, false);
+	
+	auto iter = sessions.find(session_id);
+	
+	if(	iter == sessions.end() ||
+		iter->second->update_socket != NULL )
 		return false;
-		
-	if(acc->second->update_socket != NULL)
-		return false;
-		
-		
+
 	DEBUG_PRINTF("Attached update socket, id = %ld\n", session_id);
-	
-	
-	acc->second->last_activity = tick_count::now();
-	acc->second->update_socket = socket;
-	
-	if(acc->second->map_socket != NULL)
-	{
-		spin_rw_mutex::scoped_lock L(session_lock, false);
-		sessions.insert(make_pair(session_id, acc->second));
-		pending_sessions.erase(acc);
-	}
+
+	iter->second->last_activity = tick_count::now();
+	iter->second->update_socket = socket;
 	
 	return true;
 }
 
 bool SessionManager::attach_map_socket(SessionID const& session_id, WebSocket* socket)
 {
-	concurrent_hash_map<SessionID, Session*>::accessor acc;
-	if(!pending_sessions.find(acc, session_id))
-		return false;
-		
-	if(acc->second->map_socket != NULL)
+	spin_rw_mutex::scoped_lock L(session_lock, false);
+	
+	auto iter = sessions.find(session_id);
+	
+	if(	iter == sessions.end() ||
+		iter->second->map_socket != NULL )
 		return false;
 
-	DEBUG_PRINTF("Attached map socket, id = %ld\n", session_id);
-		
-	acc->second->last_activity = tick_count::now();
-	acc->second->map_socket = socket;
+	DEBUG_PRINTF("Attached update socket, id = %ld\n", session_id);
+
+	iter->second->last_activity = tick_count::now();
+	iter->second->map_socket = socket;
 	
-	if(acc->second->update_socket != NULL)
-	{
-		spin_rw_mutex::scoped_lock L(session_lock, false);
-		sessions.insert(make_pair(session_id, acc->second));
-		pending_sessions.erase(acc);
-	}
-	
-	return true;
+	return true;	
 }
 
 //Session removal
 void SessionManager::remove_session(SessionID const& session_id)
 {
-	if(!pending_sessions.erase(session_id))
-	{
-		auto iter = sessions.find(session_id);
-		if(iter == sessions.end())
-			return;
-		iter->second->dead = true;
-		pending_erase.push(session_id);
-	}
+	auto iter = sessions.find(session_id);
+	if(iter == sessions.end())
+		return;
+	iter->second->state = SessionState_Dead;
+	pending_erase.push(session_id);
 }
 
 //Must be called when no other task is accessing the session set, applies all

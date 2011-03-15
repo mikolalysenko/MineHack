@@ -427,7 +427,7 @@ int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
 	packet->SerializeToArray(buffer, bs);
 	
 	DEBUG_PRINTF("Serializing output packet: ");
-	for(int i=0; i<length; ++i)
+	for(int i=0; i<bs; ++i)
 	{
 		DEBUG_PRINTF("%02x,", ((uint8_t*)buffer)[i]);
 	}	

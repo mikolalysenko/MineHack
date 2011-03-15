@@ -247,7 +247,7 @@ var Player =
 	},
 
 	//Returns player's position
-	position = function()
+	position : function()
 	{
 		return [ 0, 0, 0 ];
 	},

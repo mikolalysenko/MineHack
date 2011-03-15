@@ -145,7 +145,32 @@ void World::main_loop()
 			[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
 		{
 			auto session = sessions.begin()->second;
-		
+
+			//Check state
+			if(session->state == SessionState_Dead)
+			{
+				return;
+			}
+			else if(session->state == SessionState_Pending)
+			{
+				if(session->map_socket != NULL && session->update_socket != NULL)
+				{
+					session->state = SessionState_Active;
+				}
+				else
+				{
+					if((tick_count::now() - session->last_activity).seconds() > SESSION_TIMEOUT)
+					{
+						DEBUG_PRINTF("Pending session timeout, session id = %ld", session->session_id);
+						session_manager->remove_session(session->session_id);
+						return;
+					}
+				
+					return;
+				}
+			}
+			
+			//Check if the sockets died
 			if(!session->update_socket->alive() || !session->map_socket->alive())
 			{
 				DEBUG_PRINTF("Socket died, client lost connection\n");
