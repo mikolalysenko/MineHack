@@ -139,6 +139,8 @@ var Game =
 			return;
 		}
 	
+		document.getElementById('gamePane').style.display = 'block';
+	
 		//Initialize screen
 		window.onresize = function(event)
 		{
@@ -151,9 +153,9 @@ var Game =
 	
 		//Start running the game
 		Game.running = true;
-		Game.tick_interval = setInterval(Game.tick, TICK_RATE);
-		Game.draw_interval = setInterval(Game.draw, DRAW_RATE);
-		Game.shadow_interval = setInterval(Game.update_shadows, SHADOW_RATE);
+		Game.tick_interval = setInterval(Game.tick, GAME_TICK_RATE);
+		Game.draw_interval = setInterval(Game.draw, GAME_DRAW_RATE);
+		Game.shadow_interval = setInterval(Game.update_shadows, GAME_SHADOW_RATE);
 		
 		//Set player input handlers
 		Player.init();
@@ -162,13 +164,18 @@ var Game =
 	//Stop all intervals
 	shutdown : function()
 	{
+		document.getElementById('gamePane').style.display = 'none';
+	
 		Game.running = false;
 		if(Game.tick_interval)		clearInterval(Game.tick_interval);
 		if(Game.draw_interval)		clearInterval(Game.draw_interval);
 		if(Game.shadow_interval)	clearInterval(Game.shadow_interval);
 		
+		window.onresize = null;
+		
 		Map.shutdown();
-		Debug.shutdown();		
+		Debug.shutdown();
+		Player.shutdown();
 	},
 
 	resize : function()
@@ -180,12 +187,9 @@ var Game =
 		Game.height = Game.canvas.height;
 	
 		//Set the dimensions for the UI stuff
-		var appPanel = document.getElementById("appElem");
+		var appPanel = document.getElementById("gamePane");
 		appPanel.width = Game.canvas.width;
 		appPanel.height = Game.canvas.height;
-	
-		//Set UI position
-		var uiPanel = document.getElementById("uiPanel");
 	},
 	
 	
@@ -271,7 +275,6 @@ var Game =
 	draw : function()
 	{
 		//Interpolate all entities
-	
 		var gl = Game.gl,
 			cam = Game.camera_matrix();
 		
@@ -286,7 +289,7 @@ var Game =
 		gl.cullFace(gl.BACK);
 		gl.enable(gl.CULL_FACE);
 
-		Map.draw(cam);
+		Map.draw();
 		
 		if(Game.show_shadows)
 			Shadows.shadow_maps[0].draw_debug();
@@ -297,7 +300,7 @@ var Game =
 	//Update the shadow maps
 	update_shadows : function()
 	{
-		for(i=0; i<Shadows.shadow_maps.length; ++i)
+		for(var i=0; i<Shadows.shadow_maps.length; ++i)
 		{
 			Shadows.shadow_maps[i].begin();
 			Map.draw_shadows(Shadows.shadow_maps[i]);	

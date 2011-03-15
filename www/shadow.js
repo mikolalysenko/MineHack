@@ -168,7 +168,7 @@ void main(void) \n\
 
 ShadowMap.prototype.calc_light_matrix = function()
 {
-	var pose = Player.entity.pose_matrix(),
+	var pose = Player.view_matrix(),
 		P = hgmult(m4inv(pose), [0, 0, -this.z_center]),
 	
 		basis = Sky.get_basis(),

@@ -123,9 +123,10 @@ Map.init = function()
 // Input:
 //  gl - the open gl rendering context
 //  camera - the current camera matrix
-Map.draw = function(gl)
+Map.draw = function()
 {
-	var c, chunk, base_chunk = Player.chunk(), 
+	var gl = Game.gl,
+		c, chunk, base_chunk = Player.chunk(), 
 		sun_dir = Sky.get_sun_dir(), 
 		sun_color = Sky.get_sun_color(),
 		i, camera;
