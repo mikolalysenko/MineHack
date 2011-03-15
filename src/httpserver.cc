@@ -36,7 +36,7 @@ using namespace tbb;
 
 
 //Uncomment this line to get dense logging for the web server
-#define SERVER_DEBUG 1
+//#define SERVER_DEBUG 1
 
 #ifndef SERVER_DEBUG
 #define DEBUG_PRINTF(...)
@@ -99,10 +99,10 @@ bool HttpServer::start()
 	}
 
 	//Bind socket address
-	auto port = htons(config->readInt("listenport"));
+	auto portnum = config->readInt(string("listenport"));
 	sockaddr_in addr;
 	addr.sin_addr.s_addr	= INADDR_ANY;
-	addr.sin_port 			= port;
+	addr.sin_port 			= htons(portnum);
 	addr.sin_family			= AF_INET;
 	
 	int optval = 1;
