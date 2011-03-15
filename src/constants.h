@@ -88,9 +88,9 @@
 #define DIG_RADIUS				5
 
 //Player start coordinates
-#define PLAYER_START_X			(1 << 20)
-#define PLAYER_START_Y			((1 << 20)+32)
-#define PLAYER_START_Z			(1 << 20)
+#define PLAYER_START_X			(1 << 19)
+#define PLAYER_START_Y			((1 << 19)+32)
+#define PLAYER_START_Z			(1 << 19)
 
 //Player time out (in ticks) default is approx. 2 minutes
 #define PLAYER_TIMEOUT			3000

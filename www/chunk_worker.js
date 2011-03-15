@@ -457,7 +457,7 @@ function pack_buffer(cx, cy, cz)
 //Decodes a run-length encoded chunk
 function decompress_chunk(buffer, data)
 {
-	var i = 0, j, k = 0, l, b;
+	var i = 0, j, k = 0, l, b, c;
 	
 	while(i < CHUNK_SIZE)
 	{
@@ -472,18 +472,19 @@ function decompress_chunk(buffer, data)
 		}
 		
 		//Decode block (assume no state bits for now, this may get nasty later)
-		b = buffer[i++];
+		b = buffer[k++];
+		//FIXME: Blocks need to have state bits on the client too
 		
 		//Write block to stream
 		for(j=0; j<l; ++j)
 		{
-			data[i++] = cur;
+			data[i++] = b;
 		}
 	}
 }
 
 
-function unpack_chunk_pbuffer(pbuf)
+function unpack_chunk_buffer(pbuf)
 {
 	var ox = pbuf.x,
 		oy = pbuf.y,
@@ -609,18 +610,16 @@ function set_block(x, y, z, b)
 
 function on_recv(event)
 {
-	var stream = new PROTO.Base64Stream(event.data),
-		packet = new Network.ServerPacket;
-		
-	if(!packet.ParseFromStream(stream))
+	var pbuf = raw_to_pbuf(event.data);
+	if(pbuf == null)
 	{
 		printf("Error parsing packet");
 		return;
 	}
 	
-	if(packet.chunk_response)
+	if(pbuf.chunk_response)
 	{
-		unpack_chunk_buffer(packet.chunk_response);
+		unpack_chunk_buffer(pbuf.chunk_response);
 	}
 }
 

@@ -108,11 +108,12 @@ ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 		}
 		
 		//Write run length as a var int in little endian
-		for(size_t p=l; p>0x80; p>>=7)
+		while(l > 0x80)
 		{
-			*(buf_ptr++) = (p & 0x7f) | 0x80;
+			*(buf_ptr++) = (l & 0x7f) | 0x80;
+			l >>= 7;
 		}
-		*(buf_ptr++) = l & 0x7f;
+		*(buf_ptr++) = l;
 		
 		//Write block
 		*(buf_ptr++) = cur.type;

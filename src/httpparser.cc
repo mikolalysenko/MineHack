@@ -382,30 +382,52 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 
 
 //Parses an input frame
-//FIXME: This all uses base64 encoding, which is hideously inefficient.  However, due to limitations in the websocket API, it is impossible to transmit raw binary data.  So, for the moment it is built using this kludge.  It is expected that the API will ultimately change in the future to allow raw binary / compressed frames, so this situation is still farily temporary.  If the situation does not change before release, then a better method will need to be found.
-Network::ClientPacket* parse_ws_frame(char* base64_buffer, int length)
+//FIXME: This all uses utf encoding, which is hideously inefficient.  However, due to limitations in the websocket API, it is impossible to transmit raw binary data.  So, for the moment it is built using this kludge.  It is expected that the API will ultimately change in the future to allow raw binary / compressed frames, so this situation is still farily temporary.  If the situation does not change before release, then a better method will need to be found.
+Network::ClientPacket* parse_ws_frame(char* buffer, int length)
 {
-	//Null terminate buffer
-	base64_buffer[length] = '\0';
-	int size;
-	ScopeFree buffer(tcbasedecode(base64_buffer, &size));
-
-	/*
-	DEBUG_PRINTF("Got input packet: ");
-	for(int i=0; i<size; ++i)
-	{
-		DEBUG_PRINTF("%02x,", ((uint8_t*)buffer.ptr)[i]);
-	}	
-	DEBUG_PRINTF("\n");
-	*/
+	int packet_length = (length * 7 + 7) / 8;
+	ScopeFree decode_buffer(malloc(packet_length + 8));
 	
-	auto packet = new Network::ClientPacket();
-	if(!packet->ParseFromArray(buffer.ptr, size))
+	#ifdef HTTP_DEBUG
+	DEBUG_PRINTF("Parsing websocket frame, input UTF8 buffer, length = %d, contents = ", length);
+	for(int i=0; i<length; ++i)
 	{
-		DEBUG_PRINTF("Failed to parse packet from base64 array\n");
-		delete packet;
-		return NULL;
+		DEBUG_PRINTF("%d,", (uint8_t*)(buffer)[i]);
 	}
+	DEBUG_PRINTF("\n");
+	#endif
+		
+	auto data = (uint8_t*)buffer;
+	auto ptr  = (uint8_t*)decode_buffer.ptr;
+	
+	//Traverse the buffer in groups of 7
+	for(int i=0; i<packet_length; i+=7)
+	{
+		uint64_t w = 0ULL;
+		for(uint64_t j=0ULL; j<8ULL; ++j)
+		{
+			w |= (uint64_t)(*(data++)) << (j*7ULL);
+		}
+		
+		for(uint64_t j=0ULL; j<7ULL; ++j)
+		{
+			*(ptr++) = w & 0xff;
+			w >>= 8ULL;
+		}
+	}
+		
+	#ifdef HTTP_DEBUG
+	DEBUG_PRINTF("Parsing websocket frame, output binary buffer, len = %d, contents = ", packet_length);
+	auto p = (uint8_t*)decode_buffer.ptr;
+	for(int i=0; i<packet_length; ++i)
+	{
+		DEBUG_PRINTF("%d,", p[i]);
+	}
+	DEBUG_PRINTF("\n");
+	#endif
+
+	auto packet = new Network::ClientPacket();
+	!packet->ParseFromArray(decode_buffer.ptr, packet_length);
 	
 	return packet;
 }
@@ -413,31 +435,72 @@ Network::ClientPacket* parse_ws_frame(char* base64_buffer, int length)
 //Serializes an output frame
 int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
 {
+	//Serialize the protocol buffer
 	int bs = packet->ByteSize();
 	if(bs > length)
 		return 0;
-
-	packet->SerializeToArray(buffer, bs);
+	ScopeFree pbuffer(malloc(bs));
+	packet->SerializeToArray(pbuffer.ptr, bs);
 	
-	DEBUG_PRINTF("Serializing output packet: ");
+	
+	
+	//Unpack the raw binary data into a utf-8 stream  (which is stupid, wastes one bit and seems unavoidable for now)
+	auto data = (uint8_t*)pbuffer.ptr;
+	auto buf_ptr = (uint8_t*)buffer;
+	
+	#ifdef HTTP_DEBUG
+	DEBUG_PRINTF("Serializing protocol buffer, length = %d, contents = ", bs);
 	for(int i=0; i<bs; ++i)
 	{
-		DEBUG_PRINTF("%02x,", ((uint8_t*)buffer)[i]);
-	}	
-	DEBUG_PRINTF("\n");	
+		DEBUG_PRINTF("%d,", data[i]);
+	}
+	DEBUG_PRINTF("\n");
+	#endif
 	
-	ScopeFree base64(tcbaseencode(buffer, bs));
+	//Packet frame start code
+	*(buf_ptr++) = 0;
+
+	//Do first pass in groups of 7
+	uint64_t w;	
+	int i = 0, packet_len = (bs * 8 + 6) / 7;
+	while(true)
+	{
+		w = 0ULL;
+		for(uint64_t j=0ULL; j<7ULL; ++j)
+		{
+			w |= (uint64_t)(*(data++)) << (8ULL*j);
+		}
+		i += 7;
+		
+		if(i > bs)
+			break;
+
+		for(uint64_t j=0ULL; j<8ULL; ++j)
+		{
+			*(buf_ptr++) = w & 0x7f;
+			w >>= 7ULL;
+		}
+	}
 	
-	DEBUG_PRINTF("Base64 packet = %s\n", base64.ptr);
+	//Fill remaining bytes
+	for(int j=0; j<packet_len - i; ++j)
+	{
+		*(buf_ptr++) = (w >> (7ULL*j)) & 0x7f;
+	}
 	
-	int base64_len = (bs * 4 + 2) / 3;
+	//Packet frame end code
+	*(buf_ptr++) = 0xff;
 	
-	//Build packet
-	*((uint8_t*)buffer) = 0;
-	memcpy(buffer+1, base64.ptr, base64_len);
-	*((uint8_t*)buffer + base64_len + 1) = 0xff;
+	#ifdef HTTP_DEBUG
+	DEBUG_PRINTF("UTF-8 encoded buffer, length = %d, contents = ", packet_len);
+	for(int i=0; i<packet_len; ++i)
+	{
+		DEBUG_PRINTF("%d,", (uint8_t*)(buffer)[i+1]);
+	}
+	DEBUG_PRINTF("\n");
+	#endif
 	
-	return base64_len + 2;
+	return packet_len + 2;
 }
 
 

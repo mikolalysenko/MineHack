@@ -534,7 +534,8 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 			dispose_socket(socket);
 			return;
 		}
-	
+
+		char* end_of_frame = socket->inp.buf_cur;	
 		socket->inp.buf_cur += len;
 		
 		//Check frame start
@@ -549,19 +550,25 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 				return;
 			}
 			
-			//Scan for end of frame packet
-			char* end_of_frame = socket->inp.buf_start + 1;
+			//Scan for end of frame byte
+			bool has_frame = false;
 			while(end_of_frame < socket->inp.buf_cur)
 			{
-				if(*(end_of_frame++) == 0xff)
+				if((uint8_t)(*(end_of_frame++)) == 0xff)
+				{
+					DEBUG_PRINTF("Found end of frame pointer\n");
+					has_frame = true;
 					break;
+				}
 			}
-			
-			//Process the input frame
-			if(end_of_frame > socket->inp.buf_cur)
+			if(!has_frame)
+			{
+				DEBUG_PRINTF("Frame incomplete, continuing\n");
 				break;
+			}
 				
-			int frame_size = end_of_frame - socket->inp.buf_start;
+			//Process the input frame				
+			int frame_size = (int)(end_of_frame - socket->inp.buf_start);
 			auto packet = parse_ws_frame(socket->inp.buf_start+1, frame_size - 2);
 			
 			if(packet != NULL)
@@ -577,6 +584,7 @@ void HttpServer::handle_websocket_recv(Socket* socket)
 			int extra_bytes = socket->inp.buf_cur - end_of_frame;
 			memmove(socket->inp.buf_start, end_of_frame, extra_bytes);
 			socket->inp.buf_cur -= frame_size;
+			end_of_frame = socket->inp.buf_start + 1;
 		}
 	}
 }

@@ -120,9 +120,6 @@ Map.init = function()
 }
 
 //Draws the map
-// Input:
-//  gl - the open gl rendering context
-//  camera - the current camera matrix
 Map.draw = function()
 {
 	var gl = Game.gl,
@@ -201,9 +198,9 @@ Map.draw = function()
 }
 
 //Draws the map for a shadow shader
-Map.draw_shadows = function(gl, shadow_map)
+Map.draw_shadows = function(shadow_map)
 {
-	var c, chunk, base_chunk = Player.chunk();
+	var gl = Game.gl, c, chunk, base_chunk = Player.chunk();
 
 	//Draw regular chunks
 	for(c in Map.index)

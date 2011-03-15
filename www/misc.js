@@ -82,11 +82,100 @@ function sendProtoBuf_sync(pbuf, timeout_val)
 }
 
 
+//Turns a protocol buffer into a utf-8 stream.  only uses lower 7 bits.
+//   AAAAHH  Why you are you stupid websockets?!? >:P
 function pbuf_to_raw(pbuf)
 {
-	var data = new PROTO.Base64Stream;
-	pbuf.SerializeToStream(data);
-	return data.string_;
+	//Serialize protocol buffer to array
+	var stream = new PROTO.ByteArrayStream;
+	pbuf.SerializeToStream(stream);	
+	var arr = stream.array_,
+		raw = "",
+		len = arr.length,
+		w = 0, i = 0, j = 0;
+			
+	for(j=0; j<7; ++j)
+		arr.push(0);
+	
+	while(i < len)
+	{
+		//Read 4
+		w = 0;
+		for(j=0; j<4; ++j)
+		{
+			w += arr[i++] << (j*8);
+		}
+		
+		//Copy 4
+		for(j=0; j<4; ++j)
+		{
+			raw += String.fromCharCode(w & 0x7f);
+			w >>= 7;
+		}
+		
+		//Read 3
+		for(j=0; j<3; ++j)
+		{
+			w += arr[i++] << (j*8 + 4);
+		}
+		
+		//Copy 4
+		for(j=0; j<4; ++j)
+		{
+			raw += String.fromCharCode(w & 0x7f);
+			w >>= 7;
+		}
+	}
+	
+	return raw.substr(0, Math.ceil(Math.floor(len * 8) / 7));
+}
+
+function raw_to_pbuf(raw)
+{
+	var len = raw.length,
+		w, i, j, k,
+		arr = new Array(0, Math.ceil(Math.floor(len * 7) / 8) + 7);
+
+	//Pad string
+	for(i=0; i<8; ++i)
+		raw += String.fromCharCode(0);
+
+	i = 0;
+	k = 0;
+	while(i < len)
+	{
+		//Read 4
+		w = 0;
+		for(j=0; j<4; ++j)
+		{
+			w += (raw.charCodeAt(i++) & 0x7f) << (7*j);
+		}
+		
+		//Copy 3
+		for(j=0; j<3; ++j)
+		{
+			arr[k++] = w & 0xff;
+			w >>= 8;
+		}
+		
+		//Read 4
+		for(j=0; j<4; ++j)
+		{
+			w += (raw.charCodeAt(i++) & 0x7f) << (7*j + 4);
+		}
+		
+		//Copy 4
+		for(j=0; j<4; ++j)
+		{
+			arr[k++] = w & 0xff;
+			w >>= 8;
+		}
+	}
+	
+	var stream = new PROTO.ByteArrayStream(arr),
+		pbuf = new Network.ServerPacket;
+	pbuf.ParseFromStream(stream)
+	return pbuf;
 }
 
 

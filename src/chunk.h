@@ -116,7 +116,7 @@ namespace Game
 		
 		ChunkID() : x(0), y(0), z(0) {}
 		ChunkID(uint32_t x_, uint32_t y_, uint32_t z_) : x(x_), y(y_), z(z_) {}
-		ChunkID(const Coord& c) : x(c.x), y(c.y), z(c.z) {}
+		ChunkID(const Coord& c) : x(c.x/CHUNK_X), y(c.y/CHUNK_Y), z(c.z/CHUNK_Z) {}
 		ChunkID(const ChunkID& other) : x(other.x), y(other.y), z(other.z) {}
 		ChunkID& operator=(const ChunkID& other)
 		{

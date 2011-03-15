@@ -92,10 +92,7 @@ var Game =
 				break;
 
 				case EV_RECV:
-					var stream = new PROTO.Base64Stream(ev.data.raw),
-						pbuf = new Network.ServerPacket;
-					pbuf.ParseFromStream(stream);
-					recvProtoBuf(pbuf);
+					recvProtoBuf(raw_to_pbuf(ev.data.raw));
 				break;
 			
 				case EV_CRASH:
@@ -298,9 +295,7 @@ var Game =
 	//Draw the game
 	draw : function()
 	{
-		//Interpolate all entities
-		var gl = Game.gl,
-			cam = Game.camera_matrix();
+		var gl = Game.gl;
 		
 		gl.viewport(0, 0, Game.width, Game.height);
 		gl.clear(gl.DEPTH_BUFFER_BIT);
