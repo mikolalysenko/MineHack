@@ -6,7 +6,8 @@ importScripts(
 	'misc.js', 
 	'protobuf.js',
 	'pbj.js',
-	'chunk_common.js');
+	'chunk_common.js',
+	'network.pb.js');
 
 var MAX_NET_CHUNKS	= 512;
 
@@ -608,7 +609,7 @@ function set_block(x, y, z, b)
 
 function on_recv(event)
 {
-	var stream = new Base64Stream(event.data),
+	var stream = new PROTO.Base64Stream(event.data),
 		packet = new Network.ServerPacket;
 		
 	if(!packet.ParseFromStream(stream))
@@ -627,9 +628,9 @@ function on_send(pbuf)
 {
 }
 
-function on_socket_error()
+function on_socket_error(err)
 {
-	printf("BLARG!  We died!");
+	postMessage({type:EV_CRASH});
 }
 
 //Starts the worker

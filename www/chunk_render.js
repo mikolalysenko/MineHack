@@ -342,6 +342,10 @@ Map.init_worker = function()
 			case EV_FORGET_CHUNK:
 				Map.forget_chunk(ev.data.idx);
 			break;
+			
+			case EV_CRASH:
+				App.crash("Map socket died");
+			break;
 		}
 	};
 

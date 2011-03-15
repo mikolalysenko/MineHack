@@ -7,12 +7,13 @@ importScripts(
 	'misc.js');
 
 //Member variables
-var socket;
+var socket = null;
 
 //Sends the raw data to the socket
 function on_send(arr)
 {
-	socket.send(arr);
+	if(socket != null)
+		socket.send(arr);
 }
 
 //Called when receiving a protocol buffer
@@ -22,8 +23,9 @@ function on_recv(event)
 }
 
 //Socket error
-function on_socket_error()
+function on_socket_error(err)
 {
+	socket = null;
 	postMessage({type:EV_CRASH});
 }
 

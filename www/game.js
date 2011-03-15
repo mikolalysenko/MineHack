@@ -36,6 +36,7 @@ var Game =
 	tick_interval : null,
 	draw_interval : null,
 	shadow_interval : null,
+	net_update_interval : null,
 	
 	//Update worker
 	update_worker : null,
@@ -99,7 +100,7 @@ var Game =
 			
 				case EV_CRASH:
 					//alert("Update thread crashed");
-					console.log("blah");
+					App.crash("Update socket error");
 				break;
 			}
 		};
@@ -156,6 +157,7 @@ var Game =
 		Game.tick_interval = setInterval(Game.tick, GAME_TICK_RATE);
 		Game.draw_interval = setInterval(Game.draw, GAME_DRAW_RATE);
 		Game.shadow_interval = setInterval(Game.update_shadows, GAME_SHADOW_RATE);
+		Game.net_update_interval = setInterval(Game.net_update, GAME_NET_UPDATE_RATE);
 		
 		//Set player input handlers
 		Player.init();
@@ -170,8 +172,11 @@ var Game =
 		if(Game.tick_interval)		clearInterval(Game.tick_interval);
 		if(Game.draw_interval)		clearInterval(Game.draw_interval);
 		if(Game.shadow_interval)	clearInterval(Game.shadow_interval);
+		if(Game.net_update_interval)clearInterval(Game.net_update_interval);
 		
 		window.onresize = null;
+		
+		Game.update_worker.terminate();
 		
 		Map.shutdown();
 		Debug.shutdown();
@@ -269,6 +274,25 @@ var Game =
 		//Update player input
 		Player.tick();
 		
+	},
+	
+	net_update : function()
+	{
+		//Send input packet to server				
+		var pbuf = new Network.ClientPacket,
+			pos = Player.position(),
+			orient = Player.orientation();
+		
+		pbuf.player_update = new Network.PlayerUpdate;
+		
+		pbuf.player_update.x = pos[0];
+		pbuf.player_update.y = pos[1];
+		pbuf.player_update.z = pos[2];
+		pbuf.player_update.pitch = orient[0];
+		pbuf.player_update.yaw = orient[1];
+		pbuf.player_update.roll = orient[2];
+		
+		Game.sendProtoBuf(pbuf);
 	},
 
 	//Draw the game

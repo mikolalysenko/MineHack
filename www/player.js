@@ -2,12 +2,6 @@
 
 var Player =
 {
-	//Entity ID
-	entity_id : "",
-	
-	//Player entity
-	entity : null,
-
 	//Units / tick walk speed
 	speed : 0.4,
 
@@ -38,6 +32,14 @@ var Player =
 	//Mouse delta
 	dx : 0,
 	dy : 0,
+	
+	//Temporary storage for position variables
+	x : (1<<19),
+	y : (1<<19),
+	z : (1<<19),
+	pitch : 0,
+	yaw : 0,
+	roll : 0,
 	
 	//If set, player is chatting
 	in_chat : false,
@@ -220,48 +222,35 @@ var Player =
 				//FIXME:  This will need to get updated		
 			}
 		}
-		
-		
-		//Send input packet to server				
-		var pbuf = new Network.ClientPacket,
-			pos = Player.position(),
-			orient = Player.orientation();
-		
-		pbuf.player_update = new Network.PlayerUpdate;
-		
-		pbuf.player_update.x = pos[0];
-		pbuf.player_update.y = pos[1];
-		pbuf.player_update.z = pos[2];
-		pbuf.player_update.pitch = orient[0];
-		pbuf.player_update.yaw = orient[1];
-		pbuf.player_update.roll = orient[2];
-		
-		Game.sendProtoBuf(pbuf);
 	},
-
+	
 	//Returns player's orientation
 	// Pitch, yaw, roll
 	orientation : function()
 	{
-		return [ 0, 0, 0 ];
+		return [ Player.pitch, Player.yaw, Player.roll ];
 	},
 
 	//Returns player's position
 	position : function()
 	{
-		return [ 0, 0, 0 ];
+		return [ Player.x, Player.y, Player.z ];
 	},
 
 	//Updates the player's orientation 
-	set_orientation : function()
+	set_orientation : function(orient)
 	{
-		//FIXME: Implement this
+		Player.pitch = orient[0];
+		Player.yaw	 = orient[1];
+		Player.roll	 = orient[2];
 	},
 
 	//Updates the player's position
-	set_position : function()
+	set_position : function(pos)
 	{
-		//FIXME: Implement this
+		Player.x = pos[0];
+		Player.y = pos[1];
+		Player.z = pos[2];
 	},
 
 	//Returns the player's chunk

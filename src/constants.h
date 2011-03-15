@@ -11,7 +11,7 @@
 #define RECV_BUFFER_SIZE		0x10000
 #define SEND_BUFFER_SIZE		0x100000
 #define EPOLL_TIMEOUT			400
-#define SESSION_TIMEOUT			100.0
+#define SESSION_TIMEOUT			10000.0
 
 
 //Chunk dimensions

@@ -16,7 +16,7 @@
 #include "httpparser.h"
 
 //Uncomment this line to get dense logging for the web server
-//#define HTTP_DEBUG 1
+#define HTTP_DEBUG 1
 
 #ifndef HTTP_DEBUG
 #define DEBUG_PRINTF(...)
@@ -64,8 +64,6 @@ void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 	result.content_ptr = end_ptr;
 	char c;
 		  
-	DEBUG_PRINTF("parsing header\n");
-	
 	//Check for no data case
 	if(ptr == end_ptr)
 		return;
@@ -276,8 +274,6 @@ int64_t compute_ws_key(string const& key)
 		}
 	}
 	
-	DEBUG_PRINTF("Num spaces = %ld, key base = %ld\n", n_spaces, num);
-	
 	if(n_spaces == 0)
 		return -1;
 	return num / n_spaces;
@@ -305,7 +301,6 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 	*size = 16 + header_size;
 
 	//Compute the request hash for each private key
-	DEBUG_PRINTF("Checking key 1\n");
 	auto iter1 = request.headers.find("Sec-WebSocket-Key1");	
 	if(iter1 == request.headers.end())
 	{
@@ -318,7 +313,6 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 	DEBUG_PRINTF("Key 1 = %ld\n", k1);
 		
 	
-	DEBUG_PRINTF("Checking key 2\n");
 	auto iter2 = request.headers.find("Sec-WebSocket-Key2");	
 	if(iter2 == request.headers.end())
 	{
@@ -365,8 +359,6 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 		*(mptr++) = hex_to_num(h)*16 + hex_to_num(l);
 	}
 	
-	DEBUG_PRINTF("Md5 sum = %s\n", md5);
-	
 	DEBUG_PRINTF("Handshake response = %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
 		mptr[-16],
 		mptr[-15],
@@ -385,8 +377,6 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
 		mptr[-2],
 		mptr[-1]);
 	
-	//DEBUG_PRINTF("WebSocket reply = %s\n", buf);
-	
 	return true;
 }
 
@@ -400,18 +390,21 @@ Network::ClientPacket* parse_ws_frame(char* base64_buffer, int length)
 	int size;
 	ScopeFree buffer(tcbasedecode(base64_buffer, &size));
 
+	/*
 	DEBUG_PRINTF("Got input packet: ");
 	for(int i=0; i<size; ++i)
 	{
 		DEBUG_PRINTF("%02x,", ((uint8_t*)buffer.ptr)[i]);
 	}	
 	DEBUG_PRINTF("\n");
+	*/
 	
 	auto packet = new Network::ClientPacket();
 	if(!packet->ParseFromArray(buffer.ptr, size))
 	{
+		DEBUG_PRINTF("Failed to parse packet from base64 array\n");
 		delete packet;
-		return NULL;	
+		return NULL;
 	}
 	
 	return packet;
@@ -434,11 +427,15 @@ int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
 	DEBUG_PRINTF("\n");	
 	
 	ScopeFree base64(tcbaseencode(buffer, bs));
-	int base64_len = (bs * 4 + 2) / 3;
-	memcpy(buffer+1, base64.ptr, base64_len);
 	
-	*((uint8_t*)buffer) = 0x76;
-	*((uint8_t*)buffer + base64_len) = 0xff;
+	DEBUG_PRINTF("Base64 packet = %s\n", base64.ptr);
+	
+	int base64_len = (bs * 4 + 2) / 3;
+	
+	//Build packet
+	*((uint8_t*)buffer) = 0;
+	memcpy(buffer+1, base64.ptr, base64_len);
+	*((uint8_t*)buffer + base64_len + 1) = 0xff;
 	
 	return base64_len + 2;
 }
@@ -506,7 +503,6 @@ void* read_file(string filename, int* length)
 //Initialize the http response cache
 void cache_directory(concurrent_hash_map<string, HttpResponse>& cache, string const& wwwroot)
 {
-
 	DEBUG_PRINTF("Initializing cache\n");
 	
 	vector<string> files;
