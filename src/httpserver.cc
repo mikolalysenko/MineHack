@@ -36,7 +36,7 @@ using namespace tbb;
 
 
 //Uncomment this line to get dense logging for the web server
-//#define SERVER_DEBUG 1
+#define SERVER_DEBUG 1
 
 #ifndef SERVER_DEBUG
 #define DEBUG_PRINTF(...)
@@ -656,6 +656,7 @@ void HttpServer::handle_websocket_send(Socket* socket)
 		//Check for send completion
 		if(socket->outp.pending > 0)
 		{
+			DEBUG_PRINTF("Send incomplete\n");
 			if(!notify_socket(socket))
 				dispose_socket(socket);
 			return;

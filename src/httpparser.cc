@@ -483,7 +483,8 @@ int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
 	}
 	
 	//Fill remaining bytes
-	for(int j=0; j<packet_len - i; ++j)
+	int r = packet_len - (int)(buf_ptr - (uint8_t*)buffer - 1);
+	for(int j=0; j<r; ++j)
 	{
 		*(buf_ptr++) = (w >> (7ULL*j)) & 0x7f;
 	}
@@ -493,14 +494,14 @@ int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
 	
 	#ifdef HTTP_DEBUG
 	DEBUG_PRINTF("UTF-8 encoded buffer, length = %d, contents = ", packet_len);
-	for(int i=0; i<packet_len; ++i)
+	for(int i=0; i<packet_len+2; ++i)
 	{
-		DEBUG_PRINTF("%d,", (uint8_t*)(buffer)[i+1]);
+		DEBUG_PRINTF("%d,", (uint8_t*)(buffer)[i]);
 	}
 	DEBUG_PRINTF("\n");
 	#endif
 	
-	return packet_len + 2;
+	return (int)(buf_ptr - (uint8_t*)buffer);
 }
 
 
