@@ -49,21 +49,6 @@ const int BLOCK_STATE_BYTES[] =
 	0		//Sand
 };
 
-
-//Checks if two blocks are equal
-bool Block::operator==(const Block& other) const
-{
-	if(type != other.type) return false;
-	for(int i=0; i<BLOCK_STATE_BYTES[type]; ++i)
-	{
-		if(state[i] != other.state[i])
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
 //Hashes chunk indices
 size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 {
@@ -77,33 +62,193 @@ size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 	return (size_t)h;
 }
 
-//Retrieves a block
-Block ChunkBuffer::get_block(int x, int y, int z)
+//Sets a block in a chunk buffer
+// This is complicated -- Mik
+void ChunkBuffer::set_block(int x, int y, int z, Block b)
 {
+	int offset = x + z * CHUNK_X + y * CHUNK_X * CHUNK_Z;
+	
+	auto iter = intervals.lower_bound(offset);
+	auto c = iter->second;
+	if(b == c)
+		return;
+		
+	//Mark protocol buffer data for update
+	pbuffer_data.clear();
+	
+	//Get the range of the interval
+	int l = iter->first, r = CHUNK_X*CHUNK_Y*CHUNK_Z;
+	auto next = iter;
+	++next;
+	if(next != intervals.end())
+		r = next->first;
+	
+	if(l == offset)
+	{
+		//Case: Insert at start of interval
+		
+		if(iter == intervals.begin() ||
+			intervals.lower_bound(l-1)->second != b)
+		{
+			//Case: Prev interval distinct
+			if(r - l == 1)
+			{
+				//Case : Interval length == 1
+				
+				if(next != intervals.end() && b == next->second)
+				{
+					//Case : next interval same
+					//
+					//Before:       aaaaa c bbbbbbb
+					//					  ^
+					//					  b
+					//					 
+					//After:        aaaaa bbbbbbbb
+					//
+					
+					iter->second = b;
+					intervals.erase(next);
+				}
+				else
+				{
+					//Case : next interval distinct
+					//
+					//Before:       aaaaa c ddddd
+					//					  ^
+					//					  b
+					//					 
+					//After:        aaaaa b ddddd
+					//
+					
+					iter->second = b;
+				}
+			}
+			else
+			{
+				//Case : Interval length > 1
+				//
+				//Before:       aaaaa ccccc
+				//					  ^
+				//					  b
+				//					 
+				//After:        aaaaa b cccc
+				//
+				
+				
+				iter->second = b;
+				intervals.insert(make_pair(l+1, c));
+			}
+		}
+		else if(r - l == 1)
+		{
+			//Case : Prev interval same, interval length == 1
+			if(next != intervals.end() && b == next->second)
+			{
+				//Case : next interval same
+				//
+				//Before:       bbbbb c bbbbb
+				//					  ^
+				//					  b
+				//					 
+				//After:        bbbbbbbbbbb
+				//
+				
+				intervals.erase(next);
+				intervals.erase(intervals.lower_bound(offset));
+			}
+			else
+			{
+				//Case : next interval distinct
+				//
+				//Before:       bbbbb c dddddd
+				//					  ^
+				//					  b
+				//					 
+				//After:        bbbbbb dddddd
+				//
+
+				intervals.erase(iter);
+			}
+		}
+		else
+		{
+			//Case : Prev interval same, interval length > 1
+			//
+			//Before:       bbbbb cccccc
+			//					  ^
+			//					  b
+			//					 
+			//After:        bbbbbb ccccc
+			//
+			
+			intervals.erase(iter);
+			intervals.insert(make_pair(offset+1, c));
+		}
+	}
+	else if(r-1 == offset)
+	{
+		//Case: insert at end of interval, interval length is > 1
+		
+		if(next == intervals.end() || next->second == b)
+		{
+			//Case : Next interval distinct
+			//
+			//Before:       ccccccc ddddddd
+			//					  ^
+			//					  b
+			//					 
+			//After:        cccccc b ddddddd
+			//
+
+			intervals.insert(make_pair(offset, b));
+		}
+		else
+		{
+			//Case : Next interval same
+			//
+			//Before:       ccccccc bbbbbb
+			//					  ^
+			//					  b
+			//					 
+			//After:        cccccc bbbbbbb
+			//
+
+			intervals.erase(next);
+			intervals.insert(make_pair(offset, b));
+		}
+	}
+	else
+	{
+		//Case:  Insert in middle of interval
+		//
+		//Before:       ccccccccccccc
+		//					  ^
+		//					  b
+		//					 
+		//After:        ccccc b ccccccc
+		//
+
+		intervals.insert(make_pair(offset, b));
+		intervals.insert(make_pair(offset+1, c));
+	}	
 }
 
-
-
-
 //Chunk compression
-ChunkBuffer* ChunkBuffer::compress_chunk(Block* chunk, int stride_x, int stride_xz)
+void ChunkBuffer::compress_chunk(Block* data_ptr, int stride_x, int stride_xz)
 {
-	uint8_t compress_buffer[CHUNK_SIZE * 5];
-
-	auto buf_start	= compress_buffer;
-	auto buf_ptr	= buf_start;
-	auto data_ptr	= chunk;
+	intervals.clear();
+	pbuffer_data.clear();
 
 	stride_xz -= stride_x * CHUNK_Z - 1;
 	stride_x  -= CHUNK_X - 1;
 	
-	size_t i;
-	for(i = 0; i<CHUNK_SIZE; )
+	for(int i = 0; i<CHUNK_SIZE; )
 	{
 		Block cur = *data_ptr;
 		
-		size_t l;
-		for(l=0; i<CHUNK_SIZE && *data_ptr == cur; ++l)
+		intervals.insert(make_pair(i, cur));
+		
+		while(i<CHUNK_SIZE && *data_ptr == cur)
 		{
 			++i;
 			if( i & (CHUNK_X - 1) )
@@ -113,46 +258,122 @@ ChunkBuffer* ChunkBuffer::compress_chunk(Block* chunk, int stride_x, int stride_
 			else
 				data_ptr += stride_xz;
 		}
-		
-		//Write run length as a var int in little endian
-		while(l > 0x80)
-		{
-			*(buf_ptr++) = (l & 0x7f) | 0x80;
-			l >>= 7;
-		}
-		*(buf_ptr++) = l;
-		
-		//Write block
-		*(buf_ptr++) = cur.type;
-		for(int j=0; j<BLOCK_STATE_BYTES[cur.type]; ++j)
-		{
-			*(buf_ptr++) = cur.state[j];
-		}
 	}
-
-	//Return resulting run-length encoded stream
-	int buf_size = (int)(buf_ptr - buf_start);
-	auto ptr = (uint8_t*)malloc(buf_size);
-	memcpy(ptr, buf_start, buf_size);
-	
-	return new ChunkBuffer(result.size, 0, ptr);
 }
 
 //Decompresses a chunk
-void ChunkBuffer::decompress_chunk(Block* chunk, int stride_x, int stride_xz) const
+void ChunkBuffer::decompress_chunk(Block* data_ptr, int stride_x, int stride_xz) const
 {
-	assert(false);
+	stride_xz -= stride_x * CHUNK_Z - 1;
+	stride_x  -= CHUNK_X - 1;
+
+	int i = 0;
+	for(auto iter = intervals.begin(); iter != intervals.end(); )
+	{
+		auto block = iter->second;
+		int right = CHUNK_SIZE;
+		if(++iter != intervals.end())
+		{
+			right = iter->first;
+		}
+	
+		while(i < right)
+		{
+			*data_ptr = block;
+		
+			++i;
+			if( i & (CHUNK_X - 1) )
+				data_ptr += 1;
+			else if( i & (CHUNK_X*CHUNK_Z - 1) )
+				data_ptr += stride_x;
+			else
+				data_ptr += stride_xz;
+		}
+	}
 }
+
+//Caches protocol buffer data
+void ChunkBuffer::cache_protocol_buffer_data()
+{
+	if(pbuffer_data.size() > 0)
+		return;
+	
+	for(auto iter = intervals.begin(); iter != intervals.end(); )
+	{
+		auto left = iter->first;
+		auto block = iter->second;
+		int right = CHUNK_SIZE;
+		if(++iter != intervals.end())
+		{
+			right = iter->first;
+		}
+		
+		//Write out length bytes, encoded using varint encoding (similar to protobuf)
+		//lower 7 bits store int part, highest bit means continue
+		int len = right - left;
+		while(len > 0x80)
+		{
+			pbuffer_data.push_back((len & 0x7f) | 0x80);
+			len >>= 7;
+		}
+		pbuffer_data.push_back(len & 0x7f);
+		
+		//Write block type
+		pbuffer_data.push_back(block.type);
+		for(int i=0; i<BLOCK_STATE_BYTES[block.type]; ++i)
+		{
+			pbuffer_data.push_back(block.state[i]);
+		}
+	}
+}
+
 
 //Serializes a chunk buffer
-void ChunkBuffer::serialize_to_protocol_buffer(Network::Chunk& c) const
-{	
+bool ChunkBuffer::serialize_to_protocol_buffer(Network::Chunk& c) const
+{
+	if(pbuffer_data.size() == 0)
+		return false;
+
+	c.set_last_modified(timestamp);
+	c.set_data(pbuffer_data);
+	return true;
 }
 
-//Parses a chunk from a protocol buffer
-ChunkBuffer* ChunkBuffer::parse_from_protocol_buffer(Network::Chunk& c)
+//Parses a chunk from a protocol buffer, used for map serialization
+void ChunkBuffer::parse_from_protocol_buffer(Network::Chunk const& c)
 {
-	assert(false);
+	if(!c.has_data())
+		return;
+
+	//Unpack fields from protocol buffer
+	if(c.has_last_modified())
+		timestamp = c.last_modified();
+	pbuffer_data = c.data();
+	intervals.clear();
+
+	//Unpack the ranges
+	auto ptr = (uint8_t*)&pbuffer_data[0];
+	for(int i=0; i<CHUNK_SIZE; )
+	{
+		//Unpack length
+		int len = 0;
+		for(int j=0; j<4; ++j)
+		{
+			uint8_t c = *(ptr++);
+			len += (c & 0x7f) << (7 * j);
+			if((c & 0x80) == 0)
+				break;
+		}
+		
+		//Unpack the encoded block type
+		uint8_t type = *(ptr++);
+		Block b(type, ptr);
+		ptr += BLOCK_STATE_BYTES[type];
+		
+		//Insert the interval and continue
+		intervals.insert(make_pair(i, b));
+		i += len;
+	}
 }
 
 };

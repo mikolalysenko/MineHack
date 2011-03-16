@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+#include <map>
+#include <string>
+
 #include "constants.h"
 #include "network.pb.h"
 
@@ -13,7 +16,7 @@ namespace Game
 	class Coord;
 	class ChunkID;
 
-	//The block type
+	//Block types
 	enum BlockType {
 		BlockType_Air,
 		BlockType_Stone,
@@ -32,65 +35,67 @@ namespace Game
 	//Number of state bytes per block
 	extern const int BLOCK_STATE_BYTES[];
 
-	//A block object
+	//A block object (ie one voxel inside the map)
 	#pragma pack(push)
 	#pragma pack(1)	
 	struct Block
 	{
-		uint8_t 	type;
-		uint8_t	state[3];
+		union
+		{
+			struct{
+				uint8_t 	type;
+				uint8_t		state[3];
+			};
+			uint32_t	int_val;
+		};
 		
-		Block() : type(BlockType_Air) { }
-		Block(uint8_t t) : type(t) { }
-		Block(uint8_t t, uint8_t s0, uint8_t s1=0, uint8_t s2=0) : type(t)
+		Block() : int_val(0) {}
+		
+		Block(uint8_t t, uint8_t s0 = 0, uint8_t s1=0, uint8_t s2=0) : type(t)
 		{
 			state[0] = s0;
 			state[1] = s1;
 			state[2] = s2;
 		}
-		Block(uint8_t t, uint8_t* s) : type(t)
+		
+		Block(uint8_t t, uint8_t* s) : int_val(0)
 		{
+			type = t;
 			for(int i=0; i<BLOCK_STATE_BYTES[t]; ++i)
 				state[i] = s[i];
 		}
 		
-		Block(const Block& other) : type(other.type)
+		Block(const Block& other)
 		{
-			for(int i=0; i<3; ++i)
-				state[i] = other.state[i];
+			int_val = other.int_val;
 		}
 		
 		Block& operator=(const Block& other)
 		{
-			type = other.type;
-			for(int i=0; i<3; ++i)
-				state[i] = other.state[i];
+			int_val = other.int_val;
 			return *this;
 		}
 		
 		Block& operator=(uint8_t t)
 		{
 			type = t;
+			state[0] = state[1] = state[2] = 0;
 			return *this;
 		}
 		
-		bool operator==(const Block& other) const;
-		
-		//Encodes a block as a uint32
-		uint32_t to_uint() const
+		bool operator==(const Block& other) const
 		{
-			uint32_t result = type;
-			for(int i=0; i<BLOCK_STATE_BYTES[type]; ++i)
-			{
-				result |= (state[i]<<((i+1)*8));
-			}
-			return result;
+			return int_val == other.int_val;
+		}
+		
+		bool operator!=(const Block& other) const
+		{
+			return int_val != other.int_val;
 		}
 	};
 	#pragma pack(pop)
 
 	//A map coordinate
-	
 	struct Coord
 	{
 		double x, y, z;
@@ -130,6 +135,7 @@ namespace Game
 		{
 			return x == other.x && y == other.y && z == other.z;
 		}
+		
 	};
 	
 	//Hash comparison for chunk IDs
@@ -140,69 +146,42 @@ namespace Game
 		size_t operator()(ChunkID const& chunk_id) const { return hash(chunk_id); }
 	};
 	
-	
-	//A region in the map
-	struct Region
-	{
-		uint32_t lo[3], hi[3];
-		
-		Region()
-		{
-			lo[0] = COORD_MIN_X;
-			lo[1] = COORD_MIN_Y;
-			lo[2] = COORD_MIN_Z;
-			
-			hi[0] = COORD_MAX_X;
-			hi[1] = COORD_MAX_Y;
-			hi[2] = COORD_MAX_Z;
-		}
-		
-		Region(ChunkID const& id)
-		{
-			lo[0] = id.x << CHUNK_X_S;
-			lo[1] = id.y << CHUNK_Y_S;
-			lo[2] = id.z << CHUNK_Z_S;
 
-			hi[0] = lo[0] + CHUNK_X;
-			hi[1] = lo[1] + CHUNK_Y;
-			hi[2] = lo[2] + CHUNK_Z;
-		}
-		
-		Region(	int lo_x, int lo_y, int lo_z,
-				int hi_x, int hi_y,	int hi_z )
-		{
-			lo[0] = lo_x;
-			lo[1] = lo_y;
-			lo[2] = lo_z;
-			
-			hi[0] = hi_x;
-			hi[1] = hi_y;
-			hi[2] = hi_z;
-		}
-	};
-	
-	
 	//A compressed chunk record
 	struct ChunkBuffer
 	{
-		//In place updates
-		Block get_block(int x, int y, int z) const;
+		ChunkBuffer() : timestamp(1) {}
+	
+		//Block accessors
+		Block get_block(int x, int y, int z) const
+		{
+			return intervals.lower_bound(x + z * CHUNK_X + y * CHUNK_X * CHUNK_Z)->second;
+		}
 		void set_block(int x, int y, int z, Block b);
 		
 		//Buffer decoding/access
-		static ChunkBuffer* compress_raw_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
+		void compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
 		void decompress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z) const;
 		
 		//Protocol buffer interface
-		static ChunkBuffer* parse_from_protocol_buffer(Network::Chunk&);
-		void serialize_to_protocol_buffer(Network::Chunk&) const;
+		void cache_protocol_buffer_data();
+		void parse_from_protocol_buffer(Network::Chunk const&);
+		bool serialize_to_protocol_buffer(Network::Chunk&) const;
 		
-		//Retrieves the timestamp for the chunk
-		uint64_t timestamp() { return last_modified; }
+		//Time stamp accessors
+		uint64_t last_modified() { return timestamp; }
+		uint64_t set_last_modified(uint64_t t) { return timestamp = t; }
 		
 	private:
-	
-		uint64_t	last_modified;
+		//Last time this chunk buffer was updated
+		uint64_t	timestamp;
+		
+		//The interval tree
+		typedef std::map<uint16_t, Block>	interval_tree_t;
+		interval_tree_t		intervals;
+		
+		//Protocol buffer data
+		std::string		pbuffer_data;
 	};	
 };
 

@@ -90,7 +90,7 @@ void Config::resetDefaults()
 	storeString("login_db_path", "data/login.tc");
 	
 	//Performance metrics
-	storeInt("vis_radius", 5);
+	storeInt("vis_radius", 3);
 }
 
 };

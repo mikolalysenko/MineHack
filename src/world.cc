@@ -35,7 +35,7 @@ namespace Game
 
 
 //The world instance, handles game logic stuff
-World::World(Config* cfg) : config(cfg)
+World::World(Config* cfg) : config(cfg), synchronize(false)
 {
 	//Restore tick count
 	ticks = config->readInt("tick_count");
@@ -143,7 +143,7 @@ void World::stop()
 //Synchronize world state
 void World::sync()
 {
-	//FIXME: Implement this
+	synchronize = true;
 }
 
 void World::main_loop()
@@ -245,11 +245,18 @@ void World::main_loop()
 		
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
+		
+		//Save the state of the world
+		if(synchronize)
+		{
+			save_state();
+		}
 	}
 	
 	DEBUG_PRINTF("Stopping world instance\n");
 	
 	session_manager->clear_all_sessions();
+	save_state();
 }
 
 //Send a list of session updates to the user in parallel
@@ -301,6 +308,11 @@ void World::broadcast_message(std::string const& str)
 		packet->set_chat_message(str);
 		iter->second->update_socket->send_packet(packet);
 	}
+}
+
+void World::save_state()
+{
+	//FIXME:  This is not yet implemented
 }
 
 };

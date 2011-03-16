@@ -46,7 +46,7 @@ namespace Game
 	private:
 
 		//State variables
-		bool			running;
+		bool			running, synchronize;
 		uint64_t		ticks;
 	
 		//The world update task
@@ -63,6 +63,9 @@ namespace Game
 		
 		//Broadcasts a console message
 		void broadcast_message(std::string const& str);
+		
+		//Saves the state of the world.  When called, main world thread is blocked
+		void save_state();
 	};
 };
 

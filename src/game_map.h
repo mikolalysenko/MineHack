@@ -16,7 +16,7 @@ namespace Game
 	struct GameMap
 	{
 		//Types
-		typedef tbb::concurrent_hash_map<ChunkID, ChunkBuffer, ChunkIDHashCompare> chunk_map_t;
+		typedef tbb::concurrent_hash_map<ChunkID, ChunkBuffer*, ChunkIDHashCompare> chunk_map_t;
 		typedef chunk_map_t::accessor accessor;
 		typedef chunk_map_t::const_accessor const_accessor;
 
@@ -24,24 +24,18 @@ namespace Game
 		GameMap(Config* config);
 		~GameMap();
 		
-		//Retrieves a chunk buffer for writing
-		void get_chunk_buffer(
-			ChunkID const&,
-			accessor);
-			
-		//Retrieves a chunk buffer for reading
-		void get_chunk_buffer(
-			ChunkID const&,
-			const_accessor);
+		//Accessor methods
+		void get_chunk_buffer(ChunkID const&, accessor&);
+		void get_chunk_buffer(ChunkID const&, const_accessor&);
 		
-		//Retrieves a chunk
+		//Chunk copying methods
 		void get_chunk(
 			ChunkID const&, 
 			Block* buffer, 
 			int stride_x = CHUNK_X, 
-			int stride_xy = CHUNK_X * CHUNK_Y);
+			int stride_xz = CHUNK_X * CHUNK_Z);
 
-		//Retrieves a raw buffer associated with the given chunk
+		//Protocol buffer methods
 		Network::ServerPacket* get_net_chunk(ChunkID const&, uint64_t timestamp);
 					
 	private:
