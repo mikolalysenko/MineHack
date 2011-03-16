@@ -48,41 +48,59 @@ var Player =
 	{
 		document.onkeyup = function(event)
 		{
+			if(Player.in_chat)
+				return true;
+		
 			var ev = Player.keys[event.keyCode];
 			if(ev)
 			{
 				Player.input[ev] = 0;
 			}
+			return false;
 		};
 	
 		document.onkeydown = function(event)
 		{
+			if(Player.in_chat)
+				return true;		
+		
 			var ev = Player.keys[event.keyCode];
 			if(ev)
 			{
 				Player.input[ev] = 1;
 			}
+			return false;
 		};
 	
 		var body = document.getElementById("docBody");
 	
 		body.onmousemove = function(event)
 		{
+			if(Player.in_chat)
+				return true;
+		
 			var cx = Game.canvas.width / 2,
 				cy = Game.canvas.height / 2;
 		
 			Player.dx = (event.x - cx) / Game.canvas.width;
 			Player.dy = (event.y - cy) / Game.canvas.height;
+			return false;
 		};
 	
 		body.onmousedown = function(event)
 		{
+			if(Player.in_chat)
+				return true;
 			Player.input["dig"] = 1;
+			return false;
 		}
 	
 		body.onmouseup = function(event)
 		{
+			if(Player.in_chat)
+				return true;
 			Player.input["dig"] = 0;
+			return false;
 		}
 	},
 	
@@ -99,21 +117,19 @@ var Player =
 
 	show_chat_input : function()
 	{
-		var chatBox = document.getElementById("chatBox");
-	
-		if(chatBox.style.display == "none")
+		if(!Player.in_chat)
 		{
-			Player.in_chat = true;
-	
+			var chatBox = document.getElementById("chatBox");
+		
 			chatBox.onkeypress = function(cc)
 			{
-		
 				if(cc.keyCode != 13)
 					return true;
 		
 				var txt = chatBox.value;
 				chatBox.value = "";
 				chatBox.style.display = "none";
+				chatBox.onkeypress = null;
 		
 				if(txt.length > 0)
 				{
@@ -122,15 +138,15 @@ var Player =
 					Game.sendProtoBuf(pbuf);
 				}
 			
-				Game.canvas.focus();
-			
 				Player.in_chat = false;
+				Game.canvas.focus();
 			
 				return false;
 			};
 	
 			chatBox.style.display = "block";	
 			chatBox.focus();
+			Player.in_chat = true;
 		}
 	},
 
@@ -139,14 +155,14 @@ var Player =
 		if(Player.input["chat"] == 1)
 		{
 			Player.show_chat_input();
-			Player.input["chat"] = 0;
 		}
 
 		if(Player.in_chat)
 		{
-			for(i in Player.input)
+			for(var i in Player.input)
 			{
-				Player.input[i] = 0;
+				if(typeof i == "string")
+					Player.input[i] = 0;
 			}
 		
 			return;

@@ -203,6 +203,11 @@ var Game =
 	recvProtoBuf : function(pbuf)
 	{
 		//FIXME: Process protocol buffer from server here
+		
+		if(pbuf.chat_message)
+		{
+			document.getElementById("chatLog").innerHTML += pbuf.chat_message;
+		}
 	},
 	
 	
