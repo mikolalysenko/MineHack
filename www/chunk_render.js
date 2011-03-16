@@ -242,7 +242,8 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	{
 		chunk = Map.add_chunk(x, y, z);
 	}
-
+	
+	chunk.pending = false;
 	chunk.num_elements = ind.length;
 	chunk.num_transparent_elements = tind.length;
 
