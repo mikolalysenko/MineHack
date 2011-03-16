@@ -40,29 +40,18 @@ namespace Game
 	#pragma pack(1)	
 	struct Block
 	{
-		union
-		{
-			struct{
-				uint8_t 	type;
-				uint8_t		state[3];
-			};
-			uint32_t	int_val;
-		};
+		uint32_t	int_val;
 		
 		Block() : int_val(0) {}
 		
-		Block(uint8_t t, uint8_t s0 = 0, uint8_t s1=0, uint8_t s2=0) : type(t)
-		{
-			state[0] = s0;
-			state[1] = s1;
-			state[2] = s2;
-		}
+		Block(uint8_t t, uint8_t s0 = 0, uint8_t s1=0, uint8_t s2=0) :
+			int_val(t | (s0<<8) | (s1<<16) | (s2<<24) )
+		{ }
 		
-		Block(uint8_t t, uint8_t* s) : int_val(0)
+		Block(uint8_t t, uint8_t* s) : int_val(t)
 		{
-			type = t;
-			for(int i=0; i<BLOCK_STATE_BYTES[t]; ++i)
-				state[i] = s[i];
+			for(int i=1; i<=BLOCK_STATE_BYTES[t]; ++i)
+				int_val |= s[i] << (8*i);
 		}
 		
 		Block(const Block& other)
@@ -78,8 +67,7 @@ namespace Game
 		
 		Block& operator=(uint8_t t)
 		{
-			type = t;
-			state[0] = state[1] = state[2] = 0;
+			int_val = t;
 			return *this;
 		}
 		
@@ -92,6 +80,12 @@ namespace Game
 		{
 			return int_val != other.int_val;
 		}
+		
+		//State accessors
+		uint8_t type() const		{ return int_val&0xff; }
+		bool transparent() const	{ return BLOCK_TRANSPARENCY[type()]; }
+		int state_bytes() const		{ return BLOCK_STATE_BYTES[type()]; }
+		int state(int i) const		{ return (int_val>>(8*(i+1))) & 0xff; }
 	};
 	#pragma pack(pop)
 
@@ -157,7 +151,7 @@ namespace Game
 		{
 			return intervals.lower_bound(x + z * CHUNK_X + y * CHUNK_X * CHUNK_Z)->second;
 		}
-		void set_block(int x, int y, int z, Block b);
+		bool set_block(Block b, int x, int y, int z, uint64_t t);
 		
 		//Buffer decoding/access
 		void compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
@@ -169,10 +163,17 @@ namespace Game
 		bool serialize_to_protocol_buffer(Network::Chunk&) const;
 		
 		//Time stamp accessors
-		uint64_t last_modified() { return timestamp; }
+		uint64_t last_modified() const { return timestamp; }
 		uint64_t set_last_modified(uint64_t t) { return timestamp = t; }
 		
+		//For surface chunks
+		bool empty_surface() const { return is_empty; }
+		bool set_empty_surface(bool b) { return is_empty = b; }
+		
 	private:
+		//For surface chunks, checks if the chunk is empty
+		bool is_empty;
+	
 		//Last time this chunk buffer was updated
 		uint64_t	timestamp;
 		

@@ -64,14 +64,16 @@ size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 
 //Sets a block in a chunk buffer
 // This is complicated -- Mik
-void ChunkBuffer::set_block(int x, int y, int z, Block b)
+bool ChunkBuffer::set_block(Block b, int x, int y, int z, uint64_t t)
 {
 	int offset = x + z * CHUNK_X + y * CHUNK_X * CHUNK_Z;
 	
 	auto iter = intervals.lower_bound(offset);
 	auto c = iter->second;
 	if(b == c)
-		return;
+		return false;
+		
+	timestamp = t;
 		
 	//Mark protocol buffer data for update
 	pbuffer_data.clear();
@@ -230,7 +232,8 @@ void ChunkBuffer::set_block(int x, int y, int z, Block b)
 
 		intervals.insert(make_pair(offset, b));
 		intervals.insert(make_pair(offset+1, c));
-	}	
+	}
+	return true;
 }
 
 //Chunk compression
@@ -277,6 +280,8 @@ void ChunkBuffer::decompress_chunk(Block* data_ptr, int stride_x, int stride_xz)
 			right = iter->first;
 		}
 	
+		DEBUG_PRINTF("Decompressing interval: %d--%d\n", i, right);
+	
 		while(i < right)
 		{
 			*data_ptr = block;
@@ -319,10 +324,10 @@ void ChunkBuffer::cache_protocol_buffer_data()
 		pbuffer_data.push_back(len & 0x7f);
 		
 		//Write block type
-		pbuffer_data.push_back(block.type);
-		for(int i=0; i<BLOCK_STATE_BYTES[block.type]; ++i)
+		pbuffer_data.push_back(block.type());
+		for(int i=0; i<block.state_bytes(); ++i)
 		{
-			pbuffer_data.push_back(block.state[i]);
+			pbuffer_data.push_back(block.state(i));
 		}
 	}
 }
@@ -368,7 +373,7 @@ void ChunkBuffer::parse_from_protocol_buffer(Network::Chunk const& c)
 		//Unpack the encoded block type
 		uint8_t type = *(ptr++);
 		Block b(type, ptr);
-		ptr += BLOCK_STATE_BYTES[type];
+		ptr += b.state_bytes();
 		
 		//Insert the interval and continue
 		intervals.insert(make_pair(i, b));

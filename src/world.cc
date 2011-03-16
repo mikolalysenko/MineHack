@@ -265,15 +265,17 @@ void World::send_chunk_updates(Session* session)
 	//Figure out which chunks are visible
 	ChunkID chunk(session->player_coord);
 	
+	//DEBUG_PRINTF("Player chunk = %d, %d, %d\n", chunk.x, chunk.y, chunk.z);
+	
 	//Scan all chunks in visible radius
 	int r = config->readInt("vis_radius");
 	parallel_for(blocked_range3d<int,int,int>(
 		chunk.x-r, chunk.x+r,
-		chunk.y-r, chunk.y+r,
-		chunk.z-r, chunk.y+r), [=](blocked_range3d<int,int,int> rng)
+		chunk.z-r, chunk.z+r,
+		chunk.y-r, chunk.y+r), [=](blocked_range3d<int,int,int> rng)
 	{
-		for(auto iz = rng.cols().begin();  iz!=rng.cols().end();  ++iz)
-		for(auto iy = rng.rows().begin();  iy!=rng.rows().end();  ++iy)
+		for(auto iy = rng.cols().begin();  iy!=rng.cols().end();  ++iy)
+		for(auto iz = rng.rows().begin();  iz!=rng.rows().end();  ++iz)
 		for(auto ix = rng.pages().begin(); ix!=rng.pages().end(); ++ix)
 		{
 			ChunkID chunk_id(ix, iy, iz);

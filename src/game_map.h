@@ -25,8 +25,14 @@ namespace Game
 		~GameMap();
 		
 		//Accessor methods
-		void get_chunk_buffer(ChunkID const&, accessor&);
-		void get_chunk_buffer(ChunkID const&, const_accessor&);
+		void get_chunk_buffer(accessor&, ChunkID const&);
+		void get_chunk_buffer(const_accessor&, ChunkID const&);
+		void get_surface_chunk_buffer(accessor&, ChunkID const&);
+		void get_surface_chunk_buffer(const_accessor&, ChunkID const&);
+		
+		//Block accessor methods
+		Block get_block(int x, int y, int z);
+		bool set_block(Block b, int x, int y, int z, uint64_t t);
 		
 		//Chunk copying methods
 		void get_chunk(
@@ -44,7 +50,10 @@ namespace Game
 		Config* config;
 		
 		//The game map
-		chunk_map_t chunks;
+		chunk_map_t chunks, surface_chunks;
+		
+		//Generates a surface chunk
+		void generate_surface_chunk(accessor&, ChunkID const&);
 	};
 	
 };
