@@ -34,21 +34,21 @@ WorldGen::~WorldGen()
 {
 }
 
-void WorldGen::generate_chunk(ChunkID const& chunk_id, Block* data, int stride_x, int stride_xy)
+void WorldGen::generate_chunk(ChunkID const& chunk_id, Block* data, int stride_x, int stride_xz)
 {
 	DEBUG_PRINTF("Generating chunk: %d, %d, %d\n", chunk_id.x, chunk_id.y, chunk_id.z);
 
-	for(int k=0; k<CHUNK_Z; ++k)
-	for(int j=0; j<CHUNK_Y; ++j)
+	for(int k=0; k<CHUNK_Y; ++k)
+	for(int j=0; j<CHUNK_Z; ++j)
 	for(int i=0; i<CHUNK_X; ++i)
 	{
 		//Get block coordinate
 		int x = chunk_id.x*CHUNK_X + i,
-			y = chunk_id.y*CHUNK_Y + j,
-			z = chunk_id.z*CHUNK_Z + k;
+			z = chunk_id.z*CHUNK_Z + j,
+			y = chunk_id.y*CHUNK_Y + k;
 			
 		//Compute pointer
-		auto ptr = data + i + j * stride_x + k * stride_xy;
+		auto ptr = data + i + j * stride_x + k * stride_xz;
 			
 		//Determine block type
 		if(y > ORIGIN_Y)

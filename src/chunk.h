@@ -191,8 +191,8 @@ namespace Game
 	};
 		
 	//Chunk compression/decompression
-	ChunkBuffer compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y);
-	void decompress_chunk(ChunkBuffer const&, Block* chunk, int stride_x=CHUNK_X, int stride_xy=CHUNK_X*CHUNK_Y);
+	ChunkBuffer compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
+	void decompress_chunk(ChunkBuffer const&, Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
 };
 
 #endif

@@ -18,8 +18,8 @@ var MAX_VB_UPDATES		= 3;
 var VERT_SIZE			= 12;
 
 var PACK_X_STRIDE		= 1;
-var PACK_Y_STRIDE		= CHUNK_X * 3;
-var PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9;
+var PACK_Y_STRIDE		= CHUNK_X * CHUNK_Z * 9;
+var PACK_Z_STRIDE		= CHUNK_X * 3;
 
 var PACK_X_OFFSET		= CHUNK_X;
 var PACK_Y_OFFSET		= CHUNK_Y;
@@ -257,8 +257,8 @@ function gen_vb()
 		nv += 4;
 	}
 		
-	for(z=0; z<CHUNK_Z; ++z)
 	for(y=0; y<CHUNK_Y; ++y)
+	for(z=0; z<CHUNK_Z; ++z)
 	{
 		//Set up neighborhood buffers
 		p00 = get_ptr(y-1, z-1);
@@ -438,8 +438,8 @@ function pack_buffer(cx, cy, cz)
 		
 		//Store result into packed buffer
 		data_offset = 0;
-		for(k=0; k<CHUNK_Z; ++k)
 		for(j=0; j<CHUNK_Y; ++j)
+		for(k=0; k<CHUNK_Z; ++k)
 		{
 			buf_offset  =
 					 (dx+1) * CHUNK_X +
@@ -507,7 +507,7 @@ function unpack_chunk_buffer(pbuf)
 	set_dirty(chunk.x, chunk.y, chunk.z+1);
 
 	//Send result to main thread
-	send_chunk(chunk);
+	//send_chunk(chunk);
 }
 
 //Marks a chunk as dirty

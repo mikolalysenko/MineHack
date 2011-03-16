@@ -237,11 +237,10 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	var chunk = Map.lookup_chunk(x, y, z),
 		gl = Game.gl;
 
-	//Check if chunk vertex buffer is pending
-	if(chunk.pending)
+	//Add chunk if missing
+	if(!chunk)
 	{
-		chunk.pending = false;
-		Map.num_pending_chunks--;
+		chunk = Map.add_chunk(x, y, z);
 	}
 
 	chunk.num_elements = ind.length;

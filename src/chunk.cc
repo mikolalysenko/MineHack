@@ -79,7 +79,7 @@ size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 
 
 //Chunk compression
-ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
+ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xz)
 {
 	uint8_t compress_buffer[CHUNK_SIZE * 5];
 
@@ -87,7 +87,7 @@ ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 	auto buf_ptr	= buf_start;
 	auto data_ptr	= chunk;
 
-	stride_xy -= stride_x * CHUNK_Y - 1;
+	stride_xz -= stride_x * CHUNK_Z - 1;
 	stride_x  -= CHUNK_X - 1;
 	
 	size_t i;
@@ -101,10 +101,10 @@ ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 			++i;
 			if( i & (CHUNK_X - 1) )
 				data_ptr += 1;
-			else if( i & (CHUNK_X*CHUNK_Y - 1) )
+			else if( i & (CHUNK_X*CHUNK_Z - 1) )
 				data_ptr += stride_x;
 			else
-				data_ptr += stride_xy;
+				data_ptr += stride_xz;
 		}
 		
 		//Write run length as a var int in little endian
@@ -136,42 +136,9 @@ ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xy)
 }
 
 //Decompresses a chunk
-void decompress_chunk(ChunkBuffer const& buffer, Block* chunk, int stride_x, int stride_xy)
+void decompress_chunk(ChunkBuffer const& buffer, Block* chunk, int stride_x, int stride_xz)
 {
-	auto buf_ptr = buffer.data;
-	auto data_ptr = chunk;
-	size_t i = 0;
-	
-	while(i < CHUNK_SIZE)
-	{
-		//Decode size
-		int l = 0;
-		for(int j=0; j<32; j+=7)
-		{
-			uint8_t c = *(buf_ptr++);
-			l += (int)(c & 0x7f) << j;
-			if(c < 0x80)
-				break;
-		}
-		
-		//Decode block
-		Block cur(*buf_ptr, buf_ptr+1);
-		buf_ptr += BLOCK_STATE_BYTES[*buf_ptr] + 1;
-		
-		//Write block to stream
-		for(int j=0; j<l; ++j)
-		{
-			*data_ptr = cur;
-			
-			++i;
-			if( i & (CHUNK_X - 1) )
-				data_ptr += 1;
-			else if( i & (CHUNK_X*CHUNK_Y - 1) )
-				data_ptr += stride_x;
-			else
-				data_ptr += stride_xy;
-		}
-	}
+	assert(false);
 }
 
 };
