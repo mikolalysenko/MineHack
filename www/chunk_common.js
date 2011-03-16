@@ -65,187 +65,6 @@ function Chunk(x, y, z)
 	this.tib = null;
 }
 
-/*
-//This is bugged...
-function frustum_test(m, cx, cy, cz)
-{
-	cx = (cx - 1) * CHUNK_X;
-	cy = (cy - 1) * CHUNK_Y;
-	cz = (cz - 1) * CHUNK_Z;
-
-	var mxx = m[0]  * (CHUNK_X+1),
-		mxy = m[1]  * (CHUNK_X+1),
-		mxz = m[2]  * (CHUNK_X+1),
-		mxw = m[3]  * (CHUNK_X+1),
-		
-		myx = m[4]  * (CHUNK_Y+1),
-		myy = m[5]  * (CHUNK_Y+1),
-		myz = m[6]  * (CHUNK_Y+1),
-		myw = m[7]  * (CHUNK_Y+1),
-		
-		mzx = m[8]  * (CHUNK_Z+1),
-		mzy = m[9]  * (CHUNK_Z+1),
-		mzz = m[10] * (CHUNK_Z+1),
-		mzw = m[11] * (CHUNK_Z+1),
-		
-		x = cx*m[0] + cy*m[4] + cz*m[8]  + m[12],
-		y = cx*m[1] + cy*m[5] + cz*m[9]  + m[13],
-		z = cx*m[2] + cy*m[6] + cz*m[10] + m[14],
-		w = cx*m[3] + cy*m[7] + cz*m[11] + m[15],
-	
-		pl_px = false, pl_nx = false,
-		pl_py = false, pl_ny = false,
-		pl_pz = false, pl_nz = false;
-		
-
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	if( pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz )
-	{
-		return true;
-	}
-		
-	x += mzx;
-	y += mzy;
-	z += mzz;
-	w += mzw;
-	
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	if( pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz )
-	{
-		return true;
-	}
-
-	x += myx;
-	y += myy;
-	z += myz;
-	w += myw;
-
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	if( pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz )
-	{
-		return true;
-	}
-
-	x -= mzx;
-	y -= mzy;
-	z -= mzz;
-	w -= mzw;
-
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	if( pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz )
-	{
-		return true;
-	}
-	
-	x += mxx;
-	y += mxy;
-	z += mxz;
-	w += mxw;
-
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	if( pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz )
-	{
-		return true;
-	}
-
-	x += mzx;
-	y += mzy;
-	z += mzz;
-	w += mzw;
-	
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	if( pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz )
-	{
-		return true;
-	}
-
-	x -= myx;
-	y -= myy;
-	z -= myz;
-	w -= myw;
-
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	if( pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz )
-	{
-		return true;
-	}
-
-	x -= mzx;
-	y -= mzy;
-	z -= mzz;
-	w -= mzw;
-
-	pl_px |= (x <=  w);
-	pl_nx |= (x >= -w);
-	pl_py |= (y <=  w);
-	pl_ny |= (y >= -w);
-	pl_pz |= (z <=  w);
-	pl_nz |= (z >= -w);
-	
-	return
-		pl_px && pl_nx && 
-		pl_py && pl_ny &&
-		pl_pz && pl_nz;
-}
-*/
-
-
 function frustum_test(m, cx, cy, cz)
 {
 	var vx = (cx)*CHUNK_X,
@@ -302,27 +121,11 @@ var Map =
 {
 	index			: {},	//The chunk index
 	
-	max_chunks		: (1<<20),	//Maximum number of chunks to load (not used yet)
-	chunk_count 	: 0,		//Number of loaded chunks
-	chunk_radius	: 3,		//These chunks are always fetched.
-	chunk_init_radius	: 4,		//Initially fetched chunks
-	num_pending_chunks	: 0,
-	
+	max_chunks			: (1<<20),	//Maximum number of chunks to load (not used yet)
+	chunk_count 		: 0,		//Number of loaded chunks	
 	
 	//If set, then we draw the debug info for the chunk
 	show_debug		: false,
-	
-	//Visibility stuff
-	vis_angle		: 0,
-	vis_width		: 128,
-	vis_height		: 128,
-	vis_fov			: Math.PI * 3.0 / 4.0,
-	vis_state		: 0,	
-	vis_bounds		: [ [1, 6],
-						[7, 10],
-						[11, 13],
-						[14, 15],
-						[16, 16] ]
 	
 };
 
@@ -361,7 +164,7 @@ Map.get_block = function(x, y, z)
 	var bx = (x & CHUNK_X_MASK), 
 		by = (y & CHUNK_Y_MASK), 
 		bz = (z & CHUNK_Z_MASK);
-	return c.data[bx + (by << CHUNK_X_S) + (bz << CHUNK_XY_S)];
+	return c.data[bx +  CHUNK_X * (bz + by * CHUNK_Z)];
 }
 
 //Traces a ray into the map, returns the index of the block hit, its type and the hit normal

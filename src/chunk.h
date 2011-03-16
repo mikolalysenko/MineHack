@@ -185,14 +185,25 @@ namespace Game
 	//A compressed chunk record
 	struct ChunkBuffer
 	{
-		int 		size;
-		uint64_t	last_modified;
-		uint8_t* 	data;
-	};
+		//In place updates
+		Block get_block(int x, int y, int z) const;
+		void set_block(int x, int y, int z, Block b);
 		
-	//Chunk compression/decompression
-	ChunkBuffer compress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
-	void decompress_chunk(ChunkBuffer const&, Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
+		//Buffer decoding/access
+		static ChunkBuffer* compress_raw_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z);
+		void decompress_chunk(Block* chunk, int stride_x=CHUNK_X, int stride_xz=CHUNK_X*CHUNK_Z) const;
+		
+		//Protocol buffer interface
+		static ChunkBuffer* parse_from_protocol_buffer(Network::Chunk&);
+		void serialize_to_protocol_buffer(Network::Chunk&) const;
+		
+		//Retrieves the timestamp for the chunk
+		uint64_t timestamp() { return last_modified; }
+		
+	private:
+	
+		uint64_t	last_modified;
+	};	
 };
 
 #endif

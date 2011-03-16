@@ -77,9 +77,16 @@ size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 	return (size_t)h;
 }
 
+//Retrieves a block
+Block ChunkBuffer::get_block(int x, int y, int z)
+{
+}
+
+
+
 
 //Chunk compression
-ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xz)
+ChunkBuffer* ChunkBuffer::compress_chunk(Block* chunk, int stride_x, int stride_xz)
 {
 	uint8_t compress_buffer[CHUNK_SIZE * 5];
 
@@ -128,15 +135,22 @@ ChunkBuffer compress_chunk(Block* chunk, int stride_x, int stride_xz)
 	auto ptr = (uint8_t*)malloc(buf_size);
 	memcpy(ptr, buf_start, buf_size);
 	
-	ChunkBuffer result;
-	result.size = buf_size;
-	result.last_modified = 0;
-	result.data = ptr;
-	return result;
+	return new ChunkBuffer(result.size, 0, ptr);
 }
 
 //Decompresses a chunk
-void decompress_chunk(ChunkBuffer const& buffer, Block* chunk, int stride_x, int stride_xz)
+void ChunkBuffer::decompress_chunk(Block* chunk, int stride_x, int stride_xz) const
+{
+	assert(false);
+}
+
+//Serializes a chunk buffer
+void ChunkBuffer::serialize_to_protocol_buffer(Network::Chunk& c) const
+{	
+}
+
+//Parses a chunk from a protocol buffer
+ChunkBuffer* ChunkBuffer::parse_from_protocol_buffer(Network::Chunk& c)
 {
 	assert(false);
 }
