@@ -157,7 +157,7 @@ void GameMap::get_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  i
 //FIXME:  This would be more efficient if it directly operated on the compressed chunks. -Mik
 void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 {
-	DEBUG_PRINTF("Generating surface\n");
+	DEBUG_PRINTF("Generating surface chunk: %d,%d,%d\n",chunk_id.x, chunk_id.y, chunk_id.z);
 
 	const static int stride_x  = 3 * CHUNK_X;
 	const static int stride_xz = 3 * stride_x * CHUNK_Z;
@@ -207,9 +207,11 @@ void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 	for(int z=0; z<CHUNK_Z; ++z, i+=dz)
 	for(int x=0; x<CHUNK_X; ++x, i+=dx)
 	{
+		/*
 		assert(i == (CHUNK_X + x) +
 					(CHUNK_Z + z) * stride_x +
 					(CHUNK_Y + y) * stride_xz );
+		*/
 	
 		if( buffer[i].transparent() ||
 			buffer[i-1].transparent() ||
@@ -237,9 +239,6 @@ void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 		
 		buffer[i] = BlockType_Stone;
 	}
-	
-	//Construct the chunk buffer and save it
-	DEBUG_PRINTF("Creating surface chunk, timestamp = %ld, empty = %d\n", timestamp, empty);
 	
 	acc->second->compress_chunk(buffer + CHUNK_X + CHUNK_Z * stride_x + CHUNK_Y * stride_xz, stride_x, stride_xz);
 	acc->second->set_last_modified(timestamp);

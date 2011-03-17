@@ -49,6 +49,8 @@ void WorldGen::generate_chunk(ChunkID const& chunk_id, Block* data, int stride_x
 			
 		//Compute pointer
 		auto ptr = data + i + j * stride_x + k * stride_xz;
+		
+		y += i + j;
 			
 		//Determine block type
 		if(y > ORIGIN_Y)
