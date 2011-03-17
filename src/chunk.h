@@ -112,7 +112,6 @@ namespace Game
 	//A chunk index into the map
 	struct ChunkID
 	{
-		//Chunk coordinates are 21-bit unsigned ints
 		uint32_t x, y, z;
 		
 		ChunkID() : x(0), y(0), z(0) {}

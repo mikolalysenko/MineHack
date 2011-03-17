@@ -3,7 +3,14 @@
 
 #include <stdint.h>
 
+#include <tbb/atomic.h>
+#include <tbb/compat/thread>
+#include <tbb/spin_rw_mutex.h>
+#include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_hash_map.h>
+
+#include <tcutil.h>
+#include <tchdb.h>
 
 #include "constants.h"
 #include "config.h"
@@ -40,20 +47,42 @@ namespace Game
 			Block* buffer, 
 			int stride_x = CHUNK_X, 
 			int stride_xz = CHUNK_X * CHUNK_Z);
+			
+		//Retrieves a chunk's protocol buffer
+		Network::Chunk* get_chunk_pbuffer(ChunkID const&);
 
 		//Protocol buffer methods
 		Network::ServerPacket* get_net_chunk(ChunkID const&, uint64_t timestamp);
+		
+		//Saves the state of the map
+		void serialize();
 					
 	private:
 		//The world generator and config stuff
 		WorldGen* world_gen;
 		Config* config;
 		
+		//Database/persistence stuff
+		typedef tbb::concurrent_unordered_map<ChunkID, bool, ChunkIDHashCompare> write_set_t;
+		TCHDB*	map_db;
+		tbb::spin_rw_mutex	write_set_lock;
+		write_set_t pending_writes;
+		std::thread* db_worker_thread;
+		tbb::atomic<bool> running;
+		
+		void initialize_db();
+		void shutdown_db();
+		void mark_dirty(ChunkID const&);
+		
 		//The game map
-		//When operating on surface chunks and chunks, must lock surface chunks first.
+		// When operating on surface chunks and chunk remember the locking order:
+		//	1.  Always lock surface_chunks before chunks
+		//	2.	Lock chunks in order of chunk id; ie lexicographic y, z, x, low-to-high.
+		//
 		chunk_map_t chunks, surface_chunks;
 		
-		//Generates a surface chunk
+		//Chunk generation stuff
+		void generate_chunk(accessor&, ChunkID const&);
 		void generate_surface_chunk(accessor&, ChunkID const&);
 	};
 	

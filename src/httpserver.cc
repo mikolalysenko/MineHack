@@ -36,7 +36,7 @@ using namespace tbb;
 
 
 //Uncomment this line to get dense logging for the web server
-#define SERVER_DEBUG 1
+//#define SERVER_DEBUG 1
 
 #ifndef SERVER_DEBUG
 #define DEBUG_PRINTF(...)

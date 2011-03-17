@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <tbb/atomic.h>
 #include <tbb/task.h>
 #include <tbb/blocked_range.h>
 #include <tbb/blocked_range3d.h>
@@ -35,8 +36,10 @@ namespace Game
 
 
 //The world instance, handles game logic stuff
-World::World(Config* cfg) : config(cfg), synchronize(false)
+World::World(Config* cfg) : config(cfg)
 {
+	running = false;
+	
 	//Restore tick count
 	ticks = config->readInt("tick_count");
 	
@@ -66,7 +69,6 @@ bool World::player_delete(string const& player_name)
 {
 	if(!running)
 		return false;
-
 	return true;
 }
 
@@ -135,7 +137,6 @@ void World::stop()
 {
 	running = false;
 	world_task->wait_for_all();
-	world_task->destroy(*world_task);
 		
 	DEBUG_PRINTF("World instance stopped\n");
 }
@@ -143,7 +144,6 @@ void World::stop()
 //Synchronize world state
 void World::sync()
 {
-	synchronize = true;
 }
 
 void World::main_loop()
@@ -245,12 +245,6 @@ void World::main_loop()
 		
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
-		
-		//Save the state of the world
-		if(synchronize)
-		{
-			save_state();
-		}
 	}
 	
 	DEBUG_PRINTF("Stopping world instance\n");

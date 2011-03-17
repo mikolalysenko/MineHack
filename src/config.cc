@@ -86,11 +86,13 @@ void Config::resetDefaults()
 	storeString("wwwroot", "www");
 	storeInt("listenport", 8081);
 	
-	//Login database defaults
+	//Database paths
 	storeString("login_db_path", "data/login.tc");
+	storeString("map_db_path", "data/map.tc");
 	
 	//Performance tweaks
 	storeInt("vis_radius", 16);
+	storeFloat("map_db_write_rate", 0.5);
 }
 
 };

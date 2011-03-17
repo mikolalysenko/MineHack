@@ -8,6 +8,7 @@
 
 #include <tcutil.h>
 
+#include <tbb/atomic.h>
 #include <tbb/task.h>
 
 #include "constants.h"
@@ -46,11 +47,11 @@ namespace Game
 	private:
 
 		//State variables
-		bool			running, synchronize;
+		tbb::atomic<bool>	running;
 		uint64_t		ticks;
 	
 		//The world update task
-		tbb::task*			world_task;
+		tbb::task*		world_task;
 	
 		//Subsystems
 		Config			*config;
