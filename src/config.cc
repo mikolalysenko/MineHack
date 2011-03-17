@@ -16,6 +16,7 @@ Config::Config(std::string const& filename)
 	
 	tchdbsetmutex(config_db);
 	tchdbtune(config_db, 0, 4, 10, HDBTBZIP);
+	tchdbsetxmsiz(config_db, (1<<23));
 	
 	//Open the map database
 	if(!tchdbopen(config_db, filename.c_str(), HDBOWRITER))
@@ -87,12 +88,20 @@ void Config::resetDefaults()
 	storeInt("listenport", 8081);
 	
 	//Database paths
-	storeString("login_db_path", "data/login.tc");
-	storeString("map_db_path", "data/map.tc");
+	storeString("login_db_path", "data/login.tch");
+	storeString("map_db_path", "data/map.tch");
 	
 	//Performance tweaks
-	storeInt("vis_radius", 16);
-	storeFloat("map_db_write_rate", 0.5);
+	storeInt("visible_radius", 16);
+	storeFloat("map_db_write_rate", 1.0);
+	storeFloat("session_timeout", 10000.0);
+	storeInt("num_chunk_buckets", (1<<20));
+	storeInt("num_surface_chunk_buckets", (1<<18));
+	storeInt("tc_map_buckets", (1<<20));
+	storeInt("tc_map_alignment", 4);
+	storeInt("tc_map_free_pool_size", 10);
+	storeInt("tc_map_cache_size", 0);
+	storeInt("tc_map_extra_memory", 300 * (1<<20));
 }
 
 };

@@ -493,6 +493,8 @@ void console_loop()
 //Program start point
 int main(int argc, char** argv)
 {
+		
+
 	//Verify protocol buffers are working correctly
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 
@@ -502,8 +504,12 @@ int main(int argc, char** argv)
 	//Initialize task scheduler
 	task_scheduler_init init;
 
+	string config_file = "data/config.tch";	
+	if(argc > 1)
+		config_file = string(argv[1]);
+
 	printf("Allocating objects\n");
-	auto GC = ScopeDelete<Config>(config = new Config("data/config.tc"));
+	auto GC = ScopeDelete<Config>(config = new Config(config_file));
 	auto GW = ScopeDelete<World>(world = new World(config));
 	auto GL = ScopeDelete<LoginDB>(login_db = new LoginDB(config));
 	auto GS = ScopeDelete<HttpServer>(server = new HttpServer(config, post_callback, websocket_callback));

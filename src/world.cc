@@ -158,6 +158,8 @@ void World::main_loop()
 		//FIXME: Update map physics in parallel
 	
 		//Iterate over the player set
+		double session_timeout = config->readFloat("session_timeout");
+		int visible_radius = config->readInt("visible_radius");
 		parallel_for(session_manager->sessions.range(), 
 			[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
 		{
@@ -176,9 +178,9 @@ void World::main_loop()
 				}
 				else
 				{
-					if((tick_count::now() - session->last_activity).seconds() > SESSION_TIMEOUT)
+					if((tick_count::now() - session->last_activity).seconds() > session_timeout)
 					{
-						DEBUG_PRINTF("Pending session timeout, session id = %ld", session->session_id);
+						printf("Pending session timeout, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
 						session_manager->remove_session(session->session_id);
 						return;
 					}
@@ -190,7 +192,7 @@ void World::main_loop()
 			//Check if the sockets died
 			if(!session->update_socket->alive() || !session->map_socket->alive())
 			{
-				DEBUG_PRINTF("Socket died, client lost connection\n");
+				printf("Client lost connection, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
 				session_manager->remove_session(session->session_id);
 				return;
 			}
@@ -200,8 +202,6 @@ void World::main_loop()
 			Network::ClientPacket *input_packet;
 			while(session->update_socket->recv_packet(input_packet))
 			{
-				DEBUG_PRINTF("Got an update packet from session %ld\n", session->session_id);
-				
 				if(input_packet->has_player_update())
 				{
 					//Unpack update and set the new coordinate for the player
@@ -231,15 +231,15 @@ void World::main_loop()
 			}
 			
 			//Check for time out condition
-			if((tick_count::now() - session->last_activity).seconds() > SESSION_TIMEOUT)
+			if((tick_count::now() - session->last_activity).seconds() > session_timeout)
 			{
-				DEBUG_PRINTF("Session timeout, session id = %ld", session->session_id);
+				printf("Session timeout, session id = %ld, player name = %s", session->session_id, session->player_name.c_str());
 				session_manager->remove_session(session->session_id);
 				return;
 			}
 			
 			//Send chunk updates to player
-			send_chunk_updates(session);
+			send_chunk_updates(session, visible_radius);
 		});
 		
 		
@@ -247,14 +247,11 @@ void World::main_loop()
 		session_manager->process_pending_deletes();
 	}
 	
-	DEBUG_PRINTF("Stopping world instance\n");
-	
 	session_manager->clear_all_sessions();
-	save_state();
 }
 
 //Send a list of session updates to the user in parallel
-void World::send_chunk_updates(Session* session)
+void World::send_chunk_updates(Session* session, int r)
 {
 	//Figure out which chunks are visible
 	ChunkID chunk(session->player_coord);
@@ -262,7 +259,6 @@ void World::send_chunk_updates(Session* session)
 	//DEBUG_PRINTF("Player chunk = %d, %d, %d\n", chunk.x, chunk.y, chunk.z);
 	
 	//Scan all chunks in visible radius
-	int r = config->readInt("vis_radius");
 	parallel_for(blocked_range3d<int,int,int>(
 		chunk.x-r, chunk.x+r,
 		chunk.z-r, chunk.z+r,
@@ -284,7 +280,6 @@ void World::send_chunk_updates(Session* session)
 			auto packet = game_map->get_net_chunk(chunk_id, last_seen);
 			if(packet != NULL)
 			{
-				DEBUG_PRINTF("Transmitting chunk %d,%d,%d\n", chunk_id.x, chunk_id.y, chunk_id.z);
 				session->known_chunks.insert(make_pair(chunk_id, packet->chunk_response().last_modified()));
 				session->map_socket->send_packet(packet);
 			}

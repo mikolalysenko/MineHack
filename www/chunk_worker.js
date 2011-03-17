@@ -13,7 +13,7 @@ var MAX_NET_CHUNKS	= 512;
 
 var VB_GEN_RATE		 	= 30;
 var FETCH_RATE			= 100;
-var MAX_VB_UPDATES		= 3;
+var MAX_VB_UPDATES		= 5;
 
 var VERT_SIZE			= 12;
 

@@ -64,6 +64,7 @@ size_t ChunkIDHashCompare::hash(const ChunkID& chunk_id) const
 
 //Sets a block in a chunk buffer
 // This is complicated -- Mik
+//FIXME: Not tested
 bool ChunkBuffer::set_block(Block b, int x, int y, int z, uint64_t t)
 {
 	int offset = x + z * CHUNK_X + y * CHUNK_X * CHUNK_Z;
@@ -258,17 +259,6 @@ void ChunkBuffer::compress_chunk(Block* data, int stride_x, int stride_xz)
 		
 		while(i<CHUNK_SIZE && *data_ptr == cur)
 		{
-		/*
-			DEBUG_PRINTF("i = %d, ptr = %d, offset = %d\n", i, (int)(data_ptr - data), (i%CHUNK_X) +
-				((i/CHUNK_X)%CHUNK_Z)*stride_x +
-				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
-		
-			assert((int)(data_ptr-data) ==
-				(i%CHUNK_X) +
-				((i/CHUNK_X)%CHUNK_Z)*stride_x +
-				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
-		*/
-		
 			++i;
 			if( i & (CHUNK_X - 1) )
 				data_ptr += dx;
@@ -303,17 +293,6 @@ void ChunkBuffer::decompress_chunk(Block* data, int stride_x, int stride_xz) con
 	
 		while(i < right)
 		{
-		/*
-			DEBUG_PRINTF("i = %d, ptr = %d, offset = %d\n", i, (int)(data_ptr - data), (i%CHUNK_X) +
-				((i/CHUNK_X)%CHUNK_Z)*stride_x +
-				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
-		
-			assert((int)(data_ptr-data) ==
-				(i%CHUNK_X) +
-				((i/CHUNK_X)%CHUNK_Z)*stride_x +
-				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
-		*/
-		
 			*data_ptr = block;
 		
 			++i;

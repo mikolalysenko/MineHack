@@ -60,7 +60,7 @@ namespace Game
 		GameMap			*game_map;
 		
 		//Player update stuff
-		void send_chunk_updates(Session* session);
+		void send_chunk_updates(Session* session, int);
 		
 		//Broadcasts a console message
 		void broadcast_message(std::string const& str);

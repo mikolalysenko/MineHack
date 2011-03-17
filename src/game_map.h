@@ -19,7 +19,10 @@
 
 namespace Game
 {
+	
 	//This is basically a data structure which implements a caching/indexing system for chunks
+	//The goal is to keep the entire database in memory at all times for maximum performance.
+	//In order to acheive this, it is necessary to operate directly on compressed chunks.
 	struct GameMap
 	{
 		//Types

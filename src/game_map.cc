@@ -31,11 +31,17 @@ using namespace std;
 namespace Game
 {
 
+	
+
 //-------------------------------------------------------------------
 // Constructor/destructor pairs
 //-------------------------------------------------------------------
 
-GameMap::GameMap(Config* cfg) : world_gen(new WorldGen(cfg)), config(cfg)
+GameMap::GameMap(Config* cfg) : 
+	world_gen(new WorldGen(cfg)), 
+	config(cfg),
+	chunks(config->readInt("num_chunk_buckets")),
+	surface_chunks(config->readInt("num_surface_chunk_buckets"))
 {
 	initialize_db();
 }
@@ -264,8 +270,6 @@ void GameMap::generate_chunk(accessor& acc, ChunkID const& chunk_id)
 //FIXME:  This would be more efficient if it directly operated on the compressed chunks. -Mik
 void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 {
-	DEBUG_PRINTF("Generating surface chunk: %d,%d,%d\n",chunk_id.x, chunk_id.y, chunk_id.z);
-
 	const static int stride_x  = 3 * CHUNK_X;
 	const static int stride_xz = 3 * stride_x * CHUNK_Z;
 	const static int delta[][3] =	//Lock order: y, z, x, low to high
@@ -371,14 +375,17 @@ void GameMap::initialize_db()
 
 	//Initialize the map database
 	map_db = tchdbnew();
-
+	
 	//Set options
 	//tchdbsetmutex(map_db);	//Not needed, will use our own mutex to synchronize database
 	tchdbtune(map_db,
-		0,							//Number of buckets
-		4,							//Record alignment
-		10,							//Free elements
+		config->readInt("tc_map_buckets"),				//Number of buckets
+		config->readInt("tc_map_alignment"),			//Record alignment
+		config->readInt("tc_map_free_pool_size"),		//Memory pool size
 		HDBTLARGE | HDBTDEFLATE);
+
+	tchdbsetcache(map_db, config->readInt("tc_map_cache_size"));
+	tchdbsetxmsiz(map_db, config->readInt("tc_map_extra_memory"));
 
 	//Open the map database
 	tchdbopen(map_db, config->readString("map_db_path").c_str(), HDBOWRITER | HDBOCREAT);
@@ -389,6 +396,8 @@ void GameMap::initialize_db()
 	//Restore the state of the map
 	auto key = tcxstrnew();
 	auto value = tcxstrnew();
+	
+	printf("Loading chunks");
 
 	while(true)
 	{
@@ -398,33 +407,26 @@ void GameMap::initialize_db()
 		ScopeDelete<Network::Chunk> pbuffer(new Network::Chunk());
 		pbuffer.ptr->ParseFromArray(tcxstrptr(value), tcxstrsize(value));
 		
-		assert(pbuffer.ptr->has_x());
-		assert(pbuffer.ptr->has_y());
-		assert(pbuffer.ptr->has_z());
-		assert(pbuffer.ptr->has_last_modified());
-		assert(pbuffer.ptr->has_data());
-		
 		ChunkID chunk_id(pbuffer.ptr->x(), pbuffer.ptr->y(), pbuffer.ptr->z());
-		
-		DEBUG_PRINTF("Loading chunk: %d,%d,%d\n", chunk_id.x, chunk_id.y, chunk_id.z);
-
 		
 		auto chunk_buffer = new ChunkBuffer();
 		chunk_buffer->parse_from_protocol_buffer(*pbuffer.ptr);
 		
 		accessor acc;
 		chunks.insert(acc, make_pair(chunk_id, chunk_buffer) );
+		
+		printf(".");
 	}
 	
 	tcxstrdel(key);
 	tcxstrdel(value);
 	
+	printf("Done!\n");
 	
-	//Worker thread
+	//Worker thread, this operates in the background and constantly writes updated chunks to the database
 	struct DBWorker
 	{
 		GameMap* game_map;
-		
 		
 		void operator()()
 		{
@@ -433,7 +435,7 @@ void GameMap::initialize_db()
 		
 			while(game_map->running)
 			{
-				write_set_t	pending;
+				write_set_t	pending(256);
 				{
 					spin_rw_mutex::scoped_lock L(game_map->write_set_lock, true);
 					pending.swap(game_map->pending_writes);
@@ -443,7 +445,7 @@ void GameMap::initialize_db()
 				{
 					auto key = iter->first;
 					
-					DEBUG_PRINTF("Serializing chunk: %d,%d,%d\n", key.x, key.y, key.z);
+					//DEBUG_PRINTF("Serializing chunk: %d,%d,%d\n", key.x, key.y, key.z);
 					
 					//Serialize the protocol buffer to an array
 					auto pbuffer = game_map->get_chunk_pbuffer(key);
@@ -489,7 +491,6 @@ void GameMap::mark_dirty(ChunkID const& chunk_id)
 	spin_rw_mutex::scoped_lock L(write_set_lock, false);
 	pending_writes.insert(make_pair(chunk_id, true));
 }
-
 
 
 };

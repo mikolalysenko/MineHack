@@ -11,7 +11,6 @@
 #define RECV_BUFFER_SIZE		0x10000
 #define SEND_BUFFER_SIZE		0x100000
 #define EPOLL_TIMEOUT			400
-#define SESSION_TIMEOUT			10000.0
 
 
 //Chunk dimensions
@@ -26,11 +25,14 @@
 #define CHUNK_SIZE				(CHUNK_X*CHUNK_Y*CHUNK_Z)
 
 
-
 //Coordinate origin
 #define ORIGIN_X				(1<<19)
 #define ORIGIN_Y				(1<<19)
 #define ORIGIN_Z				(1<<19)
+
+
+
+
 
 
 
