@@ -50,6 +50,7 @@ namespace Game
 		Config* config;
 		
 		//The game map
+		//When operating on surface chunks and chunks, must lock surface chunks first.
 		chunk_map_t chunks, surface_chunks;
 		
 		//Generates a surface chunk

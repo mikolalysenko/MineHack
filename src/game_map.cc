@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <stdint.h>
 
+#include <tbb/scalable_allocator.h>
 #include <tbb/concurrent_hash_map.h>
 
 #include "constants.h"
@@ -8,8 +9,18 @@
 #include "chunk.h"
 #include "game_map.h"
 
+
 using namespace tbb;
 using namespace std;
+
+#define MAP_DB_DEBUG 1
+
+#ifndef MAP_DB_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
 
 namespace Game
 {
@@ -143,39 +154,51 @@ void GameMap::get_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  i
 }
 
 //Generates a surface chunk and stores it in the cache
+//FIXME:  This would be more efficient if it directly operated on the compressed chunks. -Mik
 void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 {
-	const int stride_x = 3 * CHUNK_X;
-	const int stride_xz = 3 * stride_x * CHUNK_Z;
-		
+	DEBUG_PRINTF("Generating surface\n");
+
+	const static int stride_x  = 3 * CHUNK_X;
+	const static int stride_xz = 3 * stride_x * CHUNK_Z;
+	const static int delta[][3] =	//Lock order: y, z, x, low to high
+	{
+		{ 0,-1, 0},
+		{ 0, 0,-1},
+		{-1, 0, 0},
+		{ 0, 0, 0},
+		{ 1, 0, 0},
+		{ 0, 0, 1},
+		{ 0, 1, 0}
+	};
+	
 	//Lock the neighboring chunks and cache them
-	const_accessor chunks[3][3][3];
-	Block buffer[CHUNK_SIZE*3*3*3];
+	const_accessor chunks[7];
+	Block* buffer = (Block*)scalable_malloc(sizeof(Block)*CHUNK_SIZE*3*3*3);
 	uint64_t timestamp = 1;	
 
 	//Lock the surrounding buffers for reading, always use order y-z-x
-	for(int j=0; j<3; ++j)
-	for(int k=0; k<3; ++k)
-	for(int i=0; i<3; ++i)
+	for(int i=0; i<7; ++i)
 	{
-		get_chunk_buffer(chunks[i][j][k],
-						ChunkID(chunk_id.x-1+i,
-								chunk_id.y-1+j,
-								chunk_id.z-1+k));
+		get_chunk_buffer(chunks[i],
+						ChunkID(chunk_id.x+delta[i][0],
+								chunk_id.y+delta[i][1],
+								chunk_id.z+delta[i][2]));
 
-		int ix = i * CHUNK_X,
-			iy = j * CHUNK_Y,
-			iz = k * CHUNK_Z;
+		int ix = (delta[i][0]+1) * CHUNK_X,
+			iy = (delta[i][1]+1) * CHUNK_Y,
+			iz = (delta[i][2]+1) * CHUNK_Z;
 			
 		Block* ptr = buffer + ix + iz * stride_x + iy * stride_xz;
-		chunks[i][j][k]->second->decompress_chunk(ptr, stride_x, stride_xz);
-		timestamp = max(timestamp, chunks[i][j][k]->second->last_modified());
+		chunks[i]->second->decompress_chunk(ptr, stride_x, stride_xz);
+		timestamp = max(timestamp, chunks[i]->second->last_modified());
 	}
 	
 	//Traverse to find surface chunks
-	int i  = CHUNK_X + CHUNK_Z * stride_x + CHUNK_Y * stride_xz,
+	int i  = CHUNK_X + CHUNK_Z * stride_x + CHUNK_Y * stride_xz;
+	const int
 		dy = stride_xz - CHUNK_Z*stride_x,
-		dz = stride_x - CHUNK_X,
+		dz = stride_x  - CHUNK_X,
 		dx = 1;
 		
 	bool empty = true;
@@ -184,6 +207,10 @@ void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 	for(int z=0; z<CHUNK_Z; ++z, i+=dz)
 	for(int x=0; x<CHUNK_X; ++x, i+=dx)
 	{
+		assert(i == (CHUNK_X + x) +
+					(CHUNK_Z + z) * stride_x +
+					(CHUNK_Y + y) * stride_xz );
+	
 		if( buffer[i].transparent() ||
 			buffer[i-1].transparent() ||
 			buffer[i+1].transparent() ||
@@ -192,8 +219,19 @@ void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 			buffer[i-stride_xz].transparent() ||
 			buffer[i+stride_xz].transparent() )
 		{
-			if(buffer[i].type() != BlockType_Air)
+			if(empty && buffer[i].type() != BlockType_Air)
+			{
+			/*
+				DEBUG_PRINTF("Flagging non-empty, i:%d, cell: %d,%d,%d; value = %d, neighbors = %d,%d,%d,%d,%d,%d\n", i, x, y, z, buffer[i].int_val,
+					buffer[i-1].int_val,
+					buffer[i+1].int_val,
+					buffer[i-stride_x].int_val,
+					buffer[i+stride_x].int_val,
+					buffer[i-stride_xz].int_val,
+					buffer[i+stride_xz].int_val);
+			*/
 				empty = false;
+			}
 			continue;
 		}
 		
@@ -201,10 +239,21 @@ void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 	}
 	
 	//Construct the chunk buffer and save it
-	acc->second->compress_chunk(buffer, stride_x, stride_xz);
+	DEBUG_PRINTF("Creating surface chunk, timestamp = %ld, empty = %d\n", timestamp, empty);
+	
+	acc->second->compress_chunk(buffer + CHUNK_X + CHUNK_Z * stride_x + CHUNK_Y * stride_xz, stride_x, stride_xz);
 	acc->second->set_last_modified(timestamp);
 	acc->second->set_empty_surface(empty);
-	acc->second->cache_protocol_buffer_data();		//Eagerly cache protocol buffer
+	if(!empty)
+		acc->second->cache_protocol_buffer_data();
+	
+	//Release locks in reverse order
+	for(int i=6; i>=0; --i)
+	{
+		chunks[i].release();
+	}
+	
+	scalable_free(buffer);
 }
 
 
@@ -216,7 +265,9 @@ Network::ServerPacket* GameMap::get_net_chunk(ChunkID const& chunk_id, uint64_t 
 	get_surface_chunk_buffer(acc, chunk_id);
 	if(acc->second->last_modified() <= timestamp ||
 		acc->second->empty_surface() )
+	{
 		return NULL;
+	}
 
 	auto packet = new Network::ServerPacket();
 	auto chunk = packet->mutable_chunk_response();

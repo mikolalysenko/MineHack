@@ -89,8 +89,8 @@ void Config::resetDefaults()
 	//Login database defaults
 	storeString("login_db_path", "data/login.tc");
 	
-	//Performance metrics
-	storeInt("vis_radius", 3);
+	//Performance tweaks
+	storeInt("vis_radius", 16);
 }
 
 };

@@ -4,7 +4,9 @@
 #include <stdint.h>
 
 #include <map>
-#include <string>
+#include <vector>
+
+#include <tbb/tbb_allocator.h>
 
 #include "constants.h"
 #include "network.pb.h"
@@ -51,7 +53,7 @@ namespace Game
 		Block(uint8_t t, uint8_t* s) : int_val(t)
 		{
 			for(int i=1; i<=BLOCK_STATE_BYTES[t]; ++i)
-				int_val |= s[i] << (8*i);
+				int_val |= (uint32_t)s[i] << (8*i);
 		}
 		
 		Block(const Block& other)
@@ -130,6 +132,13 @@ namespace Game
 			return x == other.x && y == other.y && z == other.z;
 		}
 		
+		//Chunks must be locked wrt to this order: y-z-x, low to high.
+		bool operator<(const ChunkID& other) const
+		{
+			if(y != other.y)	return y < other.y;
+			if(z != other.z)	return z < other.z;
+			return x < other.x;
+		}
 	};
 	
 	//Hash comparison for chunk IDs
@@ -144,7 +153,7 @@ namespace Game
 	//A compressed chunk record
 	struct ChunkBuffer
 	{
-		ChunkBuffer() : timestamp(1) {}
+		ChunkBuffer() : is_empty(false), timestamp(1) {}
 	
 		//Block accessors
 		Block get_block(int x, int y, int z) const
@@ -178,11 +187,11 @@ namespace Game
 		uint64_t	timestamp;
 		
 		//The interval tree
-		typedef std::map<uint16_t, Block>	interval_tree_t;
+		typedef std::map<int, Block, std::less<int>, tbb::tbb_allocator< std::pair<const int, Block> > >	interval_tree_t;
 		interval_tree_t		intervals;
 		
 		//Protocol buffer data
-		std::string		pbuffer_data;
+		std::vector<uint8_t, tbb::tbb_allocator< uint8_t > >		pbuffer_data;
 	};	
 };
 

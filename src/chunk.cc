@@ -10,7 +10,7 @@
 using namespace std;
 using namespace tbb;
 
-#define CHUNK_DEBUG 1
+//#define CHUNK_DEBUG 1
 
 #ifndef CHUNK_DEBUG
 #define DEBUG_PRINTF(...)
@@ -237,13 +237,16 @@ bool ChunkBuffer::set_block(Block b, int x, int y, int z, uint64_t t)
 }
 
 //Chunk compression
-void ChunkBuffer::compress_chunk(Block* data_ptr, int stride_x, int stride_xz)
+void ChunkBuffer::compress_chunk(Block* data, int stride_x, int stride_xz)
 {
 	intervals.clear();
 	pbuffer_data.clear();
-
-	stride_xz -= stride_x * CHUNK_Z - 1;
-	stride_x  -= CHUNK_X - 1;
+	
+	auto data_ptr = data;
+	
+	const int dx = 1;
+	const int dy = stride_xz - (stride_x * (CHUNK_Z - 1) + CHUNK_X - 1);
+	const int dz = stride_x - (CHUNK_X - 1);
 	
 	for(int i = 0; i<CHUNK_SIZE; )
 	{
@@ -251,25 +254,41 @@ void ChunkBuffer::compress_chunk(Block* data_ptr, int stride_x, int stride_xz)
 		
 		intervals.insert(make_pair(i, cur));
 		
+		DEBUG_PRINTF("Compressing interval: s:%d, t:%d\n", i, cur.int_val);
+		
 		while(i<CHUNK_SIZE && *data_ptr == cur)
 		{
+		/*
+			DEBUG_PRINTF("i = %d, ptr = %d, offset = %d\n", i, (int)(data_ptr - data), (i%CHUNK_X) +
+				((i/CHUNK_X)%CHUNK_Z)*stride_x +
+				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
+		
+			assert((int)(data_ptr-data) ==
+				(i%CHUNK_X) +
+				((i/CHUNK_X)%CHUNK_Z)*stride_x +
+				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
+		*/
+		
 			++i;
 			if( i & (CHUNK_X - 1) )
-				data_ptr += 1;
+				data_ptr += dx;
 			else if( i & (CHUNK_X*CHUNK_Z - 1) )
-				data_ptr += stride_x;
+				data_ptr += dz;
 			else
-				data_ptr += stride_xz;
+				data_ptr += dy;
 		}
 	}
 }
 
 //Decompresses a chunk
-void ChunkBuffer::decompress_chunk(Block* data_ptr, int stride_x, int stride_xz) const
+void ChunkBuffer::decompress_chunk(Block* data, int stride_x, int stride_xz) const
 {
-	stride_xz -= stride_x * CHUNK_Z - 1;
-	stride_x  -= CHUNK_X - 1;
-
+	auto data_ptr = data;
+	
+	const int dx = 1;
+	const int dy = stride_xz - (stride_x * (CHUNK_Z - 1) + CHUNK_X - 1);
+	const int dz = stride_x - (CHUNK_X - 1);
+	
 	int i = 0;
 	for(auto iter = intervals.begin(); iter != intervals.end(); )
 	{
@@ -280,19 +299,30 @@ void ChunkBuffer::decompress_chunk(Block* data_ptr, int stride_x, int stride_xz)
 			right = iter->first;
 		}
 	
-		DEBUG_PRINTF("Decompressing interval: %d--%d\n", i, right);
+		DEBUG_PRINTF("Decompressing interval: %d--%d, t:%d\n", i, right, block.int_val);
 	
 		while(i < right)
 		{
+		/*
+			DEBUG_PRINTF("i = %d, ptr = %d, offset = %d\n", i, (int)(data_ptr - data), (i%CHUNK_X) +
+				((i/CHUNK_X)%CHUNK_Z)*stride_x +
+				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
+		
+			assert((int)(data_ptr-data) ==
+				(i%CHUNK_X) +
+				((i/CHUNK_X)%CHUNK_Z)*stride_x +
+				((i/(CHUNK_X*CHUNK_Z))*stride_xz));
+		*/
+		
 			*data_ptr = block;
 		
 			++i;
 			if( i & (CHUNK_X - 1) )
-				data_ptr += 1;
+				data_ptr += dx;
 			else if( i & (CHUNK_X*CHUNK_Z - 1) )
-				data_ptr += stride_x;
+				data_ptr += dz;
 			else
-				data_ptr += stride_xz;
+				data_ptr += dy;
 		}
 	}
 }
@@ -340,7 +370,7 @@ bool ChunkBuffer::serialize_to_protocol_buffer(Network::Chunk& c) const
 		return false;
 
 	c.set_last_modified(timestamp);
-	c.set_data(pbuffer_data);
+	c.set_data(&pbuffer_data[0], pbuffer_data.size());
 	return true;
 }
 
@@ -353,7 +383,7 @@ void ChunkBuffer::parse_from_protocol_buffer(Network::Chunk const& c)
 	//Unpack fields from protocol buffer
 	if(c.has_last_modified())
 		timestamp = c.last_modified();
-	pbuffer_data = c.data();
+	pbuffer_data.assign(c.data().begin(), c.data().end());
 	intervals.clear();
 
 	//Unpack the ranges

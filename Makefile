@@ -38,7 +38,7 @@ protodir = proto
 INC_PATH = -I$(srcdir) -I/usr/local/include
 
 # libraries link options ('-lm' is common to link with the math library)
-LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -ltbb -pthread -ldl -lm -lc 
+LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -ltbb -ltbbmalloc -pthread -ldl -lm -lc 
 
 # other compilation options
 COMPILE_OPTS = -pthread -msse2 -Wno-deprecated

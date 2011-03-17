@@ -290,6 +290,7 @@ void World::send_chunk_updates(Session* session)
 			auto packet = game_map->get_net_chunk(chunk_id, last_seen);
 			if(packet != NULL)
 			{
+				DEBUG_PRINTF("Transmitting chunk %d,%d,%d\n", chunk_id.x, chunk_id.y, chunk_id.z);
 				session->known_chunks.insert(make_pair(chunk_id, packet->chunk_response().last_modified()));
 				session->map_socket->send_packet(packet);
 			}
