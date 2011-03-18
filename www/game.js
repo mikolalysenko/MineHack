@@ -301,6 +301,8 @@ var Game =
 	draw : function()
 	{
 		var gl = Game.gl;
+
+		//Wait for any asynchronous rendering commands to complete (ie shadow map updates)
 		
 		gl.viewport(0, 0, Game.width, Game.height);
 		gl.clear(gl.DEPTH_BUFFER_BIT);
@@ -319,6 +321,7 @@ var Game =
 			Shadows.shadow_maps[0].draw_debug();
 		
 		gl.flush();
+		gl.finish();
 	},
 	
 	//Update the shadow maps
@@ -330,6 +333,8 @@ var Game =
 			Map.draw_shadows(Shadows.shadow_maps[i]);	
 			Shadows.shadow_maps[i].end();
 		}
+		Game.gl.flush();
+		Game.gl.finish();
 	}
 };
 

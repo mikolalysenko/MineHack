@@ -13,8 +13,9 @@ var Player =
 		68 : "right",
 		32 : "jump",
 		67 : "crouch",
-		66 : "dig",
-		84 : "chat"
+		84 : "chat",
+		
+		500 : "use"
 	},
 	
 	//Input state
@@ -25,8 +26,9 @@ var Player =
 		"right" : 0,
 		"jump" : 0,
 		"crouch" : 0,
-		"dig" : 0,
-		"chat" : 0
+		"chat" : 0,
+		
+		"use" : 0
 	},
 	
 	//Mouse delta
@@ -48,9 +50,6 @@ var Player =
 	{
 		document.onkeyup = function(event)
 		{
-			if(Player.in_chat)
-				return true;
-		
 			var ev = Player.keys[event.keyCode];
 			if(ev)
 			{
@@ -70,6 +69,15 @@ var Player =
 				Player.input[ev] = 1;
 			}
 			return false;
+		};
+		
+		document.onblur = function(event)
+		{
+			for(var i in Player.input)
+			{
+				Player.input[i] = 0;
+			}
+			return true;
 		};
 	
 		var body = document.getElementById("docBody");
@@ -91,17 +99,24 @@ var Player =
 		{
 			if(Player.in_chat)
 				return true;
-			Player.input["dig"] = 1;
+			Player.input["use"] = 1;
 			return false;
-		}
+		};
 	
 		body.onmouseup = function(event)
 		{
-			if(Player.in_chat)
-				return true;
-			Player.input["dig"] = 0;
+			Player.input["use"] = 0;
 			return false;
-		}
+		};
+		
+		body.onblur = function(event)
+		{
+			for(var i in Player.input)
+			{
+				Player.input[i] = 0;
+			}
+			return true;
+		};
 	},
 	
 	shutdown : function()
@@ -220,7 +235,7 @@ var Player =
 
 		Player.set_orientation(orientation);
 
-		if(Player.input["dig"] == 1)
+		if(Player.input["use"] == 1)
 		{
 			var R = Player.eye_ray();
 		
@@ -235,7 +250,7 @@ var Player =
 							Math.round(hit_rec[1]), 
 							Math.round(hit_rec[2]) ];
 
-				//FIXME:  This will need to get updated		
+				//FIXME:  This will need to get updated
 			}
 		}
 	},
