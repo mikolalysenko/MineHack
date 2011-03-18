@@ -148,25 +148,285 @@ Block GameMap::get_block(int x, int y, int z)
 }
 
 //Sets a block in the map
+// This gets complicated -- Mik
+// FIXME: Untested
 bool GameMap::set_block(Block b, int x, int y, int z, uint64_t t)
 {
+	int cx = x % CHUNK_X,
+		cy = y % CHUNK_Y,
+		cz = z % CHUNK_Z;
+
 	ChunkID chunk_id(x/CHUNK_X, y/CHUNK_Y, z/CHUNK_Z);
 
-	//FIXME: Lock surface chunks only if t is a transparent block
-
-	//Update chunk
-	accessor acc;
-	get_chunk_buffer(acc, chunk_id);
-	if(acc->second->set_block(b, x%CHUNK_X, y%CHUNK_Y, z%CHUNK_Z, t))
+	//Lock the surface chunks
+	const static int delta[][3] =	//Lock order: y, z, x, low to high
 	{
-		return true;
+		{ 0,-1, 0},
+		{ 0, 0,-1},
+		{-1, 0, 0},
+		{ 0, 0, 0},
+		{ 1, 0, 0},
+		{ 0, 0, 1},
+		{ 0, 1, 0}
+	};
+	
+	//First, need to lock surface accessors
+	accessor surface_acc[7];
+	if(cy == 0)
+	{
+		get_surface_chunk_buffer(surface_acc[0], 
+			ChunkID(chunk_id.x,
+					chunk_id.y-1,
+					chunk_id.z));
+	}
+
+	if(cz == 0)	
+	{
+		get_surface_chunk_buffer(surface_acc[1], 
+			ChunkID(chunk_id.x,
+					chunk_id.y,
+					chunk_id.z-1));
+	}
+
+	if(cx == 0)	
+	{
+		get_surface_chunk_buffer(surface_acc[2], 
+			ChunkID(chunk_id.x-1,
+					chunk_id.y,
+					chunk_id.z));
+	}
+
+	get_surface_chunk_buffer(surface_acc[3], chunk_id);
+
+	if(cx == CHUNK_X-1)	
+	{
+		get_surface_chunk_buffer(surface_acc[4], 
+			ChunkID(chunk_id.x+1,
+					chunk_id.y,
+					chunk_id.z));
+	}
+
+	if(cz == CHUNK_Z-1)
+	{
+		get_surface_chunk_buffer(surface_acc[5], 
+			ChunkID(chunk_id.x,
+					chunk_id.y,
+					chunk_id.z+1));
+	}
+
+	if(cy == CHUNK_Y-1)
+	{
+		get_surface_chunk_buffer(surface_acc[6], 
+			ChunkID(chunk_id.x,
+					chunk_id.y+1,
+					chunk_id.z));
 	}
 	
-	mark_dirty(chunk_id);
+
+	//Case:  Update a transparent block
+	if(b.transparent())
+	{
+		//Next: Lock the chunk accessors in order
+		const_accessor chunk_acc[7];
+		accessor	center_acc;
 	
-	//FIXME: Update surface chunks here
+		if(cy == 0)
+		{
+			get_chunk_buffer(chunk_acc[0], 
+				ChunkID(chunk_id.x,
+						chunk_id.y-1,
+						chunk_id.z));
+		}
 	
-	return false;
+		if(cz == 0)	
+		{
+			get_chunk_buffer(chunk_acc[1], 
+				ChunkID(chunk_id.x,
+						chunk_id.y,
+						chunk_id.z-1));
+		}
+	
+		if(cx == 0)	
+		{
+			get_chunk_buffer(chunk_acc[2], 
+				ChunkID(chunk_id.x-1,
+						chunk_id.y,
+						chunk_id.z));
+		}
+	
+		//Set the block
+		get_chunk_buffer(center_acc, chunk_id);
+		auto prev = center_acc->second->get_block(cx, cy, cz);
+		if(!center_acc->second->set_block(b, cx, cy, cz, t))
+		{
+			return false;
+		}
+		mark_dirty(chunk_id);
+		if(prev.transparent())
+		{
+			surface_acc[3]->second->set_block(b, cx, cy, cz, t);
+			return true;
+		}
+
+
+		if(cx == CHUNK_X-1)	
+		{
+			get_chunk_buffer(chunk_acc[4], 
+				ChunkID(chunk_id.x+1,
+						chunk_id.y,
+						chunk_id.z));
+		}
+
+		if(cz == CHUNK_Z-1)
+		{
+			get_chunk_buffer(chunk_acc[5], 
+				ChunkID(chunk_id.x,
+						chunk_id.y,
+						chunk_id.z+1));
+		}
+	
+		if(cy == CHUNK_Y-1)
+		{
+			get_chunk_buffer(chunk_acc[6], 
+				ChunkID(chunk_id.x,
+						chunk_id.y+1,
+						chunk_id.z));
+		}
+		
+		
+		//Normal case:: Update the surface blocks
+		for(int i=0; i<7; ++i)
+		{
+			int nx = cx + delta[i][0],
+				ny = cy + delta[i][1],
+				nz = cz + delta[i][2];
+			
+			if( 0 <= nx || nx < CHUNK_X ||
+			 	0 <= ny || ny < CHUNK_Y ||
+				0 <= nz || nz < CHUNK_Z )
+			{
+				surface_acc[3]->second->set_block(
+					center_acc->second->get_block(nx, ny, nz),
+					nx, ny, nz, t);
+			}
+			else
+			{
+				nx = (nx + CHUNK_X) % CHUNK_X;
+				ny = (ny + CHUNK_Y) % CHUNK_Y;
+				nz = (nz + CHUNK_Z) % CHUNK_Z;
+				surface_acc[i]->second->set_block(
+					chunk_acc[i]->second->get_block(nx, ny, nz),
+					nx, ny, nz, t);
+			}
+		}
+		
+		return true;
+	}
+
+	//Hard case:  Update a non-transparent block, requires more locking potentially because we need to search neighborhoods to check visibility
+	
+	const_accessor chunk_acc[3][3][3];
+	accessor	center_acc;
+	
+	for(int dy=-1; dy<=1; ++dy)
+	for(int dz=-1; dz<=1; ++dz)
+	for(int dx=-1; dx<=1; ++dx)
+	{
+		if(dx == 0 && dy == 0 && dz == 0)
+		{
+			get_chunk_buffer(center_acc, chunk_id);
+			auto prev = center_acc->second->get_block(cx, cy, cz);
+			if(!center_acc->second->set_block(b, cx, cy, cz, t))
+			{
+				return false;
+			}
+			mark_dirty(chunk_id);
+			if(!prev.transparent())
+				return true;
+		}
+		else
+		{
+			int nx = cx + dx,
+				ny = cy + dy,
+				nz = cz + dz;
+			
+			if( 0 <= nx || nx < CHUNK_X ||
+			 	0 <= ny || ny < CHUNK_Y ||
+				0 <= nz || nz < CHUNK_Z )
+			{
+				continue;
+			}
+			
+			get_chunk_buffer(chunk_acc[dx+1][dy+1][dz+1],
+				ChunkID(chunk_id.x+dx,
+						chunk_id.y+dy,
+						chunk_id.z+dz));
+		}
+	}
+	
+	//Mark the block on the surface
+	surface_acc[3]->second->set_block(b, cx, cy, cz, t);
+	
+	//Block was *not* transparent, need to hide any cells that got covered up
+	for(int i=0; i<7; ++i)
+	{
+		if(i == 3)
+			continue;
+	
+		//Check if visible, if so then we don't need to lock
+		bool visible = false;
+		for(int j=0; j<7; ++j)
+		{
+			int vx = x + delta[i][0] + delta[j][0],
+				vy = y + delta[i][1] + delta[j][1],
+				vz = z + delta[i][2] + delta[j][2];
+			
+			int dx = (vx/CHUNK_X) - chunk_id.x + 1,
+				dy = (vy/CHUNK_Y) - chunk_id.y + 1,
+				dz = (vz/CHUNK_Z) - chunk_id.z + 1,
+				kx = vx%CHUNK_X,
+				ky = vy%CHUNK_Y,
+				kz = vz%CHUNK_Z;
+				
+			if(dx == 1 && dy == 1 && dz == 1)
+			{
+				if(center_acc->second->get_block(kx,ky,kz).transparent())
+				{
+					visible = true;
+					break;
+				}	
+			}
+			else if(chunk_acc[dx][dy][dz]->second->get_block(kx,ky,kz).transparent())
+			{
+				visible = true;
+				break;
+			}
+		}
+		if(visible)
+			continue;
+		
+		//Block got hidden, so replace it with stone in the surface chunk
+		int tx = cx + delta[i][0],
+			ty = cy + delta[i][1],
+			tz = cz + delta[i][2];
+		
+		if( 0 <= tx || tx < CHUNK_X ||
+		 	0 <= ty || ty < CHUNK_Y ||
+			0 <= tz || tz < CHUNK_Z )
+		{
+			surface_acc[3]->second->set_block(Block(BlockType_Stone), tx, ty, tz, t);
+		}
+		else
+		{
+			tx = (tx + CHUNK_X) % CHUNK_X;
+			ty = (ty + CHUNK_Y) % CHUNK_Y;
+			tz = (tz + CHUNK_Z) % CHUNK_Z;
+			
+			surface_acc[i]->second->set_block(Block(BlockType_Stone), tx, ty, tz, t);
+		}
+	}
+	
+	return true;
 }
 
 //-------------------------------------------------------------------

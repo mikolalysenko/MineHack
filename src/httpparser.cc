@@ -295,9 +295,10 @@ int hex_to_num(uint8_t c)
 }
 
 //Generates a websocket handshake reply
-bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size)
+bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size, string const& origin)
 {
-	int header_size = sprintf(buf, DEFAULT_WEBSOCKET_HEADER, ORIGIN, ORIGIN, request.url.c_str());
+
+	int header_size = sprintf(buf, DEFAULT_WEBSOCKET_HEADER, origin.c_str(), origin.c_str(), request.url.c_str());
 	*size = 16 + header_size;
 
 	//Compute the request hash for each private key

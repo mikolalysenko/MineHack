@@ -86,6 +86,7 @@ void Config::resetDefaults()
 	//HttpServer defaults
 	storeString("wwwroot", "www");
 	storeInt("listenport", 8081);
+	storeString("origin", "127.0.0.1:8081");
 	
 	//Database paths
 	storeString("login_db_path", "data/login.tch");

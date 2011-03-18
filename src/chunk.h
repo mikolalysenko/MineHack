@@ -32,9 +32,11 @@ namespace Game
 	};
 	
 	//The transparency data for a block type
+	//FIXME: Replace this with a simple rule
 	extern const bool BLOCK_TRANSPARENCY[];
 
 	//Number of state bytes per block
+	//FIXME: Replace this with a bit flag...
 	extern const int BLOCK_STATE_BYTES[];
 
 	//A block object (ie one voxel inside the map)

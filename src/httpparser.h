@@ -49,7 +49,7 @@ namespace Game
 	HttpResponse http_serialize_protobuf(Network::ServerPacket* message);
 	
 	//Generates a web socket handshake accept
-	bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size);
+	bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size, std::string const& origin);
 	
 	//Caches a directory
 	void cache_directory(tbb::concurrent_hash_map<std::string, HttpResponse>& cache, std::string const& wwwroot);
