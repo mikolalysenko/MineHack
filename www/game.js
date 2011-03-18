@@ -333,8 +333,6 @@ var Game =
 			Map.draw_shadows(Shadows.shadow_maps[i]);	
 			Shadows.shadow_maps[i].end();
 		}
-		Game.gl.flush();
-		Game.gl.finish();
 	}
 };
 
