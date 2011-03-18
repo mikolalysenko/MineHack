@@ -1,7 +1,7 @@
 //Rates for the different game intervals
 const GAME_TICK_RATE		= 20;
 const GAME_DRAW_RATE		= 40;
-const GAME_SHADOW_RATE		= 80;
+const GAME_SHADOW_RATE		= 100;
 const GAME_NET_UPDATE_RATE	= 200;
 
 

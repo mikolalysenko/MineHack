@@ -41,6 +41,8 @@ var Game =
 	//Update worker
 	update_worker : null,
 	
+	pchunk : [0, 0, 0],
+	
 	//Used for debugging
 	show_shadows : false,
 	
@@ -301,8 +303,18 @@ var Game =
 	draw : function()
 	{
 		var gl = Game.gl;
-
-		//Wait for any asynchronous rendering commands to complete (ie shadow map updates)
+		
+		var chunk = Player.chunk();
+		
+		//Check if we need to force a shadow map update
+		//FIXME: The correct way to fix this should be to have the light map shader store the chunk...
+		if( Game.pchunk[0] != chunk[0] || 
+			Game.pchunk[1] != chunk[1] ||
+			Game.pchunk[2] != chunk[2] )
+		{
+			Game.pchunk = chunk;
+			Game.update_shadows();
+		}
 		
 		gl.viewport(0, 0, Game.width, Game.height);
 		gl.clear(gl.DEPTH_BUFFER_BIT);
@@ -321,7 +333,6 @@ var Game =
 			Shadows.shadow_maps[0].draw_debug();
 		
 		gl.flush();
-		gl.finish();
 	},
 	
 	//Update the shadow maps

@@ -247,7 +247,6 @@ ShadowMap.prototype.end = function()
 	gl.disable(gl.DEPTH_TEST);
 	gl.enable(gl.TEXTURE_2D);
 	
-	
 	if(this.radius > 0)
 	{
 		//Need to reset texture parameters since these get cleared when we render (stupid)
@@ -275,7 +274,7 @@ ShadowMap.prototype.end = function()
 
 		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 	}
-	
+		
 	//Unbind fbo
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
