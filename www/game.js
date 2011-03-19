@@ -312,6 +312,7 @@ var Game =
 			Game.pchunk[1] != chunk[1] ||
 			Game.pchunk[2] != chunk[2] )
 		{
+			Map.update_active_chunks();
 			Game.pchunk = chunk;
 			Game.update_shadows();
 		}

@@ -158,22 +158,18 @@ Map.draw = function()
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
 
 	//Draw chunks
-	for(c in Map.index)
+	for(i=0; i<Map.active_chunks.length; ++i)
 	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
+		Map.index[Map.active_chunks[i]].draw(gl, camera, base_chunk, Map.chunk_shader, false);
 	}
 
 	//Draw transparent chunks	
 	gl.enable(gl.BLEND);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.depthMask(0);
-	for(c in Map.index)
+	for(i=0; i<Map.active_chunks.length; ++i)
 	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
+		Map.index[Map.active_chunks[i]].draw(gl, camera, base_chunk, Map.chunk_shader, true);
 	}
 	gl.depthMask(1);
 
@@ -184,11 +180,13 @@ Map.draw = function()
 		gl.bindTexture(gl.TEXTURE_2D, null);
 	}	
 
+/*
 	//Disable attributes
 	gl.disableVertexAttribArray(Map.chunk_shader.pos_attr);
 	gl.disableVertexAttribArray(Map.chunk_shader.tc_attr);
 	gl.disableVertexAttribArray(Map.chunk_shader.norm_attr);
 	gl.disableVertexAttribArray(Map.chunk_shader.light_attr);
+*/
 
 	//Optional: draw debug information for visibility query
 	if(Map.show_debug)
@@ -200,14 +198,12 @@ Map.draw = function()
 //Draws the map for a shadow shader
 Map.draw_shadows = function(shadow_map)
 {
-	var gl = Game.gl, c, chunk, base_chunk = Player.chunk();
+	var gl = Game.gl, i, base_chunk = Player.chunk();
 
 	//Draw regular chunks
-	for(c in Map.index)
+	for(i=0; i<Map.active_chunks.length; ++i)
 	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, shadow_map.light_matrix, base_chunk, Shadows.shadow_shader, false);
+		Map.index[Map.active_chunks[i]].draw(gl, shadow_map.light_matrix, base_chunk, Shadows.shadow_shader, false);
 	}
 }
 
@@ -241,6 +237,14 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	if(!chunk)
 	{
 		chunk = Map.add_chunk(x, y, z);
+		
+		if( Math.abs(chunk.x - Game.pchunk[0]) <= 16 &&
+			Math.abs(chunk.y - Game.pchunk[1]) <= 16 &&
+			Math.abs(chunk.z - Game.pchunk[2]) <= 16 )
+		{
+			Map.active_chunks.push(x + ":" + y + ":" + z);
+		}
+		
 	}
 	
 	chunk.pending = false;
@@ -274,6 +278,24 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	}
 }
 
+Map.update_active_chunks = function()
+{
+	var c, chunk;
+	Map.active_chunks = [];
+	for(c in Map.index)
+	{
+		chunk = Map.index[c];
+		if((chunk instanceof Chunk) &&
+			Math.abs(chunk.x - Game.pchunk[0]) <= 16 &&
+			Math.abs(chunk.y - Game.pchunk[1]) <= 16 &&
+			Math.abs(chunk.z - Game.pchunk[2]) <= 16)
+		{
+			Map.active_chunks.push(c);
+		}
+	}
+}
+
+/*
 //Updates the chunk data
 Map.update_chunk = function(x, y, z, data)
 {
@@ -286,6 +308,7 @@ Map.update_chunk = function(x, y, z, data)
 	
 	chunk.data = data;
 }
+*/
 
 //Kills off a chunk
 Map.forget_chunk = function(str)
@@ -326,11 +349,13 @@ Map.init_worker = function()
 				}
 			break;
 
+/*
 			case EV_CHUNK_UPDATE:
 				Map.update_chunk(
 					ev.data.x, ev.data.y, ev.data.z, 
 					ev.data.data);
 			break;
+*/
 
 			case EV_PRINT:
 				console.log(ev.data.str);				

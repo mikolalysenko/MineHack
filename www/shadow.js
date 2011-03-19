@@ -240,7 +240,7 @@ ShadowMap.prototype.end = function()
 {
 	var gl = Game.gl;
 
-	gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);	
+	//gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);	
 	gl.disable(gl.POLYGON_OFFSET_FILL);
 	
 	gl.disable(gl.CULL_FACE);
