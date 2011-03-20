@@ -1,45 +1,7 @@
 "use strict";
 
 
-//Draws a chunk
-//
-// Convention:
-//
-//	Attrib 0 = position
-//	Attrib 1 = normal
-//	Attrib 2 = tex coord
-//	Attrib 3 = light map value
-//
-Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
-{
 
-	gl.uniform3f(shader.chunk_offset, 
-		(this.x-base_chunk[0])<<CHUNK_X_S, 
-		(this.y-base_chunk[1])<<CHUNK_Y_S, 
-		(this.z-base_chunk[2])<<CHUNK_Z_S);
-
-	//Bind buffers
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
-	if('pos_attr' in shader)
-		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
-	if('tc_attr' in shader)
-		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
-	if('norm_attr' in shader)
-		gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
-	if('light_attr' in shader)
-		gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
-
-	if(transp)
-	{
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
-		gl.drawElements(gl.TRIANGLES, this.num_transparent_elements, gl.UNSIGNED_SHORT, 0);
-	}
-	else
-	{
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
-		gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
-	}
-}
 
 //Start preloading the map
 Map.preload = function()
@@ -117,6 +79,7 @@ Map.init = function()
 Map.draw = function()
 {
 	var gl = Game.gl,
+		offset_uni = Map.chunk_shader.chunk_offset,
 		c, chunk, base_chunk = Player.chunk(), 
 		sun_dir = Sky.get_sun_dir(), 
 		sun_color = Sky.get_sun_color(),
@@ -164,7 +127,19 @@ Map.draw = function()
 		{
 			if(chunk.num_elements > 0)
 			{
-				chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
+				gl.uniform3f(offset_uni, 
+					(chunk.x-base_chunk[0])*CHUNK_X, 
+					(chunk.y-base_chunk[1])*CHUNK_Y, 
+					(chunk.z-base_chunk[2])*CHUNK_Z);
+
+				gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);
+				gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
+				gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
+				gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
+				gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
+
+				gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
+				gl.drawElements(gl.TRIANGLES, chunk.num_elements, gl.UNSIGNED_SHORT, 0);
 			}
 				
 			if(chunk.num_transparent_elements > 0)
@@ -181,7 +156,22 @@ Map.draw = function()
 	gl.depthMask(0);
 	for(i=0; i<trans_chunks.length; ++i)
 	{
-		trans_chunks[i].draw(gl, camera, base_chunk, Map.chunk_shader, true);
+		chunk = trans_chunks[i];
+		
+		gl.uniform3f(offset_uni, 
+			(chunk.x-base_chunk[0])*CHUNK_X, 
+			(chunk.y-base_chunk[1])*CHUNK_Y, 
+			(chunk.z-base_chunk[2])*CHUNK_Z);
+
+		gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);
+		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
+		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
+		gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
+		gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
+
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
+		gl.drawElements(gl.TRIANGLES, chunk.num_transparent_elements, gl.UNSIGNED_SHORT, 0);
+
 	}
 	gl.depthMask(1);
 
@@ -191,14 +181,6 @@ Map.draw = function()
 		gl.activeTexture(gl.TEXTURE0+i);
 		gl.bindTexture(gl.TEXTURE_2D, null);
 	}	
-
-/*
-	//Disable attributes
-	gl.disableVertexAttribArray(Map.chunk_shader.pos_attr);
-	gl.disableVertexAttribArray(Map.chunk_shader.tc_attr);
-	gl.disableVertexAttribArray(Map.chunk_shader.norm_attr);
-	gl.disableVertexAttribArray(Map.chunk_shader.light_attr);
-*/
 
 	//Optional: draw debug information for visibility query
 	if(Map.show_debug)
