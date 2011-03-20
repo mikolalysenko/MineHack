@@ -492,6 +492,8 @@ function unpack_chunk_buffer(pbuf)
 		chunk = Map.add_chunk(ox, oy, oz),
 		res = -1;
 		
+	chunk.data = new Array(CHUNK_SIZE);
+		
 	decompress_chunk(pbuf.data, chunk.data);
 		
 	//Handle any pending writes

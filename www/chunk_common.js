@@ -50,7 +50,7 @@ var Transparent =
 function Chunk(x, y, z)
 {
 	//Set chunk data
-	this.data = new Array(CHUNK_SIZE);
+	this.data = [];
 	
 	//Set position
 	this.x = x;

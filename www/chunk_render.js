@@ -1,8 +1,5 @@
 "use strict";
 
-
-
-
 //Start preloading the map
 Map.preload = function()
 {
@@ -192,7 +189,8 @@ Map.draw = function()
 //Draws the map for a shadow shader
 Map.draw_shadows = function(shadow_map)
 {
-	var gl = Game.gl, i, base_chunk = Player.chunk(), chunk;
+	var gl = Game.gl, i, base_chunk = Player.chunk(), chunk, 
+		offset_uni = Shadows.shadow_shader.chunk_offset;
 
 	//Draw regular chunks
 	for(i=0; i<Map.active_chunks.length; ++i)
@@ -204,7 +202,7 @@ Map.draw_shadows = function(shadow_map)
 					chunk.y - base_chunk[1], 
 					chunk.z - base_chunk[2]) )
 		{
-			gl.uniform3f(Shadows.shadow_shader.chunk_offset, 
+			gl.uniform3f(offset_uni, 
 				(chunk.x-base_chunk[0])*CHUNK_X, 
 				(chunk.y-base_chunk[1])*CHUNK_Y, 
 				(chunk.z-base_chunk[2])*CHUNK_Z);
