@@ -61,12 +61,10 @@ namespace Game
 		
 		//Player update stuff
 		void send_chunk_updates(Session* session, int);
+		void send_world_updates(Session* session);
 		
 		//Broadcasts a console message
 		void broadcast_message(std::string const& str);
-		
-		//Saves the state of the world.  When called, main world thread is blocked
-		void save_state();
 	};
 };
 

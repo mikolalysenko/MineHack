@@ -41,7 +41,7 @@ World::World(Config* cfg) : config(cfg)
 	running = false;
 	
 	//Restore tick count
-	ticks = config->readInt("tick_count");
+	ticks = config->readInt("ticks");
 	
 	session_manager = new SessionManager();
 	entity_db = new EntityDB(config);
@@ -158,7 +158,8 @@ void World::main_loop()
 		//FIXME: Update map physics in parallel
 	
 		//Iterate over the player set
-		double session_timeout = config->readFloat("session_timeout");
+		double session_timeout = config->readFloat("session_timeout"),
+				update_rate = config->readFloat("update_rate");
 		int visible_radius = config->readInt("visible_radius");
 		parallel_for(session_manager->sessions.range(), 
 			[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
@@ -172,6 +173,7 @@ void World::main_loop()
 			}
 			else if(session->state == SessionState_Pending)
 			{
+			
 				if(session->map_socket != NULL && session->update_socket != NULL)
 				{
 					session->state = SessionState_Active;
@@ -215,8 +217,9 @@ void World::main_loop()
 				else if(input_packet->has_chat_message())
 				{
 					//Broadcast chat message
+					DEBUG_PRINTF("Got a chat message\n");
 					ScopeFree escape_str(tcxmlescape(input_packet->chat_message().c_str()));
-					string chat_string = "<color='yellow'>" + session->player_name + "</color>: <color='white'>" + string((char*)escape_str.ptr) + "<br/>";
+					string chat_string = "<font color='yellow'>" + session->player_name + " :</font> <font color='white'>" + string((char*)escape_str.ptr) + "</font><br/>";
 					broadcast_message(chat_string);
 				}
 				
@@ -240,11 +243,21 @@ void World::main_loop()
 			
 			//Send chunk updates to player
 			send_chunk_updates(session, visible_radius);
+			
+			//Send game state updates to player
+			if((tick_count::now() - session->last_updated).seconds() > update_rate)
+			{
+				send_world_updates(session);
+				session->last_updated = tick_count::now();
+			}
 		});
 		
 		
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
+		
+		//Update tick counter in database
+		config->storeInt("ticks", ticks);
 	}
 	
 	session_manager->clear_all_sessions();
@@ -287,6 +300,16 @@ void World::send_chunk_updates(Session* session, int r)
 	});
 }
 
+//Sends world updates to the player
+void World::send_world_updates(Session* session)
+{
+	DEBUG_PRINTF("Updating player: %s\n", session->player_name.c_str());
+
+	auto packet = new Network::ServerPacket();
+	packet->mutable_world_update()->set_ticks(ticks);
+	session->update_socket->send_packet(packet);
+}
+
 //Broadcasts a chat message to all players
 void World::broadcast_message(std::string const& str)
 {
@@ -302,9 +325,5 @@ void World::broadcast_message(std::string const& str)
 	}
 }
 
-void World::save_state()
-{
-	//FIXME:  This is not yet implemented
-}
 
 };

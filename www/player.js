@@ -237,6 +237,9 @@ var Player =
 
 		if(Player.input["use"] == 1)
 		{
+		
+			//FIXME: Use a render target to do point picking instead
+		/*
 			var R = Player.eye_ray();
 		
 			var hit_rec = Map.trace_ray(
@@ -252,6 +255,19 @@ var Player =
 
 				//FIXME:  This will need to get updated
 			}
+		*/
+		
+			//FIXME: Need to trace a ray through the map
+			
+			var block = Player.position(),
+				packet = new Network.ClientPacket,
+				set_block = new Network.SetBlock;
+				
+			packet.set_block = set_block;
+			set_block.x = Math.floor(block[0]);
+			set_block.y = Math.floor(block[1]);
+			set_block.z = Math.floor(block[2]);
+			
 		}
 	},
 	

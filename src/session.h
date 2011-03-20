@@ -5,6 +5,8 @@
 #include <stdint.h>
 
 #include <tbb/tick_count.h>
+#include <tbb/atomic.h>
+#include <tbb/task.h>
 #include <tbb/spin_rw_mutex.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
@@ -37,7 +39,7 @@ namespace Game
 		//Basic session state information
 		SessionID			session_id;
 		SessionState		state;
-		tbb::tick_count		last_activity;
+		tbb::tick_count		last_activity, last_updated;
 	
 		//Player state/entity information
 		std::string			player_name;

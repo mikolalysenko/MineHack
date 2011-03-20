@@ -12,12 +12,6 @@
 //
 Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
 {
-	if(	this.pending || 
-		(transp && this.num_transparent_elements == 0) ||
-		(!transp && this.num_elements == 0) ||
-		!frustum_test(cam, this.x - base_chunk[0], this.y - base_chunk[1], this.z - base_chunk[2]) )
-		return;
-
 
 	gl.uniform3f(shader.chunk_offset, 
 		(this.x-base_chunk[0])<<CHUNK_X_S, 
@@ -158,18 +152,36 @@ Map.draw = function()
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
 
 	//Draw chunks
+	var trans_chunks = [];
 	for(i=0; i<Map.active_chunks.length; ++i)
 	{
-		Map.index[Map.active_chunks[i]].draw(gl, camera, base_chunk, Map.chunk_shader, false);
+		chunk = Map.index[Map.active_chunks[i]];
+		
+		if( frustum_test(camera, 
+					chunk.x - base_chunk[0], 
+					chunk.y - base_chunk[1], 
+					chunk.z - base_chunk[2]) )
+		{
+			if(chunk.num_elements > 0)
+			{
+				chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
+			}
+				
+			if(chunk.num_transparent_elements > 0)
+			{
+				trans_cunks.push(chunk);
+			}
+		}
 	}
 
-	//Draw transparent chunks	
+	//Draw transparent chunks
+	//FIXME:  Sort transparent chunks back to front maybe
 	gl.enable(gl.BLEND);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.depthMask(0);
-	for(i=0; i<Map.active_chunks.length; ++i)
+	for(i=0; i<trans_chunks.length; ++i)
 	{
-		Map.index[Map.active_chunks[i]].draw(gl, camera, base_chunk, Map.chunk_shader, true);
+		trans_chunks[i].draw(gl, camera, base_chunk, Map.chunk_shader, true);
 	}
 	gl.depthMask(1);
 
@@ -198,12 +210,28 @@ Map.draw = function()
 //Draws the map for a shadow shader
 Map.draw_shadows = function(shadow_map)
 {
-	var gl = Game.gl, i, base_chunk = Player.chunk();
+	var gl = Game.gl, i, base_chunk = Player.chunk(), chunk;
 
 	//Draw regular chunks
 	for(i=0; i<Map.active_chunks.length; ++i)
 	{
-		Map.index[Map.active_chunks[i]].draw(gl, shadow_map.light_matrix, base_chunk, Shadows.shadow_shader, false);
+		chunk = Map.index[Map.active_chunks[i]];
+		if(	chunk.num_elements > 0 &&
+			frustum_test(shadow_map.light_matrix, 
+					chunk.x - base_chunk[0], 
+					chunk.y - base_chunk[1], 
+					chunk.z - base_chunk[2]) )
+		{
+			gl.uniform3f(Shadows.shadow_shader.chunk_offset, 
+				(chunk.x-base_chunk[0])*CHUNK_X, 
+				(chunk.y-base_chunk[1])*CHUNK_Y, 
+				(chunk.z-base_chunk[2])*CHUNK_Z);
+
+			gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);
+			gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
+			gl.drawElements(gl.TRIANGLES, chunk.num_elements, gl.UNSIGNED_SHORT, 0);
+		}
 	}
 }
 
@@ -286,6 +314,7 @@ Map.update_active_chunks = function()
 	{
 		chunk = Map.index[c];
 		if((chunk instanceof Chunk) &&
+			!chunk.pending &&
 			Math.abs(chunk.x - Game.pchunk[0]) <= 16 &&
 			Math.abs(chunk.y - Game.pchunk[1]) <= 16 &&
 			Math.abs(chunk.z - Game.pchunk[2]) <= 16)

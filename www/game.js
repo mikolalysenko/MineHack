@@ -94,7 +94,7 @@ var Game =
 				break;
 
 				case EV_RECV:
-					recvProtoBuf(raw_to_pbuf(ev.data.raw));
+					Game.recvProtoBuf(raw_to_pbuf(ev.data.raw));
 				break;
 			
 				case EV_CRASH:
@@ -209,6 +209,10 @@ var Game =
 		if(pbuf.chat_message)
 		{
 			document.getElementById("chatLog").innerHTML += pbuf.chat_message;
+		}
+		else if(pbuf.world_update)
+		{
+			Game.net_ticks = pbuf.world_update.ticks.lsw;
 		}
 	},
 	

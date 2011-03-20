@@ -30,6 +30,7 @@ Session::Session(SessionID const& id, string const& name) :
 	session_id(id),
 	state(SessionState_Pending),
 	last_activity(tick_count::now()),
+	last_updated(tick_count::now()),
 	player_name(name),
 	update_socket(NULL),
 	map_socket(NULL)

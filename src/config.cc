@@ -16,7 +16,8 @@ Config::Config(std::string const& filename)
 	
 	tchdbsetmutex(config_db);
 	tchdbtune(config_db, 0, 4, 10, HDBTBZIP);
-	tchdbsetxmsiz(config_db, (1<<23));
+	tchdbsetcache(config_db, (1<<24));
+	tchdbsetxmsiz(config_db, (1<<24));
 	
 	//Open the map database
 	if(!tchdbopen(config_db, filename.c_str(), HDBOWRITER))
@@ -83,6 +84,9 @@ void Config::resetDefaults()
 {
 	tchdbvanish(config_db);
 	
+	//Default state variables
+	storeInt("ticks", 1);
+	
 	//HttpServer defaults
 	storeString("wwwroot", "www");
 	storeInt("listenport", 8081);
@@ -94,15 +98,16 @@ void Config::resetDefaults()
 	
 	//Performance tweaks
 	storeInt("visible_radius", 16);
+	storeFloat("update_rate", 0.125);
 	storeFloat("map_db_write_rate", 1.0);
 	storeFloat("session_timeout", 10000.0);
-	storeInt("num_chunk_buckets", (1<<20));
-	storeInt("num_surface_chunk_buckets", (1<<18));
-	storeInt("tc_map_buckets", (1<<20));
+	storeInt("num_chunk_buckets", (1<<25));
+	storeInt("num_surface_chunk_buckets", (1<<25));
+	storeInt("tc_map_buckets", (1<<25));
 	storeInt("tc_map_alignment", 4);
-	storeInt("tc_map_free_pool_size", 10);
-	storeInt("tc_map_cache_size", 0);
-	storeInt("tc_map_extra_memory", 300 * (1<<20));
+	storeInt("tc_map_free_pool_size", 15);
+	storeInt("tc_map_cache_size", 128 * (1<<20));
+	storeInt("tc_map_extra_memory", 512 * (1<<20));
 }
 
 };

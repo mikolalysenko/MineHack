@@ -108,8 +108,6 @@ function frustum_test(m, cx, cy, cz)
 }
 
 
-
-
 //Sets the block type and updates vertex buffers as needed
 Chunk.prototype.set_block = function(x, y, z, b)
 {
