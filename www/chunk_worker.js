@@ -30,7 +30,7 @@ var
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
 //	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
-	session_id = new Uint8Array(8),		 	 //Session ID key
+//	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
 	fetch_interval = null,					 //Interval timer for chunk fetch events
 	socket = null,							 //The websocket
@@ -500,40 +500,6 @@ function pack_buffer(cx, cy, cz)
 }
 
 
-/*
-
-//Decodes a run-length encoded chunk
-function decompress_chunk(buffer, offset)
-{
-	var i = 0, j, k = 0, l, b, c;
-	
-	while(i < CHUNK_SIZE)
-	{
-		//Decode size
-		l = 0;
-		for(j=0; j<32; j+=7)
-		{
-			c = buffer[k++];
-			l += (c & 0x7f) << j;
-			if(c < 0x80)
-				break;
-		}
-		
-		//Decode block (assume no state bits for now, this may get nasty later)
-		b = buffer[k++];
-		//FIXME: Blocks need to have state bits on the client too
-		
-		//Write block to stream
-		for(j=0; j<l; ++j)
-		{
-			data[i++] = b;
-		}
-	}
-}
-
-*/
-
-
 //Decodes a protocol buffer into an ordered list of runs
 function decode_pbuffer(buffer)
 {
@@ -558,6 +524,7 @@ function decode_pbuffer(buffer)
 	return res;
 }
 
+//Unpacks an incoming protocol buffer
 function unpack_chunk_buffer(pbuf)
 {
 	var ox = pbuf.x,
@@ -567,8 +534,6 @@ function unpack_chunk_buffer(pbuf)
 		res = -1;
 		
 	chunk.data = decode_pbuffer(pbuf.data);
-		
-//	decompress_chunk(pbuf.data, chunk.data);
 		
 	//Handle any pending writes
 	chunk.pending = false;
