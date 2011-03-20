@@ -98,7 +98,7 @@ var Game =
 		Game.update_socket = new WebSocket("ws://"+DOMAIN_NAME+"/update/"+
 			pad_hex(Session.session_id.msw)+
 			pad_hex(Session.session_id.lsw));
-		Game.update_socket.onmessage = function(ev) { Game.recvProtoBuf(raw_to_pbuf(ev.data)); }
+		Game.update_socket.onmessage = Game.recvProtoBuf;
 		Game.update_socket.onclose = Game.update_socket.onerror = function() {App.crash("Lost connection to server"); };
 		
 		return true;
@@ -195,9 +195,9 @@ var Game =
 		Game.update_socket.send(pbuf_to_raw(pbuf));
 	},
 	
-	recvProtoBuf : function(pbuf)
+	recvProtoBuf : function(ev)
 	{
-		//FIXME: Process protocol buffer from server here
+		var pbuf = raw_to_pbuf(ev.data));
 		
 		if(pbuf.chat_message)
 		{
