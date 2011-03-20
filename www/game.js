@@ -38,8 +38,9 @@ var Game =
 	shadow_interval : null,
 	net_update_interval : null,
 	
-	//Update worker
-	update_worker : null,
+	//Update socket
+	update_socket : null,
+	
 	
 	pchunk : [0, 0, 0],
 	
@@ -84,29 +85,21 @@ var Game =
 		Map.preload();
 		
 		//Start the update worker
-		Game.update_worker = new Worker("update_worker.js");
-		Game.update_worker.onmessage = function(ev)
+		function pad_hex(w)
+	{
+		var r = Number(w).toString(16);
+		while(r.length < 8)
 		{
-			switch(ev.data.type)
-			{
-				case EV_PRINT:
-					console.log(ev.data.str);				
-				break;
+			r = "0" + r;
+		}
+		return r;
+	}
 
-				case EV_RECV:
-					Game.recvProtoBuf(raw_to_pbuf(ev.data.raw));
-				break;
-			
-				case EV_CRASH:
-					//alert("Update thread crashed");
-					App.crash("Update socket error");
-				break;
-			}
-		};
-		Game.update_worker.postMessage({
-			type: EV_START, 
-			lsw: Session.session_id.lsw, 
-			msw: Session.session_id.msw});
+		Game.update_socket = new WebSocket("ws://"+DOMAIN_NAME+"/update/"+
+			pad_hex(Session.session_id.msw)+
+			pad_hex(Session.session_id.lsw));
+		Game.update_socket.onmessage = function(ev) { Game.recvProtoBuf(raw_to_pbuf(ev.data)); }
+		Game.update_socket.onclose = Game.update_socket.onerror = function() {App.crash("Lost connection to server"); };
 		
 		return true;
 	},
@@ -199,7 +192,7 @@ var Game =
 	
 	sendProtoBuf : function(pbuf)
 	{
-		Game.update_worker.postMessage({type:EV_SEND, raw:pbuf_to_raw(pbuf)});
+		Game.update_socket.send(pbuf_to_raw(pbuf));
 	},
 	
 	recvProtoBuf : function(pbuf)
