@@ -29,7 +29,7 @@ var
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
-	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
+//	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
 	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
 	fetch_interval = null,					 //Interval timer for chunk fetch events
@@ -419,43 +419,91 @@ function pack_buffer(cx, cy, cz)
 
 	var i, j, k, 
 		dx, dy, dz,
-		data_offset, buf_offset,
-		chunk, data;
+		step_x  = PACK_Z_STRIDE - CHUNK_X + 1,
+		step_xz = PACK_Y_STRIDE - (PACK_Z_STRIDE * (CHUNK_Z - 1) + CHUNK_X - 1)
+		
 
 	for(dz=-1; dz<=1; ++dz)
 	for(dy=-1; dy<=1; ++dy)
 	for(dx=-1; dx<=1; ++dx)
 	{
-		chunk = Map.lookup_chunk(cx+dx, cy+dy, cz+dz);
+		var chunk = Map.lookup_chunk(cx+dx, cy+dy, cz+dz),
+		
+			buf_offset  =
+				 (dx+1) * CHUNK_X +
+				((dy+1) * CHUNK_Y) * PACK_Y_STRIDE +
+				((dz+1) * CHUNK_Z) * PACK_Z_STRIDE;
+
 		if(chunk)
 		{
-			data = chunk.data;
+			var x = 0, y = 0, z = 0, data = chunk.data;
+			
+			for(i = 0; i<data.length; ++i)
+			{
+				var l = data[i][0],
+					b = data[i][1];
+	
+				for(j=0; j<l; ++j)
+				{
+					packed_buffer[buf_offset] = b;
+					if(++x < CHUNK_X)
+					{
+						++buf_offset;
+					}
+					else
+					{
+						x = 0;
+						if(++z < CHUNK_Z)
+						{
+							buf_offset += step_x;
+						}
+						else
+						{
+							z = 0;
+							++y;
+							buf_offset += step_xz;
+						}
+					}
+				}
+			}
 		}
 		else
 		{
-			data = empty_data;
-		}
-		
-		//Store result into packed buffer
-		data_offset = 0;
-		for(j=0; j<CHUNK_Y; ++j)
-		for(k=0; k<CHUNK_Z; ++k)
-		{
-			buf_offset  =
-					 (dx+1) * CHUNK_X +
-					((dy+1) * CHUNK_Y + j) * PACK_Y_STRIDE +
-					((dz+1) * CHUNK_Z + k) * PACK_Z_STRIDE;
-					
-			for(i=0; i<CHUNK_X; ++i)
-				packed_buffer[buf_offset++] = data[data_offset++];
+			//Zero out packed buffer
+			var x = 0, y = 0, z = 0;
+			
+			for(i=0; i<CHUNK_SIZE; ++i)
+			{
+				packed_buffer[buf_offset] = 0;
+				
+				if(++x < CHUNK_X)
+				{
+					++buf_offset;
+				}
+				else
+				{
+					x = 0;
+					if(++z < CHUNK_Z)
+					{
+						buf_offset += step_x;
+					}
+					else
+					{
+						z = 0;
+						++y;
+						buf_offset += step_xz;
+					}
+				}
+			}
 		}
 	}
 }
 
 
+/*
 
 //Decodes a run-length encoded chunk
-function decompress_chunk(buffer, data)
+function decompress_chunk(buffer, offset)
 {
 	var i = 0, j, k = 0, l, b, c;
 	
@@ -483,6 +531,32 @@ function decompress_chunk(buffer, data)
 	}
 }
 
+*/
+
+
+//Decodes a protocol buffer into an ordered list of runs
+function decode_pbuffer(buffer)
+{
+	var i=0, j, l, c, b, res = [];
+	while(i < buffer.length)
+	{
+		//Decode size
+		l = 0;
+		for(j=0; j<32; j+=7)
+		{
+			c = buffer[i++];
+			l += (c & 0x7f) << j;
+			if(c < 0x80)
+				break;
+		}
+		
+		//Decode block
+		b = buffer[i++];
+		
+		res.push( [l, b] );
+	}
+	return res;
+}
 
 function unpack_chunk_buffer(pbuf)
 {
@@ -492,9 +566,9 @@ function unpack_chunk_buffer(pbuf)
 		chunk = Map.add_chunk(ox, oy, oz),
 		res = -1;
 		
-	chunk.data = new Array(CHUNK_SIZE);
+	chunk.data = decode_pbuffer(pbuf.data);
 		
-	decompress_chunk(pbuf.data, chunk.data);
+//	decompress_chunk(pbuf.data, chunk.data);
 		
 	//Handle any pending writes
 	chunk.pending = false;
@@ -507,9 +581,6 @@ function unpack_chunk_buffer(pbuf)
 	set_dirty(chunk.x, chunk.y+1, chunk.z);
 	set_dirty(chunk.x, chunk.y, chunk.z-1);
 	set_dirty(chunk.x, chunk.y, chunk.z+1);
-
-	//Send result to main thread
-	//send_chunk(chunk);
 }
 
 //Marks a chunk as dirty
@@ -656,10 +727,12 @@ function worker_start(lsw, msw)
 	
 	//Send an initial protobuf containing the contents of the cache (maybe)
 
+/*
 	for(var i=0; i<CHUNK_SIZE; ++i)
 	{
 		empty_data[i] = 0;
 	}
+*/
 }
 
 
@@ -685,20 +758,6 @@ self.onmessage = function(ev)
 function send_vb(vbs)
 {
 	postMessage({ type: EV_VB_UPDATE, 'vbs':vbs });
-}
-
-//Sends a new chunk to the main thread
-function send_chunk(chunk)
-{
-	//Convert data to an array (bleh)
-	var tmp_data = new Array(CHUNK_SIZE), i;
-	for(i=0; i<CHUNK_SIZE; ++i)
-		tmp_data[i] = chunk.data[i];
-
-	postMessage({
-		type: EV_CHUNK_UPDATE,
-		x:chunk.x, y:chunk.y, z:chunk.z,
-		data: tmp_data });
 }
 
 //Removes a chunk from the database
