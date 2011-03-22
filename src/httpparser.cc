@@ -397,6 +397,12 @@ Network::ClientPacket* parse_ws_frame(char* buffer, int length)
 	}
 	DEBUG_PRINTF("\n");
 	#endif
+	
+	//Zero out end of buffer
+	for(int i=0; i<7; ++i)
+	{
+		buffer[length + i] = 0;
+	}
 		
 	auto data = (uint8_t*)buffer;
 	auto ptr  = (uint8_t*)decode_buffer.ptr;
@@ -428,9 +434,13 @@ Network::ClientPacket* parse_ws_frame(char* buffer, int length)
 	#endif
 
 	auto packet = new Network::ClientPacket();
-	!packet->ParseFromArray(decode_buffer.ptr, packet_length);
+	if(packet->ParseFromArray(decode_buffer.ptr, (ptr - (uint8_t*)decode_buffer.ptr)))
+	{
+		return packet;
+	}
 	
-	return packet;
+	delete packet;
+	return NULL;
 }
 
 //Serializes an output frame

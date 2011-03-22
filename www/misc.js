@@ -126,8 +126,8 @@ function pbuf_to_raw(pbuf)
 			w >>= 7;
 		}
 	}
-	
-	return raw.substr(0, Math.ceil(Math.floor(len * 8) / 7));
+	 
+	return raw.substr(0, Math.ceil(Math.floor(len * 8 + 6) / 7));
 }
 
 function raw_to_pbuf(raw)

@@ -296,7 +296,8 @@ void World::send_chunk_updates(Session* session, int r)
 	//Figure out which chunks are visible
 	ChunkID chunk(session->player_coord);
 	
-	//DEBUG_PRINTF("Player chunk = %d, %d, %d\n", chunk.x, chunk.y, chunk.z);
+	
+	DEBUG_PRINTF("Player chunk = %d, %d, %d\n", chunk.x, chunk.y, chunk.z);
 	
 	//Scan all chunks in visible radius
 	parallel_for(blocked_range3d<int,int,int>(

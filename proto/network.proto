@@ -18,9 +18,9 @@ message Chunk {
 //--------------------------------------------------------
 
 message PlayerUpdate {
-	optional double		x = 1;
-	optional double		y = 2;
-	optional double		z = 3;
+	optional uint32		x = 1;
+	optional uint32		y = 2;
+	optional uint32		z = 3;
 	
 	optional float		pitch	= 4;
 	optional float		yaw		= 5;

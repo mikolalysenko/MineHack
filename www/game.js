@@ -286,12 +286,9 @@ var Game =
 		
 		pbuf.player_update = new Network.PlayerUpdate;
 		
-		pbuf.player_update.x = pos[0];
-		pbuf.player_update.y = pos[1];
-		pbuf.player_update.z = pos[2];
-		pbuf.player_update.pitch = orient[0];
-		pbuf.player_update.yaw = orient[1];
-		pbuf.player_update.roll = orient[2];
+		pbuf.player_update.x = Math.round(pos[0]);
+		pbuf.player_update.y = Math.round(pos[1]);
+		pbuf.player_update.z = Math.round(pos[2]);
 		
 		Game.sendProtoBuf(pbuf);
 	},

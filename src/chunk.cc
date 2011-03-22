@@ -10,7 +10,7 @@
 using namespace std;
 using namespace tbb;
 
-#define CHUNK_DEBUG 1
+//#define CHUNK_DEBUG 1
 
 #ifndef CHUNK_DEBUG
 #define DEBUG_PRINTF(...)
@@ -398,10 +398,6 @@ bool ChunkBuffer::equals(interval_tree_t const& tree) const
 	
 	while( a != intervals.end() && b != intervals.end() )
 	{
-		DEBUG_PRINTF("Comparing intervals: (%d,%d) -- (%d,%d)\n",
-			a->first, a->second.int_val,
-			b->first, b->second.int_val);
-	
 		if( a->first  != b->first ||
 			a->second != b->second )
 		{

@@ -143,6 +143,8 @@ void GameMap::get_surface_chunk_buffer(const_accessor& acc, ChunkID const& chunk
 	{
 		acc.release();
 	
+		DEBUG_PRINTF("Chunk invalidated!!!!\n");
+	
 		accessor mut_acc;
 		if(surface_chunks.insert(mut_acc, chunk_id))
 		{
@@ -188,21 +190,7 @@ bool GameMap::update_chunk(ChunkID const& chunk_id, uint64_t t, Block* buffer, i
 		get_chunk_buffer(acc, chunk_id);
 	
 		ChunkBuffer::interval_tree_t prev(acc->second->interval_tree());
-		
-		for(auto iter=prev.begin(); iter != prev.end(); ++iter)
-		{
-			DEBUG_PRINTF("(%d,%d), ", iter->first, iter->second.int_val);
-		}
-		
 		acc->second->compress_chunk(buffer, stride_x, stride_xz);
-		
-		DEBUG_PRINTF("\nPost update: ");
-		for(auto iter=prev.begin(); iter != prev.end(); ++iter)
-		{
-			DEBUG_PRINTF("(%d,%d), ", iter->first, iter->second.int_val);
-		}
-		
-		DEBUG_PRINTF("\n");
 	
 		if(acc->second->equals(prev))
 		{
@@ -212,6 +200,8 @@ bool GameMap::update_chunk(ChunkID const& chunk_id, uint64_t t, Block* buffer, i
 		
 		acc->second->set_last_modified(t);
 	}
+	
+	DEBUG_PRINTF("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	
 	DEBUG_PRINTF("Chunk %d,%d,%d changed, invalidating surface\n", chunk_id.x, chunk_id.y, chunk_id.z);
 	
@@ -223,6 +213,12 @@ bool GameMap::update_chunk(ChunkID const& chunk_id, uint64_t t, Block* buffer, i
 	if(chunks.find(surface_acc, chunk_id))
 	{
 		surface_acc->second->invalidate();
+		
+		assert(surface_acc->second->invalidated());
+	}
+	else
+	{
+		DEBUG_PRINTF("no surface\n");
 	}
 	
 	return true;
@@ -320,6 +316,8 @@ void GameMap::generate_chunk(accessor& acc, ChunkID const& chunk_id)
 //FIXME:  This would be more efficient if it directly operated on the compressed chunks. -Mik
 void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 {
+	DEBUG_PRINTF("Generating surface chunk, %d,%d,%d\n", chunk_id.x, chunk_id.y, chunk_id.z);
+
 	const static int stride_x  = 3 * CHUNK_X;
 	const static int stride_xz = 3 * stride_x * CHUNK_Z;
 	const static int delta[][3] =	//Lock order: y, z, x, low to high

@@ -54,8 +54,9 @@ var Player =
 			if(ev)
 			{
 				Player.input[ev] = 0;
+				return false;
 			}
-			return false;
+			return true;
 		};
 	
 		document.onkeydown = function(event)
@@ -67,8 +68,9 @@ var Player =
 			if(ev)
 			{
 				Player.input[ev] = 1;
+				return false;
 			}
-			return false;
+			return true;
 		};
 		
 		document.onblur = function(event)
