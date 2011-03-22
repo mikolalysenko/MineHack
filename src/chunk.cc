@@ -390,4 +390,24 @@ void ChunkBuffer::parse_from_protocol_buffer(Network::Chunk const& c)
 	}
 }
 
+//Checks if the interval trees are equivalent
+bool ChunkBuffer::equals(interval_tree_t const& tree) const
+{
+	auto a = intervals.begin();
+	auto b = tree.begin();
+	
+	while( a != intervals.end() && b != intervals.end() )
+	{
+		if( a->first  != b->first ||
+			a->second != b->second )
+		{
+			return false;
+		}
+	}
+	
+	return
+		a == intervals.end() &&
+		b == tree.end();
+}
+
 };

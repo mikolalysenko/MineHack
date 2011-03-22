@@ -154,6 +154,8 @@ namespace Game
 	//A compressed chunk record
 	struct ChunkBuffer
 	{
+		typedef std::map<int, Block, std::less<int>, tbb::tbb_allocator< std::pair<const int, Block> > >	interval_tree_t;
+	
 		ChunkBuffer() : is_empty(false), timestamp(1) {}
 	
 		//Block accessors
@@ -180,6 +182,10 @@ namespace Game
 		bool empty_surface() const { return is_empty; }
 		bool set_empty_surface(bool b) { return is_empty = b; }
 		
+		//The internal representation of the interval tree
+		interval_tree_t interval_tree() const { return intervals; }
+		bool equals(interval_tree_t const& tree) const;
+		
 	private:
 		//For surface chunks, checks if the chunk is empty
 		bool is_empty;
@@ -188,7 +194,7 @@ namespace Game
 		uint64_t	timestamp;
 		
 		//The interval tree
-		typedef std::map<int, Block, std::less<int>, tbb::tbb_allocator< std::pair<const int, Block> > >	interval_tree_t;
+		
 		interval_tree_t		intervals;
 		
 		//Protocol buffer data

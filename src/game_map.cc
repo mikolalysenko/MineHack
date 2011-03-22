@@ -441,11 +441,38 @@ void GameMap::get_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  i
 	acc->second->decompress_chunk(buffer, stride_x, stride_xz);
 }
 
-
+//Updates a chunk
 bool GameMap::update_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  int stride_xz)
 {
-	//FIXME: Implement this
-	return false;
+	{
+		accessor acc;
+		get_chunk_buffer(acc, chunk_id);
+	
+		auto prev_tree = acc->second->interval_tree();
+		acc->second->compress_chunk(buffer, stride_x, stride_xz);
+	
+		if(acc->second->equals(prev_tree))
+		{
+			return false;
+		}
+	}
+	
+	//Invalidate surface chunks
+	for(int dy=-1; dy<=1; ++dy)
+	for(int dz=-1; dz<=1; ++dz)
+	for(int dx=-1; dx<=1; ++dx)
+	{
+		accessor surface_acc;
+		if(chunks.find(surface_acc, ChunkID(
+			chunk_id.x + dx,
+			chunk_id.y + dy,
+			chunk_id.z + dz)))
+		{
+			chunks.erase(surface_acc);
+		}
+	}
+	
+	return true;
 }
 
 
