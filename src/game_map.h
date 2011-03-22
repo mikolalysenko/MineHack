@@ -44,13 +44,19 @@ namespace Game
 		Block get_block(int x, int y, int z);
 		bool set_block(Block b, int x, int y, int z, uint64_t t);
 		
-		//Chunk copying methods
+		//Chunk update methods
 		void get_chunk(
 			ChunkID const&, 
 			Block* buffer, 
 			int stride_x = CHUNK_X, 
 			int stride_xz = CHUNK_X * CHUNK_Z);
-			
+		
+		bool update_chunk(
+			ChunkID const&,
+			Block* buffer,
+			int stride_x = CHUNK_X,
+			int stride_xz = CHUNK_X * CHUNK_Z);
+		
 		//Retrieves a chunk's protocol buffer
 		Network::Chunk* get_chunk_pbuffer(ChunkID const&);
 

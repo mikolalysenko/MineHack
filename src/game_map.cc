@@ -441,6 +441,14 @@ void GameMap::get_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  i
 	acc->second->decompress_chunk(buffer, stride_x, stride_xz);
 }
 
+
+bool GameMap::update_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  int stride_xz)
+{
+	//FIXME: Implement this
+	return false;
+}
+
+
 //Retrieves a chunk protocol buffer
 Network::Chunk* GameMap::get_chunk_pbuffer(ChunkID const& chunk_id)
 {

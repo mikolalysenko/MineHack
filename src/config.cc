@@ -101,13 +101,13 @@ void Config::resetDefaults()
 	storeFloat("update_rate", 0.125);
 	storeFloat("map_db_write_rate", 1.0);
 	storeFloat("session_timeout", 10000.0);
-	storeInt("num_chunk_buckets", (1<<25));
-	storeInt("num_surface_chunk_buckets", (1<<25));
-	storeInt("tc_map_buckets", (1<<25));
+	storeInt("num_chunk_buckets", (1<<20));
+	storeInt("num_surface_chunk_buckets", (1<<20));
+	storeInt("tc_map_buckets", (1<<20));
 	storeInt("tc_map_alignment", 4);
-	storeInt("tc_map_free_pool_size", 15);
-	storeInt("tc_map_cache_size", 128 * (1<<20));
-	storeInt("tc_map_extra_memory", 512 * (1<<20));
+	storeInt("tc_map_free_pool_size", 10);
+	storeInt("tc_map_cache_size", 10 * (1<<20));
+	storeInt("tc_map_extra_memory", 128 * (1<<20));
 }
 
 };
