@@ -155,14 +155,15 @@ void World::main_loop()
 	DEBUG_PRINTF("Starting world instance\n");
 	while(running)
 	{
+	
 		//Increment the global tick count
 		ticks += 16;
 		
 		//Spawn each of the main game tasks
 		task_group game_tasks;
 		
-		game_tasks.run([=](){ physics->update(); });
-		game_tasks.run([=](){ update_players(); });
+		game_tasks.run([&](){ physics->update(ticks); });
+		game_tasks.run([&](){ update_players(); });
 		
 		game_tasks.wait();
 		
@@ -185,7 +186,7 @@ void World::update_players()
 			update_rate = config->readFloat("update_rate");
 	int visible_radius = config->readInt("visible_radius");
 	parallel_for(session_manager->sessions.range(), 
-		[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
+		[&](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
 	{
 		auto session = sessions.begin()->second;
 
@@ -297,7 +298,7 @@ void World::send_chunk_updates(Session* session, int r)
 	parallel_for(blocked_range3d<int,int,int>(
 		chunk.x-r, chunk.x+r,
 		chunk.z-r, chunk.z+r,
-		chunk.y-r, chunk.y+r), [=](blocked_range3d<int,int,int> rng)
+		chunk.y-r, chunk.y+r), [&](blocked_range3d<int,int,int> rng)
 	{
 		for(auto iy = rng.cols().begin();  iy!=rng.cols().end();  ++iy)
 		for(auto iz = rng.rows().begin();  iz!=rng.rows().end();  ++iz)

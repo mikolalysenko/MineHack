@@ -6,7 +6,7 @@
 #include <tbb/task.h>
 #include <tbb/scalable_allocator.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <tbb/spin_rw_mutex.h>
+#include <tbb/queuing_rw_mutex.h>
 
 #include "constants.h"
 #include "config.h"
@@ -23,7 +23,7 @@ namespace Game
 		
 		void set_block(Block b, int x, int y, int z);
 		void mark_chunk(ChunkID const& chunk);	
-		void update();
+		void update(uint64_t t);
 	
 	private:
 
@@ -41,7 +41,7 @@ namespace Game
 		GameMap* game_map;
 
 		//The list of active chunks/block events
-		tbb::spin_rw_mutex	chunk_set_lock;
+		tbb::queuing_rw_mutex	chunk_set_lock;
 		chunk_set_t active_chunks;
 		block_list_t pending_blocks;
 	
@@ -59,7 +59,7 @@ namespace Game
 			int stride_x,
 			int stride_xz);
 	
-		void update_region(std::set<ChunkID> chunks, block_list_t blocks);
+		void update_region(uint64_t t, std::set<ChunkID> const& chunks, block_list_t const& blocks);
 	};
 };
 

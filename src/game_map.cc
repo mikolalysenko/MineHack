@@ -160,7 +160,7 @@ void GameMap::get_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  i
 }
 
 //Updates a chunk
-bool GameMap::update_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,  int stride_xz)
+bool GameMap::update_chunk(ChunkID const& chunk_id, uint64_t t, Block* buffer, int stride_x,  int stride_xz)
 {
 	{
 		accessor acc;
@@ -173,6 +173,8 @@ bool GameMap::update_chunk(ChunkID const& chunk_id, Block* buffer, int stride_x,
 		{
 			return false;
 		}
+		
+		acc->second->set_last_modified(t);
 	}
 	
 	//Invalidate surface chunks

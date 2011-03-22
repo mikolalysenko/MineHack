@@ -37,7 +37,7 @@ void Physics::set_block(Block b, int x, int y, int z)
 {
 	ChunkID chunk_id(x/CHUNK_X, y/CHUNK_Y, z/CHUNK_Z);
 
-	spin_rw_mutex::scoped_lock L(chunk_set_lock, false);
+	queuing_rw_mutex::scoped_lock L(chunk_set_lock, false);
 	active_chunks.insert(make_pair(chunk_id, true));
 	pending_blocks.push_back( (BlockRecord){x, y, z, b} );
 }
@@ -45,7 +45,7 @@ void Physics::set_block(Block b, int x, int y, int z)
 //Marks a chunk for update
 void Physics::mark_chunk(ChunkID const& c)
 {
-	spin_rw_mutex::scoped_lock L(chunk_set_lock, false);
+	queuing_rw_mutex::scoped_lock L(chunk_set_lock, false);
 	
 	for(int dx=-1; dx<=1; ++dx)
 	for(int dy=-1; dy<=1; ++dy)
@@ -57,12 +57,12 @@ void Physics::mark_chunk(ChunkID const& c)
 }
 
 //Updates a chunk
-void Physics::update()
+void Physics::update(uint64_t t)
 {
 	chunk_set_t chunks;
 	block_list_t blocks;
 	{
-		spin_rw_mutex::scoped_lock L(chunk_set_lock, true);
+		queuing_rw_mutex::scoped_lock L(chunk_set_lock, true);
 		chunks.swap(active_chunks);
 		blocks.swap(pending_blocks);
 	}
@@ -102,11 +102,11 @@ void Physics::update()
 	
 	//Update all regions in parallel
 	parallel_for( blocked_range<int>(0, regions.size(), 1), 
-		[=]( blocked_range<int> rng )
+		[&]( blocked_range<int> rng )
 	{
 		for(auto i = rng.begin(); i != rng.end(); ++i)
 		{
-			update_region( regions[i], blocks );
+			update_region( t, regions[i], blocks );
 		}
 	});
 	
@@ -181,7 +181,7 @@ void Physics::update_chunk(
 }
 
 //Updates a list of chunks
-void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
+void Physics::update_region(uint64_t t, set<ChunkID> const& marked_chunk_set, block_list_t const& blocks)
 {
 	uint32_t
 		x_min = (1<<30), y_min = (1<<30), z_min = (1<<30),
@@ -191,7 +191,7 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 	//Construct the offset chunk list
 	set<ChunkID> offset_chunk_set;
 	
-	DEBUG_PRINTF("Updating region: ");
+	DEBUG_PRINTF("Updating region: minst = %016x\n ", game_map);
 	
 	for(auto iter = marked_chunk_set.begin(); iter != marked_chunk_set.end(); ++iter)
 	{
@@ -219,6 +219,7 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 	
 	//Unpack the update chunk list
 	vector<ChunkID> chunks(offset_chunk_set.begin(), offset_chunk_set.end());
+	DEBUG_PRINTF("Chunks.size = %d\n", chunks.size());
 	
 	//Compute strides, need to pad by 1 in y dimension to avoid going oob
 	int stride_x = (x_max - x_min) * CHUNK_X,
@@ -230,11 +231,12 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 	auto back_buffer = (Block*)scalable_malloc(size * sizeof(Block));
 	
 	//Read chunks into memory
-	parallel_for( blocked_range<int>(0, chunks.size(), 5),
-		[=](blocked_range<int> rng)
+	parallel_for( blocked_range<int>(0, chunks.size()),
+		[&](blocked_range<int> rng)
 	{
 		for(auto i = rng.begin(); i != rng.end(); ++i)
 		{
+			DEBUG_PRINTF("Retrieving chunk %d; id=%d,%d,%d; minst = %016x\n", i, chunks[i].x, chunks[i].y, chunks[i].z, game_map);
 			game_map->get_chunk(chunks[i], front_buffer, stride_x, stride_xz);
 		}
 	});
@@ -267,7 +269,7 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 	{
 		DEBUG_PRINTF("Update, t = %d\n", t);
 		parallel_for( blocked_range<int>(0, chunks.size(), 1),
-			[=]( blocked_range<int> rng )
+			[&]( blocked_range<int> rng )
 		{
 			for(auto i = rng.begin(); i != rng.end(); ++i)
 			{
@@ -310,7 +312,7 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 					 (oy * CHUNK_Y + 1) * stride_xz;
 		
 		if(game_map->update_chunk(
-			c,
+			c, t,
 			back_buffer + offset,
 			stride_x,
 			stride_xz))

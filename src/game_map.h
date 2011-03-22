@@ -52,6 +52,7 @@ namespace Game
 		
 		bool update_chunk(
 			ChunkID const&,
+			uint64_t t,
 			Block* buffer,
 			int stride_x = CHUNK_X,
 			int stride_xz = CHUNK_X * CHUNK_Z);
