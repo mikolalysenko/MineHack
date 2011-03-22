@@ -34,6 +34,7 @@ namespace Game
 		};
 	
 		typedef tbb::concurrent_unordered_map<ChunkID, bool, ChunkIDHashCompare> chunk_set_t;
+		typedef std::set<ChunkID, std::less<ChunkID>, tbb::scalable_allocator<ChunkID> >  chunk_set_nl_t;
 		typedef std::vector< BlockRecord, tbb::scalable_allocator<BlockRecord> > block_list_t;
 
 		//Interface to separate sytems
@@ -59,7 +60,7 @@ namespace Game
 			int stride_x,
 			int stride_xz);
 	
-		void update_region(uint64_t t, std::set<ChunkID> const& chunks, block_list_t const& blocks);
+		void update_region(uint64_t t, chunk_set_nl_t const& chunks, block_list_t const& blocks);
 	};
 };
 

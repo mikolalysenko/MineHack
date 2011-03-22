@@ -156,7 +156,7 @@ namespace Game
 	{
 		typedef std::map<int, Block, std::less<int>, tbb::tbb_allocator< std::pair<const int, Block> > >	interval_tree_t;
 	
-		ChunkBuffer() : is_empty(false), timestamp(1) {}
+		ChunkBuffer() : is_empty(false), valid(false), timestamp(1) {}
 	
 		//Block accessors
 		Block get_block(int x, int y, int z) const
@@ -186,9 +186,13 @@ namespace Game
 		interval_tree_t interval_tree() const { return intervals; }
 		bool equals(interval_tree_t const& tree) const;
 		
+		void validate() { valid = true; }
+		void invalidate() { valid = false; }
+		bool invalidated() const { return !valid; }
+		
 	private:
 		//For surface chunks, checks if the chunk is empty
-		bool is_empty;
+		bool is_empty, valid;
 	
 		//Last time this chunk buffer was updated
 		uint64_t	timestamp;

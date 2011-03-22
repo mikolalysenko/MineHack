@@ -10,7 +10,7 @@
 using namespace std;
 using namespace tbb;
 
-//#define CHUNK_DEBUG 1
+#define CHUNK_DEBUG 1
 
 #ifndef CHUNK_DEBUG
 #define DEBUG_PRINTF(...)
@@ -255,7 +255,7 @@ void ChunkBuffer::compress_chunk(Block* data, int stride_x, int stride_xz)
 		
 		intervals.insert(make_pair(i, cur));
 		
-		DEBUG_PRINTF("Compressing interval: s:%d, t:%d\n", i, cur.int_val);
+		//DEBUG_PRINTF("Compressing interval: s:%d, t:%d\n", i, cur.int_val);
 		
 		while(i<CHUNK_SIZE && *data_ptr == cur)
 		{
@@ -289,7 +289,7 @@ void ChunkBuffer::decompress_chunk(Block* data, int stride_x, int stride_xz) con
 			right = iter->first;
 		}
 	
-		DEBUG_PRINTF("Decompressing interval: %d--%d, t:%d\n", i, right, block.int_val);
+		//DEBUG_PRINTF("Decompressing interval: %d--%d, t:%d\n", i, right, block.int_val);
 	
 		while(i < right)
 		{
@@ -398,11 +398,17 @@ bool ChunkBuffer::equals(interval_tree_t const& tree) const
 	
 	while( a != intervals.end() && b != intervals.end() )
 	{
+		DEBUG_PRINTF("Comparing intervals: (%d,%d) -- (%d,%d)\n",
+			a->first, a->second.int_val,
+			b->first, b->second.int_val);
+	
 		if( a->first  != b->first ||
 			a->second != b->second )
 		{
 			return false;
 		}
+		++a;
+		++b;
 	}
 	
 	return
