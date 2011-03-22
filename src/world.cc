@@ -245,13 +245,14 @@ void World::update_players()
 				string chat_string = "<font color='yellow'>" + session->player_name + " :</font> <font color='white'>" + string((char*)escape_str.ptr) + "</font><br/>";
 				broadcast_message(chat_string);
 			}
-			else if(input_packet->has_set_block())
+			else if(input_packet->has_block_update())
 			{
+				DEBUG_PRINTF("Updating block\n");
 				physics->set_block(
-					Block(input_packet->set_block().b()),
-					input_packet->set_block().x(),
-					input_packet->set_block().y(),
-					input_packet->set_block().z());
+					Block(input_packet->block_update().block()),
+					input_packet->block_update().x(),
+					input_packet->block_update().y(),
+					input_packet->block_update().z());
 			}
 			
 			active = true;

@@ -10,6 +10,15 @@
 #include "game_map.h"
 #include "physics.h"
 
+#define PHYSICS_DEBUG 1
+
+#ifndef PHYSICS_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
+
 using namespace std;
 using namespace tbb;
 
@@ -115,6 +124,13 @@ Block Physics::update_block(
 	Block back)		//+z
 {
 	//FIXME: Physics implementation goes here
+	
+	if( center.type() == BlockType_Air &&
+		top.type() == BlockType_Water )
+	{
+		return Block( BlockType_Water );
+	}
+	
 	return center;
 }
 
@@ -175,14 +191,18 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 	//Construct the offset chunk list
 	set<ChunkID> offset_chunk_set;
 	
+	DEBUG_PRINTF("Updating region: ");
+	
 	for(auto iter = marked_chunk_set.begin(); iter != marked_chunk_set.end(); ++iter)
 	{
+		DEBUG_PRINTF("(%d,%d,%d), ", iter->x, iter->y, iter->z);
+	
 		x_min = min(x_min, iter->x - 1);
-		x_max = max(x_max, iter->x + 1);
+		x_max = max(x_max, iter->x + 2);
 		y_min = min(y_min, iter->y - 1);
-		y_max = max(y_max, iter->y + 1);
+		y_max = max(y_max, iter->y + 2);
 		z_min = min(z_min, iter->z - 1);
-		z_max = max(z_max, iter->z + 1);
+		z_max = max(z_max, iter->z + 2);
 		
 		for(int dx=-1; dx<=1; ++dx)
 		for(int dy=-1; dy<=1; ++dy)
@@ -194,6 +214,8 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 				iter->z + dz) );
 		}
 	}
+	
+	DEBUG_PRINTF("\n");
 	
 	//Unpack the update chunk list
 	vector<ChunkID> chunks(offset_chunk_set.begin(), offset_chunk_set.end());
@@ -224,10 +246,12 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 			cy = iter->y / CHUNK_Y,
 			cz = iter->z / CHUNK_Z;
 			
-		if( cx < x_min || cx > x_max ||
-			cy < y_min || cy > y_max ||
-			cz < y_min || cz > z_max )
+		if( cx < x_min || cx >= x_max ||
+			cy < y_min || cy >= y_max ||
+			cz < y_min || cz >= z_max )
 			continue;
+			
+		DEBUG_PRINTF("Writing block: %d,%d,%d, t = %d\n", iter->x, iter->y, iter->z, iter->b.int_val);
 			
 		int ox = cx - x_min + (iter->x % CHUNK_X),
 			oy = cy - y_min + (iter->y % CHUNK_Y),

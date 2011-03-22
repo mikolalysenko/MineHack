@@ -261,13 +261,15 @@ var Player =
 			
 			var block = Player.position(),
 				packet = new Network.ClientPacket,
-				set_block = new Network.SetBlock;
+				set_block = new Network.BlockUpdate;
 				
-			packet.set_block = set_block;
+			packet.block_update = set_block;
 			set_block.x = Math.floor(block[0]);
 			set_block.y = Math.floor(block[1]);
 			set_block.z = Math.floor(block[2]);
+			set_block.block = 0;
 			
+			Game.sendProtoBuf(packet);
 		}
 	},
 	
