@@ -24,6 +24,15 @@ Physics::~Physics()
 {
 }
 
+void Physics::set_block(Block b, int x, int y, int z)
+{
+	ChunkID chunk_id(x/CHUNK_X, y/CHUNK_Y, z/CHUNK_Z);
+
+	spin_rw_mutex::scoped_lock L(chunk_set_lock, false);
+	active_chunks.insert(make_pair(chunk_id, true));
+	pending_blocks.push_back( (BlockRecord){x, y, z, b} );
+}
+
 //Marks a chunk for update
 void Physics::mark_chunk(ChunkID const& c)
 {
@@ -42,9 +51,11 @@ void Physics::mark_chunk(ChunkID const& c)
 void Physics::update()
 {
 	chunk_set_t chunks;
+	block_list_t blocks;
 	{
 		spin_rw_mutex::scoped_lock L(chunk_set_lock, true);
 		chunks.swap(active_chunks);
+		blocks.swap(pending_blocks);
 	}
 
 	//Partition the active chunk set into connected components
@@ -86,9 +97,11 @@ void Physics::update()
 	{
 		for(auto i = rng.begin(); i != rng.end(); ++i)
 		{
-			update_region( regions[i] );
+			update_region( regions[i], blocks );
 		}
 	});
+	
+	
 }
 
 //Computes the next state of a block
@@ -101,8 +114,11 @@ Block Physics::update_block(
 	Block front, 	//-z
 	Block back)		//+z
 {
+	//FIXME: Physics implementation goes here
 	return center;
 }
+
+
 
 //Updates a chunk
 void Physics::update_chunk(
@@ -149,7 +165,7 @@ void Physics::update_chunk(
 }
 
 //Updates a list of chunks
-void Physics::update_region(set<ChunkID> marked_chunk_set)
+void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 {
 	uint32_t
 		x_min = (1<<30), y_min = (1<<30), z_min = (1<<30),
@@ -200,6 +216,29 @@ void Physics::update_region(set<ChunkID> marked_chunk_set)
 			game_map->get_chunk(chunks[i], front_buffer, stride_x, stride_xz);
 		}
 	});
+	
+	//Apply pending writes
+	for(auto iter = blocks.begin(); iter != blocks.end(); ++iter)
+	{
+		int cx = iter->x / CHUNK_X,
+			cy = iter->y / CHUNK_Y,
+			cz = iter->z / CHUNK_Z;
+			
+		if( cx < x_min || cx > x_max ||
+			cy < y_min || cy > y_max ||
+			cz < y_min || cz > z_max )
+			continue;
+			
+		int ox = cx - x_min + (iter->x % CHUNK_X),
+			oy = cy - y_min + (iter->y % CHUNK_Y),
+			oz = cz - z_min + (iter->z % CHUNK_Z);
+		
+		int offset = ox * CHUNK_X + 
+			 oz * CHUNK_Z * stride_x + 
+			 (oy * CHUNK_Y + 1) * stride_xz;
+		
+		front_buffer[offset] = iter->b;
+	}
 	
 	//Update the chunks (x16 to reduce overhead)
 	for(int t=0; t<16; ++t)

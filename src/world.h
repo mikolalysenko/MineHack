@@ -14,9 +14,9 @@
 #include "constants.h"
 #include "config.h"
 #include "chunk.h"
-#include "entity.h"
 #include "session.h"
 #include "game_map.h"
+#include "physics.h"
 
 namespace Game
 {
@@ -56,10 +56,11 @@ namespace Game
 		//Subsystems
 		Config			*config;
 		SessionManager	*session_manager;
-		EntityDB		*entity_db;
 		GameMap			*game_map;
+		Physics			*physics;
 		
 		//Player update stuff
+		void update_players();
 		void send_chunk_updates(Session* session, int);
 		void send_world_updates(Session* session);
 		

@@ -8,6 +8,7 @@
 #include <tbb/blocked_range.h>
 #include <tbb/blocked_range3d.h>
 #include <tbb/parallel_for.h>
+#include <tbb/task_group.h>
 
 #include "network.pb.h"
 
@@ -15,6 +16,8 @@
 #include "misc.h"
 #include "config.h"
 #include "session.h"
+#include "game_map.h"
+#include "physics.h"
 #include "world.h"
 
 using namespace tbb;
@@ -44,16 +47,16 @@ World::World(Config* cfg) : config(cfg)
 	ticks = config->readInt("ticks");
 	
 	session_manager = new SessionManager();
-	entity_db = new EntityDB(config);
 	game_map = new GameMap(config);
+	physics = new Physics(config, game_map);
 }
 
 //Clean up/saving stuff
 World::~World()
 {
-	delete session_manager;
-	delete entity_db;
+	delete physics;
 	delete game_map;
+	delete session_manager;
 }
 
 //Creates a player
@@ -153,105 +156,15 @@ void World::main_loop()
 	while(running)
 	{
 		//Increment the global tick count
-		++ticks;
+		ticks += 16;
 		
-		//FIXME: Update map physics in parallel
-	
-		//Iterate over the player set
-		double session_timeout = config->readFloat("session_timeout"),
-				update_rate = config->readFloat("update_rate");
-		int visible_radius = config->readInt("visible_radius");
-		parallel_for(session_manager->sessions.range(), 
-			[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
-		{
-			auto session = sessions.begin()->second;
-
-			//Check state
-			if(session->state == SessionState_Dead)
-			{
-				return;
-			}
-			else if(session->state == SessionState_Pending)
-			{
-			
-				if(session->map_socket != NULL && session->update_socket != NULL)
-				{
-					session->state = SessionState_Active;
-				}
-				else
-				{
-					if((tick_count::now() - session->last_activity).seconds() > session_timeout)
-					{
-						printf("Pending session timeout, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
-						session_manager->remove_session(session->session_id);
-						return;
-					}
-				
-					return;
-				}
-			}
-			
-			//Check if the sockets died
-			if(!session->update_socket->alive() || !session->map_socket->alive())
-			{
-				printf("Client lost connection, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
-				session_manager->remove_session(session->session_id);
-				return;
-			}
-			
-			//Handle input
-			bool active = false;
-			Network::ClientPacket *input_packet;
-			while(session->update_socket->recv_packet(input_packet))
-			{
-				if(input_packet->has_player_update())
-				{
-					//Unpack update and set the new coordinate for the player
-					if(input_packet->player_update().has_x())
-						session->player_coord.x = input_packet->player_update().x();
-					if(input_packet->player_update().has_y())
-						session->player_coord.y = input_packet->player_update().y();
-					if(input_packet->player_update().has_z())
-						session->player_coord.z = input_packet->player_update().z();
-				}
-				else if(input_packet->has_chat_message())
-				{
-					//Broadcast chat message
-					DEBUG_PRINTF("Got a chat message\n");
-					ScopeFree escape_str(tcxmlescape(input_packet->chat_message().c_str()));
-					string chat_string = "<font color='yellow'>" + session->player_name + " :</font> <font color='white'>" + string((char*)escape_str.ptr) + "</font><br/>";
-					broadcast_message(chat_string);
-				}
-				
-				active = true;
-				delete input_packet;
-			}
-			
-			//Update the activity flag
-			if(active)
-			{
-				session->last_activity = tick_count::now();
-			}
-			
-			//Check for time out condition
-			if((tick_count::now() - session->last_activity).seconds() > session_timeout)
-			{
-				printf("Session timeout, session id = %ld, player name = %s", session->session_id, session->player_name.c_str());
-				session_manager->remove_session(session->session_id);
-				return;
-			}
-			
-			//Send chunk updates to player
-			send_chunk_updates(session, visible_radius);
-			
-			//Send game state updates to player
-			if((tick_count::now() - session->last_updated).seconds() > update_rate)
-			{
-				send_world_updates(session);
-				session->last_updated = tick_count::now();
-			}
-		});
+		//Spawn each of the main game tasks
+		task_group game_tasks;
 		
+		game_tasks.run([=](){ physics->update(); });
+		game_tasks.run([=](){ update_players(); });
+		
+		game_tasks.wait();
 		
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
@@ -261,6 +174,114 @@ void World::main_loop()
 	}
 	
 	session_manager->clear_all_sessions();
+}
+
+
+
+void World::update_players()
+{
+	//Iterate over the player set
+	double session_timeout = config->readFloat("session_timeout"),
+			update_rate = config->readFloat("update_rate");
+	int visible_radius = config->readInt("visible_radius");
+	parallel_for(session_manager->sessions.range(), 
+		[=](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
+	{
+		auto session = sessions.begin()->second;
+
+		//Check state
+		if(session->state == SessionState_Dead)
+		{
+			return;
+		}
+		else if(session->state == SessionState_Pending)
+		{
+		
+			if(session->map_socket != NULL && session->update_socket != NULL)
+			{
+				session->state = SessionState_Active;
+			}
+			else
+			{
+				if((tick_count::now() - session->last_activity).seconds() > session_timeout)
+				{
+					printf("Pending session timeout, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
+					session_manager->remove_session(session->session_id);
+					return;
+				}
+			
+				return;
+			}
+		}
+		
+		//Check if the sockets died
+		if(!session->update_socket->alive() || !session->map_socket->alive())
+		{
+			printf("Client lost connection, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
+			session_manager->remove_session(session->session_id);
+			return;
+		}
+		
+		//Handle input
+		bool active = false;
+		Network::ClientPacket *input_packet;
+		while(session->update_socket->recv_packet(input_packet))
+		{
+			if(input_packet->has_player_update())
+			{
+				//Unpack update and set the new coordinate for the player
+				if(input_packet->player_update().has_x())
+					session->player_coord.x = input_packet->player_update().x();
+				if(input_packet->player_update().has_y())
+					session->player_coord.y = input_packet->player_update().y();
+				if(input_packet->player_update().has_z())
+					session->player_coord.z = input_packet->player_update().z();
+			}
+			else if(input_packet->has_chat_message())
+			{
+				//Broadcast chat message
+				DEBUG_PRINTF("Got a chat message\n");
+				ScopeFree escape_str(tcxmlescape(input_packet->chat_message().c_str()));
+				string chat_string = "<font color='yellow'>" + session->player_name + " :</font> <font color='white'>" + string((char*)escape_str.ptr) + "</font><br/>";
+				broadcast_message(chat_string);
+			}
+			else if(input_packet->has_set_block())
+			{
+				physics->set_block(
+					Block(input_packet->set_block().b()),
+					input_packet->set_block().x(),
+					input_packet->set_block().y(),
+					input_packet->set_block().z());
+			}
+			
+			active = true;
+			delete input_packet;
+		}
+		
+		//Update the activity flag
+		if(active)
+		{
+			session->last_activity = tick_count::now();
+		}
+		
+		//Check for time out condition
+		if((tick_count::now() - session->last_activity).seconds() > session_timeout)
+		{
+			printf("Session timeout, session id = %ld, player name = %s", session->session_id, session->player_name.c_str());
+			session_manager->remove_session(session->session_id);
+			return;
+		}
+		
+		//Send chunk updates to player
+		send_chunk_updates(session, visible_radius);
+		
+		//Send game state updates to player
+		if((tick_count::now() - session->last_updated).seconds() > update_rate)
+		{
+			send_world_updates(session);
+			session->last_updated = tick_count::now();
+		}
+	});
 }
 
 //Send a list of session updates to the user in parallel

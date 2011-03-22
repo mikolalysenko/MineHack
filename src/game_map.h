@@ -42,7 +42,6 @@ namespace Game
 		
 		//Block accessor methods
 		Block get_block(int x, int y, int z);
-		bool set_block(Block b, int x, int y, int z, uint64_t t);
 		
 		//Chunk update methods
 		void get_chunk(
