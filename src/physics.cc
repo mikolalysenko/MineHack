@@ -246,9 +246,7 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 			cy = iter->y / CHUNK_Y,
 			cz = iter->z / CHUNK_Z;
 			
-		if( cx < x_min || cx >= x_max ||
-			cy < y_min || cy >= y_max ||
-			cz < y_min || cz >= z_max )
+		if( marked_chunk_set.find(ChunkID(cx,cy,cz)) == marked_chunk_set.end() )
 			continue;
 			
 		DEBUG_PRINTF("Writing block: %d,%d,%d, t = %d\n", iter->x, iter->y, iter->z, iter->b.int_val);
@@ -267,16 +265,19 @@ void Physics::update_region(set<ChunkID> marked_chunk_set, block_list_t blocks)
 	//Update the chunks (x16 to reduce overhead)
 	for(int t=0; t<16; ++t)
 	{
+		DEBUG_PRINTF("Update, t = %d\n", t);
 		parallel_for( blocked_range<int>(0, chunks.size(), 1),
 			[=]( blocked_range<int> rng )
 		{
 			for(auto i = rng.begin(); i != rng.end(); ++i)
 			{
 				auto c = chunks[i];
-			
+		
 				int ox = c.x - x_min,
 					oy = c.y - y_min,
 					oz = c.z - z_min;
+					
+				DEBUG_PRINTF("Updating chunk: %d,%d,%d\n", c.x, c.y, c.z);
 					
 				int offset = ox * CHUNK_X + 
 							 oz * CHUNK_Z * stride_x + 
