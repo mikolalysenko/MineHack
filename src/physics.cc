@@ -251,7 +251,7 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 	auto back_buffer = (Block*)scalable_malloc(size * sizeof(Block));
 	
 	//Read chunks into memory
-	parallel_for( blocked_range<int>(0, chunks.size()),
+	parallel_for( blocked_range<int>(0, chunks.size(), 128),
 		[&](blocked_range<int> rng)
 	{
 		for(auto i = rng.begin(); i != rng.end(); ++i)
@@ -299,12 +299,11 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 		front_buffer[offset] = iter->b;
 	}
 	
-	/*
 	//Update the chunks (x16 to reduce overhead)
 	for(int t=0; t<16; ++t)
 	{
 		DEBUG_PRINTF("Update, t = %d\n", t);
-		parallel_for( blocked_range<int>(0, chunks.size(), 16),
+		parallel_for( blocked_range<int>(0, chunks.size(), 128),
 			[&]( blocked_range<int> rng )
 		{
 			for(auto i = rng.begin(); i != rng.end(); ++i)
@@ -331,36 +330,59 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 		back_buffer = front_buffer;
 		front_buffer = tmp;
 	}
-	*/
 	
 	//Check for chunks which changed, and update them in the map
-	for(auto iter=marked_chunk_set.begin(); iter!=marked_chunk_set.end(); ++iter)
+	vector<ChunkID, scalable_allocator<ChunkID> > 
+		marked_chunks(marked_chunk_set.begin(), marked_chunk_set.end());
+		
+	parallel_for( blocked_range<int>(0, marked_chunks.size(), 128),
+		[&]( blocked_range<int> rng )
 	{
-		auto c = *iter;
-	
-		int ox = c.x - x_min,
-			oy = c.y - y_min,
-			oz = c.z - z_min;
-			
-		int offset =  ox * CHUNK_X + 
-					  oz * CHUNK_Z * stride_x + 
-					 (oy * CHUNK_Y + 1) * stride_xz;
-		
-		DEBUG_PRINTF("Writing chunk: %d,%d,%d; %d,%d,%d; %d\n",
-			c.x, c.y, c.z,
-			ox, oy, oz,
-			offset);
-	
-		
-		if(game_map->update_chunk(
-			c, ticks,
-			front_buffer + offset,
-			stride_x,
-			stride_xz))
+		for(auto i = rng.begin(); i != rng.end(); ++i)
 		{
-			mark_chunk(c);
+			auto c = marked_chunks[i];
+	
+			int ox = c.x - x_min,
+				oy = c.y - y_min,
+				oz = c.z - z_min;
+			
+			int offset =  ox * CHUNK_X + 
+						  oz * CHUNK_Z * stride_x + 
+						 (oy * CHUNK_Y + 1) * stride_xz;
+		
+			DEBUG_PRINTF("Writing chunk: %d,%d,%d; %d,%d,%d; %d\n",
+				c.x, c.y, c.z,
+				ox, oy, oz,
+				offset);
+			
+			if(game_map->update_chunk(
+				c, ticks,
+				front_buffer + offset,
+				stride_x,
+				stride_xz))
+			{
+				//Check if the chunk changed in the last iteration
+				const int dx = 1;
+				const int dy = stride_xz - (stride_x * (CHUNK_Z - 1) + CHUNK_X - 1);
+				const int dz = stride_x - (CHUNK_X - 1);
+				
+				for(int y=0; y<CHUNK_Y; ++y, offset += dy)
+				for(int z=0; z<CHUNK_Z; ++z, offset += dz)
+				for(int x=0; x<CHUNK_X; ++x, offset += dx)
+				{
+					if(front_buffer[offset] != back_buffer[offset])
+					{
+						//Mark the chunk as dirty
+						mark_chunk(c);
+						x = CHUNK_Z;
+						y = CHUNK_Y;
+						z = CHUNK_Z;
+						break;
+					}
+				}
+			}
 		}
-	}
+	});
 	
 	scalable_free(front_buffer);
 	scalable_free(back_buffer);
