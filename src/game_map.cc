@@ -76,6 +76,7 @@ void GameMap::get_chunk_buffer(accessor& acc, ChunkID const& chunk_id)
 	{
 		if(chunks.insert(acc, chunk_id))
 		{
+			acc->second = new ChunkBuffer();
 			generate_chunk(acc, chunk_id);
 		}
 		else
@@ -94,6 +95,7 @@ void GameMap::get_chunk_buffer(const_accessor& acc, ChunkID const& chunk_id)
 		accessor  mut_acc;
 		if(chunks.insert(mut_acc, chunk_id))
 		{
+			mut_acc->second = new ChunkBuffer();
 			generate_chunk(mut_acc, chunk_id);
 			mut_acc.release();
 		}
@@ -116,7 +118,7 @@ void GameMap::get_surface_chunk_buffer(accessor& acc, ChunkID const& chunk_id)
 		
 		surface_chunks.find(acc, chunk_id);
 	}
-	else if(acc->second->invalidated())
+	else if(!acc->second->valid())
 	{
 		generate_surface_chunk(acc, chunk_id);
 	}
@@ -139,14 +141,13 @@ void GameMap::get_surface_chunk_buffer(const_accessor& acc, ChunkID const& chunk
 	}
 	
 	//Loop while invalidated
-	while(acc->second->invalidated())
+	while(!acc->second->valid())
 	{
-		acc.release();
-	
 		DEBUG_PRINTF("Chunk invalidated!!!!\n");
 	
+		acc.release();
 		accessor mut_acc;
-		if(surface_chunks.insert(mut_acc, chunk_id))
+		if(surface_chunks.find(mut_acc, chunk_id))
 		{
 			generate_surface_chunk(mut_acc, chunk_id);
 			mut_acc.release();
@@ -209,18 +210,26 @@ bool GameMap::update_chunk(ChunkID const& chunk_id, uint64_t t, Block* buffer, i
 	mark_dirty(chunk_id);
 	
 	//Invalidate surface chunk (if it exists)
-	accessor surface_acc;
-	if(chunks.find(surface_acc, chunk_id))
+	for(int dy=-1; dy<=1; ++dy)
+	for(int dz=-1; dz<=1; ++dz)
+	for(int dx=-1; dx<=1; ++dx)
 	{
-		surface_acc->second->invalidate();
-		
-		assert(surface_acc->second->invalidated());
-	}
-	else
-	{
-		DEBUG_PRINTF("no surface\n");
+		accessor surface_acc;
+		if(surface_chunks.find(surface_acc, ChunkID(
+			chunk_id.x + dx,
+			chunk_id.y + dy,
+			chunk_id.z + dz) ) )
+		{
+			surface_acc->second->set_valid(false);
+			surface_acc.release();
+		}
+		else
+		{
+			DEBUG_PRINTF("no surface\n");
+		}
 	}
 	
+		
 	return true;
 }
 
@@ -262,7 +271,7 @@ Network::ServerPacket* GameMap::get_net_chunk(ChunkID const& chunk_id, uint64_t 
 	const_accessor acc;
 	get_surface_chunk_buffer(acc, chunk_id);
 	if(acc->second->last_modified() <= timestamp ||
-		acc->second->empty_surface() )
+		(timestamp == 0 && acc->second->empty_surface())  )
 	{
 		return NULL;
 	}
@@ -304,10 +313,9 @@ void GameMap::generate_chunk(accessor& acc, ChunkID const& chunk_id)
 	Block buffer[CHUNK_SIZE];
 	world_gen->generate_chunk(chunk_id, buffer, CHUNK_X, CHUNK_X*CHUNK_Y);
 	
-	acc->second = new ChunkBuffer();
 	acc->second->compress_chunk(buffer, CHUNK_X, CHUNK_X*CHUNK_Y);
-	acc->second->validate();
 	acc->second->set_last_modified(1);
+	acc->second->set_valid(true);
 	
 	mark_dirty(chunk_id);
 }
@@ -399,12 +407,17 @@ void GameMap::generate_surface_chunk(accessor& acc, ChunkID const& chunk_id)
 		buffer[i] = BlockType_Stone;
 	}
 	
+	auto psurface = acc->second->interval_tree();
+	
 	acc->second->compress_chunk(buffer + CHUNK_X + CHUNK_Z * stride_x + CHUNK_Y * stride_xz, stride_x, stride_xz);
-	acc->second->set_last_modified(timestamp);
+	acc->second->cache_protocol_buffer_data();
 	acc->second->set_empty_surface(empty);
-	if(!empty)
-		acc->second->cache_protocol_buffer_data();
-	acc->second->validate();
+	acc->second->set_valid(true);
+	
+	if(!acc->second->equals(psurface))
+	{
+		acc->second->set_last_modified(timestamp);
+	}
 	
 	//Release locks in reverse order
 	for(int i=6; i>=0; --i)

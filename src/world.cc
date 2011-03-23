@@ -298,9 +298,10 @@ void World::send_chunk_updates(Session* session, int r)
 	
 	auto coord = session->player_coord;
 	
-	
+	/*
 	DEBUG_PRINTF("Player chunk = %d, %d, %d; position = %d,%d,%d\n", chunk.x, chunk.y, chunk.z,
 		(int)coord.x, (int)coord.y, (int)coord.z);
+	*/
 	
 	//Scan all chunks in visible radius
 	parallel_for(blocked_range3d<int,int,int>(

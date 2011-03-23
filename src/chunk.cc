@@ -396,7 +396,7 @@ bool ChunkBuffer::equals(interval_tree_t const& tree) const
 	auto a = intervals.begin();
 	auto b = tree.begin();
 	
-	while( a != intervals.end() && b != intervals.end() )
+	while( a != intervals.end() && b != tree.end() )
 	{
 		if( a->first  != b->first ||
 			a->second != b->second )
