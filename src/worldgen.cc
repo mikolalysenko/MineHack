@@ -50,22 +50,20 @@ void WorldGen::generate_chunk(ChunkID const& chunk_id, Block* data, int stride_x
 			
 		//Compute pointer
 		auto ptr = data + i + j * stride_x + k * stride_xz;
-		
-		y += i + j;
 			
-		if(abs(x - ORIGIN_X) < 10 &&
+		if (abs(x - ORIGIN_X) < 10 &&
 			abs(z - ORIGIN_Z) < 10 &&
-			abs(y - ORIGIN_Y - 10) < 10)
+			abs(y - ORIGIN_Y - 20) < 10)
 		{
-			*ptr = BlockType_Wood;
+			*ptr = BlockType_Sand;
 			continue;
 		}	
-			
+
 			
 		//Determine block type
-		if(y > ORIGIN_Y)
+		if(y + i + j > ORIGIN_Y)
 			*ptr = BlockType_Air;
-		else if(y == ORIGIN_Y)
+		else if(y + i + j == ORIGIN_Y)
 			*ptr = BlockType_Grass;
 		else
 			*ptr = BlockType_Stone;

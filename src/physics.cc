@@ -143,9 +143,14 @@ Block Physics::update_block(
 	//FIXME: Physics implementation goes here
 	
 	if( center.type() == BlockType_Air &&
-		top.type() == BlockType_Water )
+		top.type() == BlockType_Sand )
 	{
-		return Block( BlockType_Water );
+		return Block( BlockType_Sand );
+	}
+	else if( center.type() == BlockType_Sand  &&
+		bottom.type() == BlockType_Air )
+	{
+		return Block( BlockType_Air );
 	}
 	
 	return center;
