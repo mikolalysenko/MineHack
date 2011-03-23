@@ -104,7 +104,7 @@ function base128_encode(arr)
 		for(j=0; j<4; ++j)
 		{
 			raw += String.fromCharCode(w & 0x7f);
-			w >>= 7;
+			w >>>= 7;
 		}
 		
 		//Read 3
@@ -117,7 +117,7 @@ function base128_encode(arr)
 		for(j=0; j<4; ++j)
 		{
 			raw += String.fromCharCode(w & 0x7f);
-			w >>= 7;
+			w >>>= 7;
 		}
 	}
 	
