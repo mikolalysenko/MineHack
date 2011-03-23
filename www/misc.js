@@ -158,7 +158,7 @@ function base128_decode(raw)
 		for(j=0; j<3; ++j)
 		{
 			arr[k++] = w & 0xff;
-			w >>= 8;
+			w >>>= 8;
 		}
 		
 		//Read 4
@@ -171,7 +171,7 @@ function base128_decode(raw)
 		for(j=0; j<4; ++j)
 		{
 			arr[k++] = w & 0xff;
-			w >>= 8;
+			w >>>= 8;
 		}
 	}
 

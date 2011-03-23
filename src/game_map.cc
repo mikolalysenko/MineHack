@@ -271,7 +271,7 @@ Network::ServerPacket* GameMap::get_net_chunk(ChunkID const& chunk_id, uint64_t 
 	const_accessor acc;
 	get_surface_chunk_buffer(acc, chunk_id);
 	if(acc->second->last_modified() <= timestamp ||
-		(timestamp == 0 && acc->second->empty_surface())  )
+		(timestamp <= 1 && acc->second->empty_surface())  )
 	{
 		return NULL;
 	}
