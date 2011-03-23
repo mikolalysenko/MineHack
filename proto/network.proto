@@ -6,10 +6,10 @@ package Network;
 //--------------------------------------------------------
 
 message Chunk {
-	optional uint32 	x = 1;
-	optional uint32 	y = 2;
-	optional uint32 	z = 3;
-	optional uint64		last_modified = 4;
+	optional int32 	x = 1;
+	optional int32 	y = 2;
+	optional int32 	z = 3;
+	optional int64		last_modified = 4;
 	optional bytes		data = 5;
 }
 
@@ -18,9 +18,9 @@ message Chunk {
 //--------------------------------------------------------
 
 message PlayerUpdate {
-	optional uint32		x = 1;
-	optional uint32		y = 2;
-	optional uint32		z = 3;
+	optional int32		x = 1;
+	optional int32		y = 2;
+	optional int32		z = 3;
 	
 	optional float		pitch	= 4;
 	optional float		yaw		= 5;
@@ -28,11 +28,11 @@ message PlayerUpdate {
 }
 
 message BlockUpdate {
-	optional uint32		x = 1;
-	optional uint32		y = 2;
-	optional uint32		z = 3;
-	optional uint32		tick = 4;
-	optional uint32		block = 5;
+	optional int32		x = 1;
+	optional int32		y = 2;
+	optional int32		z = 3;
+	optional int32		tick = 4;
+	optional int32		block = 5;
 }
 
 //--------------------------------------------------------
@@ -40,7 +40,7 @@ message BlockUpdate {
 //--------------------------------------------------------
 
 message WorldUpdate {
-	optional uint64 ticks = 1;
+	optional int64 ticks = 1;
 }
 
 //--------------------------------------------------------

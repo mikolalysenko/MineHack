@@ -86,14 +86,14 @@ var Game =
 		
 		//Start the update worker
 		function pad_hex(w)
-	{
-		var r = Number(w).toString(16);
-		while(r.length < 8)
 		{
-			r = "0" + r;
+			var r = Number(w).toString(16);
+			while(r.length < 8)
+			{
+				r = "0" + r;
+			}
+			return r;
 		}
-		return r;
-	}
 
 		Game.update_socket = new WebSocket("ws://"+DOMAIN_NAME+"/update/"+
 			pad_hex(Session.session_id.msw)+
@@ -284,13 +284,14 @@ var Game =
 		//Send input packet to server				
 		var pbuf = new Network.ClientPacket,
 			pos = Player.position(),
-			orient = Player.orientation();
+			orient = Player.orientation(),
+			p_upd = new Network.PlayerUpdate;
 		
-		pbuf.player_update = new Network.PlayerUpdate;
+		p_upd.SetField("x", Math.round(pos[0]));
+		p_upd.SetField("y", Math.round(pos[1]));
+		p_upd.SetField("z", Math.round(pos[2]));
 		
-		pbuf.player_update.x = Math.round(pos[0]);
-		pbuf.player_update.y = Math.round(pos[1]);
-		pbuf.player_update.z = Math.round(pos[2]);
+		pbuf.SetField("player_update", p_upd);
 		
 		Game.sendProtoBuf(pbuf);
 	},

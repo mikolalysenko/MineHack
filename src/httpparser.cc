@@ -382,9 +382,6 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size, 
 }
 
 
-
-
-
 void base128_encode(uint8_t* src, int src_len, uint8_t*& dest)
 {
 	//Do first pass in groups of 7

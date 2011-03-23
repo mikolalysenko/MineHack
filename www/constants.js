@@ -2,7 +2,7 @@
 const GAME_TICK_RATE		= 20;
 const GAME_DRAW_RATE		= 40;
 const GAME_SHADOW_RATE		= 100;
-const GAME_NET_UPDATE_RATE	= 200;
+const GAME_NET_UPDATE_RATE	= 100;
 
 
 const DOMAIN_NAME = "127.0.0.1:8081"

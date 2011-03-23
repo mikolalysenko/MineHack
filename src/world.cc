@@ -25,7 +25,7 @@ using namespace std;
 using namespace Game;
 
 //Uncomment this line to get dense logging for the web server
-//#define WORLD_DEBUG 1
+#define WORLD_DEBUG 1
 
 #ifndef WORLD_DEBUG
 #define DEBUG_PRINTF(...)
@@ -296,8 +296,11 @@ void World::send_chunk_updates(Session* session, int r)
 	//Figure out which chunks are visible
 	ChunkID chunk(session->player_coord);
 	
+	auto coord = session->player_coord;
 	
-	DEBUG_PRINTF("Player chunk = %d, %d, %d\n", chunk.x, chunk.y, chunk.z);
+	
+	DEBUG_PRINTF("Player chunk = %d, %d, %d; position = %d,%d,%d\n", chunk.x, chunk.y, chunk.z,
+		(int)coord.x, (int)coord.y, (int)coord.z);
 	
 	//Scan all chunks in visible radius
 	parallel_for(blocked_range3d<int,int,int>(
