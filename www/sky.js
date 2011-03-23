@@ -9,7 +9,8 @@ var Sky =
 	//    0 = sunrise
 	time_of_day : function()
 	{
-		return (((Game.game_ticks + Sky.day_offset) % 8000) / 4000.0) - 1.0;
+		//return (((Game.game_ticks + Sky.day_offset) % 8000) / 4000.0) - 1.0;
+		return 0.5;
 	},
 
 	get_shadow_fudge : function()

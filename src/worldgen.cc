@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <cstdio>
+#include <cmath>
 
 #include <tbb/task.h>
 
@@ -51,6 +52,15 @@ void WorldGen::generate_chunk(ChunkID const& chunk_id, Block* data, int stride_x
 		auto ptr = data + i + j * stride_x + k * stride_xz;
 		
 		y += i + j;
+			
+		if(abs(x - ORIGIN_X) < 10 &&
+			abs(z - ORIGIN_Z) < 10 &&
+			abs(y - ORIGIN_Y - 10) < 10)
+		{
+			*ptr = BlockType_Wood;
+			continue;
+		}	
+			
 			
 		//Determine block type
 		if(y > ORIGIN_Y)

@@ -372,7 +372,7 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 				{
 					if(front_buffer[offset] != back_buffer[offset])
 					{
-						//Mark the chunk as dirty
+						//Mark the chunk as dirty only if they changed in the last iteration
 						mark_chunk(c);
 						x = CHUNK_Z;
 						y = CHUNK_Y;
