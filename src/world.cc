@@ -25,7 +25,7 @@ using namespace std;
 using namespace Game;
 
 //Uncomment this line to get dense logging for the web server
-#define WORLD_DEBUG 1
+//#define WORLD_DEBUG 1
 
 #ifndef WORLD_DEBUG
 #define DEBUG_PRINTF(...)

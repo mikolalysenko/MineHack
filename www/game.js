@@ -198,6 +198,8 @@ var Game =
 	recvProtoBuf : function(ev)
 	{
 		var pbuf = raw_to_pbuf(ev.data);
+		if(pbuf == null)
+			return;
 		
 		if(pbuf.chat_message)
 		{

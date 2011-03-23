@@ -382,13 +382,83 @@ bool http_websocket_handshake(HttpRequest const& request, char* buf, int* size, 
 }
 
 
+
+
+
+void base128_encode(uint8_t* src, int src_len, uint8_t*& dest)
+{
+	//Do first pass in groups of 7
+	uint64_t w;	
+	int i = 0;
+	while(true)
+	{
+		w = 0ULL;
+		for(uint64_t j=0ULL; j<7ULL; ++j)
+		{
+			w |= (uint64_t)(*(src++)) << (8ULL*j);
+		}
+		i += 7;
+		
+		if(i > src_len)
+			break;
+
+		for(uint64_t j=0ULL; j<8ULL; ++j)
+		{
+			*(dest++) = w & 0x7f;
+			w >>= 7ULL;
+		}
+	}
+	
+	//Fill remaining bytes
+	int r = src_len % 7;
+	if(r != 0)
+	for(uint64_t j=0; j<=r; ++j)
+	{
+		*(dest++) = w & 0x7f;
+		w >>= 7ULL;
+	}
+}
+
+void base128_decode(uint8_t* src, int src_len, uint8_t*& dest)
+{
+	//Traverse the buffer in groups of 8
+	uint64_t w;
+	int i = 0;
+	while(true)
+	{
+		w = 0ULL;
+		for(uint64_t j=0ULL; j<8ULL; ++j)
+		{
+			w |= (uint64_t)(*(src++)) << (j*7ULL);
+		}
+		
+		i += 8;
+		if(i > src_len)
+			break;
+		
+		for(uint64_t j=0ULL; j<7ULL; ++j)
+		{
+			*(dest++) = w & 0xff;
+			w >>= 8ULL;
+		}
+	}
+	
+	int r = src_len % 8;
+	if(r != 0)
+	for(uint64_t j=0ULL; j<r-1; ++j)
+	{
+		*(dest++) = w & 0xff;
+		w >>= 8ULL;
+	}
+}
+
+
+
+
 //Parses an input frame
 //FIXME: This all uses utf encoding, which is hideously inefficient.  However, due to limitations in the websocket API, it is impossible to transmit raw binary data.  So, for the moment it is built using this kludge.  It is expected that the API will ultimately change in the future to allow raw binary / compressed frames, so this situation is still farily temporary.  If the situation does not change before release, then a better method will need to be found.
 Network::ClientPacket* parse_ws_frame(char* buffer, int length)
 {
-	int packet_length = (length * 7 + 7) / 8;
-	ScopeFree decode_buffer(malloc(packet_length + 8));
-	
 	#ifdef HTTP_DEBUG
 	DEBUG_PRINTF("Parsing websocket frame, input UTF8 buffer, length = %d, contents = ", length);
 	for(int i=0; i<length; ++i)
@@ -398,30 +468,10 @@ Network::ClientPacket* parse_ws_frame(char* buffer, int length)
 	DEBUG_PRINTF("\n");
 	#endif
 	
-	//Zero out end of buffer
-	for(int i=0; i<7; ++i)
-	{
-		buffer[length + i] = 0;
-	}
-		
-	auto data = (uint8_t*)buffer;
-	auto ptr  = (uint8_t*)decode_buffer.ptr;
-	
-	//Traverse the buffer in groups of 7
-	for(int i=0; i<packet_length; i+=7)
-	{
-		uint64_t w = 0ULL;
-		for(uint64_t j=0ULL; j<8ULL; ++j)
-		{
-			w |= (uint64_t)(*(data++)) << (j*7ULL);
-		}
-		
-		for(uint64_t j=0ULL; j<7ULL; ++j)
-		{
-			*(ptr++) = w & 0xff;
-			w >>= 8ULL;
-		}
-	}
+	ScopeFree decode_buffer(malloc( (7*length)/8 + 7));
+	auto ptr = (uint8_t*)decode_buffer.ptr;
+	base128_decode((uint8_t*)buffer, length, ptr);
+	int packet_length = ptr - (uint8_t*)decode_buffer.ptr;
 		
 	#ifdef HTTP_DEBUG
 	DEBUG_PRINTF("Parsing websocket frame, output binary buffer, len = %d, contents = ", packet_length);
@@ -434,14 +484,14 @@ Network::ClientPacket* parse_ws_frame(char* buffer, int length)
 	#endif
 
 	auto packet = new Network::ClientPacket();
-	if(packet->ParseFromArray(decode_buffer.ptr, (ptr - (uint8_t*)decode_buffer.ptr)))
+	if(!packet->ParseFromArray(decode_buffer.ptr, packet_length))
 	{
-		return packet;
+		delete packet;
+		return NULL;
 	}
-	
-	delete packet;
-	return NULL;
+	return packet;
 }
+
 
 //Serializes an output frame
 int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
@@ -452,8 +502,6 @@ int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
 		return 0;
 	ScopeFree pbuffer(malloc(bs));
 	packet->SerializeToArray(pbuffer.ptr, bs);
-	
-	
 	
 	//Unpack the raw binary data into a utf-8 stream  (which is stupid, wastes one bit and seems unavoidable for now)
 	auto data = (uint8_t*)pbuffer.ptr;
@@ -468,51 +516,22 @@ int serialize_ws_frame(Network::ServerPacket* packet, char* buffer, int length)
 	DEBUG_PRINTF("\n");
 	#endif
 	
-	//Packet frame start code
-	*(buf_ptr++) = 0;
-
-	//Do first pass in groups of 7
-	uint64_t w;	
-	int i = 0, packet_len = (bs * 8 + 6) / 7;
-	while(true)
-	{
-		w = 0ULL;
-		for(uint64_t j=0ULL; j<7ULL; ++j)
-		{
-			w |= (uint64_t)(*(data++)) << (8ULL*j);
-		}
-		i += 7;
-		
-		if(i > bs)
-			break;
-
-		for(uint64_t j=0ULL; j<8ULL; ++j)
-		{
-			*(buf_ptr++) = w & 0x7f;
-			w >>= 7ULL;
-		}
-	}
-	
-	//Fill remaining bytes
-	int r = packet_len - (int)(buf_ptr - (uint8_t*)buffer - 1);
-	for(int j=0; j<r; ++j)
-	{
-		*(buf_ptr++) = (w >> (7ULL*j)) & 0x7f;
-	}
-	
-	//Packet frame end code
-	*(buf_ptr++) = 0xff;
+	//Serialize the frame
+	*(buf_ptr++) = 0;			//Frame start
+	base128_encode(data, bs, buf_ptr);
+	*(buf_ptr++) = 0xff;		//Frame end
+	int packet_length = (int)(buf_ptr - (uint8_t*)buffer);
 	
 	#ifdef HTTP_DEBUG
-	DEBUG_PRINTF("UTF-8 encoded buffer, length = %d, contents = ", packet_len);
-	for(int i=0; i<packet_len+2; ++i)
+	DEBUG_PRINTF("UTF-8 encoded buffer, length = %d, contents = ", packet_length);
+	for(int i=0; i<packet_length; ++i)
 	{
 		DEBUG_PRINTF("%d,", (uint8_t*)(buffer)[i]);
 	}
 	DEBUG_PRINTF("\n");
 	#endif
 	
-	return (int)(buf_ptr - (uint8_t*)buffer);
+	return packet_length;
 }
 
 

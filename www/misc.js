@@ -81,19 +81,13 @@ function sendProtoBuf_sync(pbuf, timeout_val)
 	return result;
 }
 
-
-//Turns a protocol buffer into a utf-8 stream.  only uses lower 7 bits.
-//   AAAAHH  Why you are you stupid websockets?!? >:P
-function pbuf_to_raw(pbuf)
+//Converts an array to a base 128
+function base128_encode(arr)
 {
-	//Serialize protocol buffer to array
-	var stream = new PROTO.ByteArrayStream;
-	pbuf.SerializeToStream(stream);	
-	var arr = stream.array_,
-		raw = "",
+	var	raw = "",
 		len = arr.length,
 		w = 0, i = 0, j = 0;
-			
+
 	for(j=0; j<7; ++j)
 		arr.push(0);
 	
@@ -126,15 +120,24 @@ function pbuf_to_raw(pbuf)
 			w >>= 7;
 		}
 	}
-	 
-	return raw.substr(0, Math.ceil(Math.floor(len * 8 + 6) / 7));
+	
+	//Calculate length
+	var n = Math.floor(len / 7), d = len % 7,
+		l = 8*n + (d == 0 ? 0 : d+1);
+	
+	return raw.substr(0, l);
 }
 
-function raw_to_pbuf(raw)
+function base128_decode(raw)
 {
 	var len = raw.length,
-		w, i, j, k,
-		arr = new Array(0, Math.ceil(Math.floor(len * 7) / 8) + 7);
+		n = Math.floor(len / 8), d = len % 8;
+		
+	if(d == 1)
+		return [];
+	
+	var w, i, j, k,
+		arr = new Array(0, (n + 1)*7 );
 
 	//Pad string
 	for(i=0; i<8; ++i)
@@ -171,10 +174,25 @@ function raw_to_pbuf(raw)
 			w >>= 8;
 		}
 	}
-	
-	var stream = new PROTO.ByteArrayStream(arr),
+
+	return arr.slice(0, 7 * n + (d == 0 ? 0 : d - 1));
+}
+
+//Turns a protocol buffer into a utf-8 stream.  only uses lower 7 bits.
+//   AAAAHH  Why you are you stupid websockets?!? >:P
+function pbuf_to_raw(pbuf)
+{
+	var stream = new PROTO.ByteArrayStream;
+	pbuf.SerializeToStream(stream);	
+	return base128_encode(stream.array_);
+}
+
+function raw_to_pbuf(raw)
+{
+	var stream = new PROTO.ByteArrayStream(base128_decode(raw)),
 		pbuf = new Network.ServerPacket;
-	pbuf.ParseFromStream(stream)
+		
+	pbuf.ParseFromStream(stream);
 	return pbuf;
 }
 
