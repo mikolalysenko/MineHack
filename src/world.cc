@@ -140,6 +140,9 @@ void World::stop()
 {
 	running = false;
 	world_task->wait_for_all();
+
+	prev_tick = tick_count::now();
+	lag = 0.0;
 		
 	DEBUG_PRINTF("World instance stopped\n");
 }
@@ -155,28 +158,37 @@ void World::main_loop()
 	DEBUG_PRINTF("Starting world instance\n");
 	while(running)
 	{
-	
-		//Increment the global tick count
-		ticks ++;
-		
-		//Start physics execution asynchronously
-		if((ticks % 16) == 0)
-		{
-			physics->update(ticks - 16);
-		}
-		
-		//Spawn each of the main game tasks
 		task_group game_tasks;
 		
-		game_tasks.run([&](){ update_players(); });
+		//Update the tick counter
+		auto t = tick_count::now();
+		lag += (t - prev_tick).seconds();
+		prev_tick = t;
+		double r = config->readFloat("tick_rate");
+	
+		//Check if enough time has elapsed
+		if(lag > r)
+		{
+			//Increment the global tick count
+			ticks ++;
+			config->storeInt("ticks", ticks);
+			lag -= r;
 		
+			//Only run the physics once every 16 updates
+			if((ticks % 16) == 0)
+			{
+				physics->update(ticks - 16);
+			}
+			
+			//Run any per tick tasks
+		}
+		
+		//Spawn the update player tasks
+		game_tasks.run([&](){ update_players(); });
 		game_tasks.wait();
 		
 		//Process all pending deletes
 		session_manager->process_pending_deletes();
-		
-		//Update tick counter in database
-		config->storeInt("ticks", ticks);
 	}
 	
 	session_manager->clear_all_sessions();

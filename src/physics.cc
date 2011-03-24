@@ -291,37 +291,30 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 	
 	DEBUG_PRINTF("Updating region: ");
 	
-	for(auto iter = marked_chunks.begin(); iter != marked_chunks.end(); ++iter)
+	for(int i=0; i<marked_chunks.size(); ++i)
 	{
-		DEBUG_PRINTF("(%d,%d,%d), ", iter->x, iter->y, iter->z);
+		auto c = marked_chunks[i];			
 	
-		x_min = min(x_min, iter->x - 1);
-		x_max = max(x_max, iter->x + 2);
-		y_min = min(y_min, iter->y - 1);
-		y_max = max(y_max, iter->y + 2);
-		z_min = min(z_min, iter->z - 1);
-		z_max = max(z_max, iter->z + 2);
+		DEBUG_PRINTF("(%d,%d,%d), ", c.x, c.y, c.z);
+	
+		x_min = min(x_min, c.x - 1);
+		x_max = max(x_max, c.x + 2);
+		y_min = min(y_min, c.y - 1);
+		y_max = max(y_max, c.y + 2);
+		z_min = min(z_min, c.z - 1);
+		z_max = max(z_max, c.z + 2);
 		
 		for(int dx=-1; dx<=1; ++dx)
 		for(int dy=-1; dy<=1; ++dy)
 		for(int dz=-1; dz<=1; ++dz)
 		{
 			offset_chunk_set.insert( ChunkID(
-				iter->x + dx,
-				iter->y + dy,
-				iter->z + dz) );
+				c.x + dx,
+				c.y + dy,
+				c.z + dz) );
 		}
 	}
-	
-	DEBUG_PRINTF("\n");
-	
-	DEBUG_PRINTF("Pending writes: ");
-	for(int i=0; i<blocks.size(); ++i)
-	{
-		DEBUG_PRINTF("(%d,%d,%d), ", blocks[i].x, blocks[i].y, blocks[i].z);
-	}
-	DEBUG_PRINTF("\n");
-	
+	DEBUG_PRINTF("\n");	
 	
 	//Unpack the update chunk list
 	vector<ChunkID, scalable_allocator<ChunkID> > 
@@ -376,7 +369,7 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 		DEBUG_PRINTF("Update, t = %d\n", t);
 		
 		//Compute physics for this region
-		parallel_for( blocked_range<int>(0, chunks.size(), 128),
+		parallel_for( blocked_range<int>(0, chunks.size(), 32),
 			[&]( blocked_range<int> rng )
 		{
 			for(auto i = rng.begin(); i != rng.end(); ++i)
@@ -411,7 +404,7 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 			}
 		});
 		
-		//Apply pending writes
+		//Apply pending writes (must be done sequentially)
 		while(b_idx < blocks.size() &&
 			blocks[b_idx].t <= t + base_tick)
 		{

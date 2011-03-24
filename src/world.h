@@ -52,6 +52,8 @@ namespace Game
 		//State variables
 		tbb::atomic<bool>	running;
 		uint64_t		ticks;
+		tbb::tick_count	prev_tick;
+		double			lag;
 	
 		//The world update task
 		tbb::task*		world_task;

@@ -97,6 +97,7 @@ void Config::resetDefaults()
 	storeString("map_db_path", "data/map.tch");
 	
 	//Performance tweaks
+	storeFloat("tick_rate", 1.0 / 20.0);
 	storeInt("visible_radius", 4);
 	storeFloat("update_rate", 0.125);
 	storeFloat("map_db_write_rate", 1.0);
