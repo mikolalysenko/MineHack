@@ -40,7 +40,10 @@ namespace Game
 		bool player_leave(SessionID const& session_id);
 		bool player_attach_update_socket(SessionID const& session_id, WebSocket*);
 		bool player_attach_map_socket(SessionID const& session_id, WebSocket*);
-				
+		
+		//Block management functions
+		void set_block(Block b, uint64_t t, int x, int y, int z);
+		
 		//Task function
 		void main_loop();
 		

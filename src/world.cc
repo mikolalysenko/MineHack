@@ -157,12 +157,17 @@ void World::main_loop()
 	{
 	
 		//Increment the global tick count
-		ticks += 16;
+		ticks ++;
+		
+		//Start physics execution asynchronously
+		if((ticks % 16) == 0)
+		{
+			physics->update(ticks - 16);
+		}
 		
 		//Spawn each of the main game tasks
 		task_group game_tasks;
 		
-		game_tasks.run([&](){ physics->update(ticks); });
 		game_tasks.run([&](){ update_players(); });
 		
 		game_tasks.wait();
@@ -253,8 +258,9 @@ void World::update_players()
 				input_packet->block_update().has_block() )
 			{
 				DEBUG_PRINTF("Updating block\n");
-				physics->set_block(
+				set_block(
 					Block(input_packet->block_update().block()),
+					ticks,
 					input_packet->block_update().x(),
 					input_packet->block_update().y(),
 					input_packet->block_update().z());
@@ -355,6 +361,13 @@ void World::broadcast_message(std::string const& str)
 		packet->set_chat_message(str);
 		iter->second->update_socket->send_packet(packet);
 	}
+}
+
+//Sets a block in the world
+void World::set_block(Block b, uint64_t t, int x, int y, int z)
+{
+	//Push the block to the physics simulator
+	physics->set_block(b, t, x, y, z);
 }
 
 

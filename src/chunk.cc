@@ -309,8 +309,7 @@ void ChunkBuffer::decompress_chunk(Block* data, int stride_x, int stride_xz) con
 //Caches protocol buffer data
 void ChunkBuffer::cache_protocol_buffer_data()
 {
-	if(pbuffer_data.size() > 0)
-		return;
+	pbuffer_data.clear();
 	
 	for(auto iter = intervals.begin(); iter != intervals.end(); )
 	{

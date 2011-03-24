@@ -1,4 +1,5 @@
 #include <vector>
+#include <algorithm>
 
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
@@ -25,15 +26,16 @@ using namespace tbb;
 namespace Game
 {
 
-Physics::Physics(Config* cfg, GameMap* gmap) : config(cfg), game_map(gmap)
+Physics::Physics(Config* cfg, GameMap* gmap) : config(cfg), game_map(gmap), base_tick(0)
 {
+
 }
 
 Physics::~Physics()
 {
 }
 
-void Physics::set_block(Block b, int x, int y, int z)
+void Physics::set_block(Block b, uint64_t t, int x, int y, int z)
 {
 	DEBUG_PRINTF("Writing block: %d, %d,%d,%d\n", b.int_val, x, y, z);
 
@@ -49,7 +51,7 @@ void Physics::set_block(Block b, int x, int y, int z)
 		active_chunks.insert(make_pair(n, true));
 	}
 
-	pending_blocks.push_back( (BlockRecord){x, y, z, b} );
+	pending_blocks.push_back( (BlockRecord){t, x, y, z, b} );
 }
 
 //Marks a chunk for update
@@ -71,6 +73,24 @@ void Physics::mark_chunk(ChunkID const& c)
 //Updates a chunk
 void Physics::update(uint64_t t)
 {
+	physics_tasks.wait();
+	base_tick = t;
+	struct TaskFunc
+	{
+		Physics* phys;
+		void operator()() const { phys->update_main(); }
+	};
+	physics_tasks.run((TaskFunc){this});
+}
+
+//The main update loop
+void Physics::update_main()
+{
+	if(base_tick == 0)
+		return;
+		
+	DEBUG_PRINTF("Updating physics, base_tick = %ld\n", base_tick);
+
 	chunk_set_t chunks;
 	block_list_t blocks;
 	{
@@ -78,57 +98,106 @@ void Physics::update(uint64_t t)
 		chunks.swap(active_chunks);
 		blocks.swap(pending_blocks);
 	}
-
+	
+	//An update task
+	struct PhysicsUpdateTask
+	{
+		Physics*		physics;
+		chunk_list_t	regions;
+		block_list_t	region_blocks;
+		
+		void operator()()
+		{
+			//Sort regions for fast look up
+			sort(regions.begin(), regions.end());
+			
+			//Sort blocks by time of write
+			sort(region_blocks.begin(), region_blocks.end());
+			
+			physics->update_region(regions, region_blocks);
+		}
+	};
+	
 	//Partition the active chunk set into connected components
-	vector< chunk_set_nl_t > regions;
+	task_group update_tasks;
 	while(chunks.begin() != chunks.end())
 	{
 		DEBUG_PRINTF("Region: ");
-
-	
-		//Mark first chunk on the tree
-		vector< ChunkID, scalable_allocator<ChunkID> > to_visit;
-		to_visit.push_back( chunks.begin()->first );
-		chunks.unsafe_erase(chunks.begin());
 		
+		PhysicsUpdateTask task;
+		task.physics = this;
+
+		//Construct region via breadth first search
+		task.regions.push_back( chunks.begin()->first );
+		chunks.unsafe_erase(chunks.begin());
+	
 		int idx = 0;
-				
-		while(idx < to_visit.size())
+			
+		while(idx < task.regions.size())
 		{
-			auto c = to_visit[idx++];
-			
+			auto c = task.regions[idx++];
+		
 			DEBUG_PRINTF("%d,%d,%d\n", c.x, c.y, c.z);
-			
+		
 			for(int dx=-1; dx<=1; ++dx)
 			for(int dy=-1; dy<=1; ++dy)
 			for(int dz=-1; dz<=1; ++dz)
 			{
 				ChunkID n(c.x+dx, c.y+dy, c.z+dz);
-				
+			
 				auto iter = chunks.find(n);
 				if(iter == chunks.end())
 					continue;
-					
+				
 				chunks.unsafe_erase(iter);
-				to_visit.push_back(n);
+				task.regions.push_back(n);
 			}
 		}
 		
-		regions.push_back( chunk_set_nl_t(to_visit.begin(), to_visit.end()) );
+		//Add all blocks to this region
+		for(int i=0; i<blocks.size(); ++i)
+		{
+			DEBUG_PRINTF("Processing pending write: %d,%d,%d; t=%ld\n", blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].t);
+		
+			if(blocks[i].t >= base_tick + 16)
+			{
+				DEBUG_PRINTF("Got a packet out of order....\n");
+				continue;
+			}
+		
+			ChunkID c(
+				blocks[i].x/CHUNK_X,
+				blocks[i].y/CHUNK_Y,
+				blocks[i].z/CHUNK_Z);
+			
+			//Check if chunk for this block write was removed.  if so, write must be in this region
+			if(chunks.find(c) == chunks.end())
+			{
+				task.region_blocks.push_back(blocks[i]);
+				
+				//Remove block from the pending write queue
+				blocks[i] = blocks[blocks.size()-1];
+				blocks.pop_back();
+				--i;
+			}
+		}
+		
+		//Run the task
+		update_tasks.run(task);
 	}
 	
-	//Update all regions in parallel
-	parallel_for( blocked_range<int>(0, regions.size(), 1), 
-		[&]( blocked_range<int> rng )
+	//Put all the unhandled writes back in the work queue
+	for(int i=0; i<blocks.size(); ++i)
 	{
-		for(auto i = rng.begin(); i != rng.end(); ++i)
-		{
-			update_region( t, regions[i], blocks );
-		}
-	});
+		DEBUG_PRINTF("Got a residual block: %d,%d,%d\n", blocks[i].x, blocks[i].y, blocks[i].z);
 	
+		set_block(blocks[i].b, blocks[i].t, blocks[i].x, blocks[i].y, blocks[i].z);
+	}
 	
+	//Wait for all pending physics tasks to complete
+	update_tasks.wait();
 }
+
 
 //Computes the next state of a block
 Block Physics::update_block(
@@ -159,7 +228,7 @@ Block Physics::update_block(
 
 
 //Updates a chunk
-void Physics::update_chunk(
+bool Physics::update_chunk(
 	Block* next,
 	Block* current,
 	int stride_x,
@@ -168,6 +237,8 @@ void Physics::update_chunk(
 	const int dx = 1;
 	const int dy = stride_xz - (stride_x * (CHUNK_Z - 1) + CHUNK_X - 1);
 	const int dz = stride_x - (CHUNK_X - 1);
+	
+	bool changed = false;
 
 	int i = 0;
 	while(true)
@@ -180,6 +251,9 @@ void Physics::update_chunk(
 			current[ stride_xz],
 			current[-stride_x],
 			current[ stride_x]);
+	
+		if(*next != *current)
+			changed = true;
 	
 		if(++i == CHUNK_SIZE)
 		{
@@ -201,22 +275,23 @@ void Physics::update_chunk(
 			current += dy;
 		}
 	}
+	
+	return changed;
 }
 
 //Updates a list of chunks
-void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_set, block_list_t const& blocks)
+void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t const& blocks)
 {
 	uint32_t
 		x_min = (1<<30), y_min = (1<<30), z_min = (1<<30),
 		x_max = 0, y_max = 0, z_max = 0;
 		
-	
 	//Construct the offset chunk list
 	chunk_set_nl_t offset_chunk_set;
 	
 	DEBUG_PRINTF("Updating region: ");
 	
-	for(auto iter = marked_chunk_set.begin(); iter != marked_chunk_set.end(); ++iter)
+	for(auto iter = marked_chunks.begin(); iter != marked_chunks.end(); ++iter)
 	{
 		DEBUG_PRINTF("(%d,%d,%d), ", iter->x, iter->y, iter->z);
 	
@@ -240,9 +315,18 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 	
 	DEBUG_PRINTF("\n");
 	
+	DEBUG_PRINTF("Pending writes: ");
+	for(int i=0; i<blocks.size(); ++i)
+	{
+		DEBUG_PRINTF("(%d,%d,%d), ", blocks[i].x, blocks[i].y, blocks[i].z);
+	}
+	DEBUG_PRINTF("\n");
+	
+	
 	//Unpack the update chunk list
 	vector<ChunkID, scalable_allocator<ChunkID> > 
 		chunks(offset_chunk_set.begin(), offset_chunk_set.end());
+	
 	DEBUG_PRINTF("chunks.size = %d, bounds = (%d-%d), (%d-%d), (%d-%d)\n", (int)chunks.size(),
 		x_min, x_max, y_min, y_max, z_min, z_max);
 	
@@ -254,6 +338,8 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 	//Allocate buffers
 	auto front_buffer = (Block*)scalable_malloc(size * sizeof(Block));
 	auto back_buffer = (Block*)scalable_malloc(size * sizeof(Block));
+	auto update_times = (int8_t*)scalable_malloc(marked_chunks.size());
+	memset(update_times, -1, marked_chunks.size());
 	
 	//Read chunks into memory
 	parallel_for( blocked_range<int>(0, chunks.size(), 128),
@@ -281,33 +367,15 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 		}
 	});
 	
-	//Apply pending writes
-	for(auto iter = blocks.begin(); iter != blocks.end(); ++iter)
-	{
-		int cx = iter->x / CHUNK_X,
-			cy = iter->y / CHUNK_Y,
-			cz = iter->z / CHUNK_Z;
-			
-		if( marked_chunk_set.find(ChunkID(cx,cy,cz)) == marked_chunk_set.end() )
-			continue;
-						
-		int ox = cx - x_min,
-			oy = cy - y_min,
-			oz = cz - z_min;
-		
-		int offset = (ox * CHUNK_X + (iter->x % CHUNK_X)) +
-					 (oz * CHUNK_Z + (iter->z % CHUNK_Z)) * stride_x + 
-					 (oy * CHUNK_Y + (iter->y % CHUNK_Y) + 1) * stride_xz;
-		
-		DEBUG_PRINTF("Writing block: %d,%d,%d, b = %d, c=%d,%d,%d\n, o=%d,%d,%d, offs=%d\n", iter->x, iter->y, iter->z, iter->b.int_val, cx, cy, cz, ox, oy, oz, offset);
-		
-		front_buffer[offset] = iter->b;
-	}
+	//The current block index in the pending write queue
+	int b_idx = 0;
 	
 	//Update the chunks (x16 to reduce overhead)
 	for(int t=0; t<16; ++t)
 	{
 		DEBUG_PRINTF("Update, t = %d\n", t);
+		
+		//Compute physics for this region
 		parallel_for( blocked_range<int>(0, chunks.size(), 128),
 			[&]( blocked_range<int> rng )
 		{
@@ -323,13 +391,65 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 							  oz * CHUNK_Z * stride_x + 
 							 (oy * CHUNK_Y + 1) * stride_xz;
 				
-				update_chunk(
+				if(update_chunk(
 					back_buffer  + offset,
 					front_buffer + offset,
 					stride_x,
-					stride_xz);
+					stride_xz))
+				{
+					//Check if the chunk was in the marked set
+					auto pos = lower_bound(marked_chunks.begin(), marked_chunks.end(), c);
+					if(pos != marked_chunks.end() && *pos == c)
+					{
+						int idx = pos - marked_chunks.begin();
+						update_times[idx] = t;
+					
+						DEBUG_PRINTF("Updated chunk: %d at t=%d", idx, t);
+					
+					}
+				}
 			}
 		});
+		
+		//Apply pending writes
+		while(b_idx < blocks.size() &&
+			blocks[b_idx].t <= t + base_tick)
+		{
+			int x = blocks[b_idx].x,
+				y = blocks[b_idx].y,
+				z = blocks[b_idx].z;
+				
+			auto b = blocks[b_idx].b;
+		
+			int cx = x / CHUNK_X,
+				cy = y / CHUNK_Y,
+				cz = z / CHUNK_Z;
+						
+			int ox = cx - x_min,
+				oy = cy - y_min,
+				oz = cz - z_min;
+		
+			int offset = (ox * CHUNK_X + (x % CHUNK_X)) +
+						 (oz * CHUNK_Z + (z % CHUNK_Z)) * stride_x + 
+						 (oy * CHUNK_Y + (y % CHUNK_Y) + 1) * stride_xz;
+		
+			DEBUG_PRINTF("Writing block: %d,%d,%d, b = %d, c=%d,%d,%d\n, o=%d,%d,%d, offs=%d\n", x, y, z, b.int_val, cx, cy, cz, ox, oy, oz, offset);
+			back_buffer[offset] = b;
+			
+			//Check if the chunk was in the marked set and update modify time stamp
+			ChunkID c(cx, cy, cz);
+			auto pos = lower_bound(marked_chunks.begin(), marked_chunks.end(), c);
+			if(pos != marked_chunks.end() && *pos == c)
+			{
+				int idx = pos - marked_chunks.begin();
+				update_times[idx] = t;
+			
+				DEBUG_PRINTF("Updated chunk: %d at t=%d", idx, t);
+			}
+			
+			//Increment pointer
+			++b_idx;
+		}
 		
 		auto tmp = back_buffer;
 		back_buffer = front_buffer;
@@ -337,14 +457,16 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 	}
 	
 	//Check for chunks which changed, and update them in the map
-	vector<ChunkID, scalable_allocator<ChunkID> > 
-		marked_chunks(marked_chunk_set.begin(), marked_chunk_set.end());
-		
 	parallel_for( blocked_range<int>(0, marked_chunks.size(), 128),
 		[&]( blocked_range<int> rng )
 	{
 		for(auto i = rng.begin(); i != rng.end(); ++i)
 		{
+			if(update_times[i] < 0)
+				continue;
+				
+			uint64_t ticks = base_tick + update_times[i];
+		
 			auto c = marked_chunks[i];
 	
 			int ox = c.x - x_min,
@@ -355,40 +477,26 @@ void Physics::update_region(uint64_t ticks, chunk_set_nl_t const& marked_chunk_s
 						  oz * CHUNK_Z * stride_x + 
 						 (oy * CHUNK_Y + 1) * stride_xz;
 		
-			DEBUG_PRINTF("Writing chunk: %d,%d,%d; %d,%d,%d; %d\n",
+			DEBUG_PRINTF("Writing chunk: %d,%d,%d; %d,%d,%d; %d, t=%d\n",
 				c.x, c.y, c.z,
 				ox, oy, oz,
-				offset);
+				offset, ticks);
 			
-			if(game_map->update_chunk(
+			game_map->update_chunk(
 				c, ticks,
 				front_buffer + offset,
 				stride_x,
-				stride_xz))
+				stride_xz);
+
+			if(update_times[i] == 15)
 			{
-				//Check if the chunk changed in the last iteration
-				const int dx = 1;
-				const int dy = stride_xz - (stride_x * (CHUNK_Z - 1) + CHUNK_X - 1);
-				const int dz = stride_x - (CHUNK_X - 1);
-				
-				for(int y=0; y<CHUNK_Y; ++y, offset += dy)
-				for(int z=0; z<CHUNK_Z; ++z, offset += dz)
-				for(int x=0; x<CHUNK_X; ++x, offset += dx)
-				{
-					if(front_buffer[offset] != back_buffer[offset])
-					{
-						//Mark the chunk as dirty only if they changed in the last iteration
-						mark_chunk(c);
-						x = CHUNK_Z;
-						y = CHUNK_Y;
-						z = CHUNK_Z;
-						break;
-					}
-				}
+				DEBUG_PRINTF("Writing chunk: %d,%d,%d\n", c.x, c.y, c.z);
+				mark_chunk(c);
 			}
 		}
 	});
 	
+	scalable_free(update_times);
 	scalable_free(front_buffer);
 	scalable_free(back_buffer);
 }
