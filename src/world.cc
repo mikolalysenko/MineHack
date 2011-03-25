@@ -381,13 +381,12 @@ void World::set_block(Block b, uint64_t t, int x, int y, int z)
 	//Push the block to the physics simulator
 	physics->set_block(b, t, x, y, z);
 	
-	/*
 	//Form the update packet
 	auto packet = new Network::ServerPacket();
 	auto update = packet->mutable_world_update();
 	update->set_ticks(ticks);
 	
-	auto blk = update->mutable_blocks(0);
+	auto blk = update->add_blocks();
 	blk->set_x(x);
 	blk->set_y(y);
 	blk->set_z(z);
@@ -411,7 +410,7 @@ void World::set_block(Block b, uint64_t t, int x, int y, int z)
 			oy = y + delta[i][1],
 			oz = z + delta[i][2];
 			
-		auto bb = update->mutable_blocks(1 + i);
+		auto bb = update->add_blocks();
 		bb->set_x(ox);
 		bb->set_y(oy);
 		bb->set_z(oz);
@@ -427,7 +426,6 @@ void World::set_block(Block b, uint64_t t, int x, int y, int z)
 	
 	//Release the packet
 	delete packet;
-	*/
 }
 
 
