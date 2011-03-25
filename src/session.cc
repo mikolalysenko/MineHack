@@ -64,7 +64,7 @@ bool SessionManager::create_session(string const& player_name, SessionID& sessio
 	DEBUG_PRINTF("Created session, id = %ld\n", session_id);
 	
 	//Lock database
-	spin_rw_mutex::scoped_lock L(session_lock, false);
+	queuing_rw_mutex::scoped_lock L(session_lock, false);
 	if(sessions.find(session_id) != sessions.end())
 	{
 		//Just a sanity check, but this should be true
@@ -79,7 +79,7 @@ bool SessionManager::create_session(string const& player_name, SessionID& sessio
 //Socket attachment
 bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket* socket)
 {
-	spin_rw_mutex::scoped_lock L(session_lock, false);
+	queuing_rw_mutex::scoped_lock L(session_lock, false);
 	
 	auto iter = sessions.find(session_id);
 	
@@ -97,7 +97,7 @@ bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket
 
 bool SessionManager::attach_map_socket(SessionID const& session_id, WebSocket* socket)
 {
-	spin_rw_mutex::scoped_lock L(session_lock, false);
+	queuing_rw_mutex::scoped_lock L(session_lock, false);
 	
 	auto iter = sessions.find(session_id);
 	
@@ -128,7 +128,7 @@ void SessionManager::remove_session(SessionID const& session_id)
 void SessionManager::process_pending_deletes()
 {
 	SessionID session_id;
-	spin_rw_mutex::scoped_lock L(session_lock, true);
+	queuing_rw_mutex::scoped_lock L(session_lock, true);
 	while(pending_erase.try_pop(session_id))
 	{
 		auto iter = sessions.find(session_id);
@@ -140,7 +140,7 @@ void SessionManager::process_pending_deletes()
 //Clears all pending sessions
 void SessionManager::clear_all_sessions()
 {
-	spin_rw_mutex::scoped_lock L(session_lock, true);
+	queuing_rw_mutex::scoped_lock L(session_lock, true);
 	for(auto iter = sessions.begin(); iter!=sessions.end(); ++iter)
 	{
 		delete iter->second;

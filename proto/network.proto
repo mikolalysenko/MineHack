@@ -40,7 +40,8 @@ message BlockUpdate {
 //--------------------------------------------------------
 
 message WorldUpdate {
-	optional int64 ticks = 1;
+	optional int64			ticks = 1;
+	repeated BlockUpdate	blocks = 2;
 }
 
 //--------------------------------------------------------

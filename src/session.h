@@ -7,7 +7,7 @@
 #include <tbb/tick_count.h>
 #include <tbb/atomic.h>
 #include <tbb/task.h>
-#include <tbb/spin_rw_mutex.h>
+#include <tbb/queuing_rw_mutex.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_hash_map.h>
@@ -82,7 +82,7 @@ namespace Game
 		
 	private:
 		//The session manager lock.  Is held during the delete, and must be read-locked before accessing a session
-		tbb::spin_rw_mutex session_lock;
+		tbb::queuing_rw_mutex session_lock;
 		
 		//Pending session removal events
 		tbb::concurrent_queue<SessionID>	pending_erase;

@@ -99,7 +99,7 @@ void Config::resetDefaults()
 	//Performance tweaks
 	storeFloat("tick_rate", 1.0 / 20.0);
 	storeInt("visible_radius", 4);
-	storeFloat("update_rate", 0.125);
+	storeFloat("update_rate", 0.5);
 	storeFloat("map_db_write_rate", 1.0);
 	storeFloat("session_timeout", 10000.0);
 	storeInt("num_chunk_buckets", (1<<20));

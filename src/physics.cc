@@ -89,8 +89,6 @@ void Physics::update_main()
 	if(base_tick == 0)
 		return;
 		
-	DEBUG_PRINTF("Updating physics, base_tick = %ld\n", base_tick);
-
 	chunk_set_t chunks;
 	block_list_t blocks;
 	{
@@ -99,6 +97,11 @@ void Physics::update_main()
 		blocks.swap(pending_blocks);
 	}
 	
+	if(chunks.size() == 0)
+		return;
+	
+	DEBUG_PRINTF("Updating physics, base_tick = %ld\n", base_tick);
+
 	//An update task
 	struct PhysicsUpdateTask
 	{
@@ -190,12 +193,13 @@ void Physics::update_main()
 	for(int i=0; i<blocks.size(); ++i)
 	{
 		DEBUG_PRINTF("Got a residual block: %d,%d,%d\n", blocks[i].x, blocks[i].y, blocks[i].z);
-	
 		set_block(blocks[i].b, blocks[i].t, blocks[i].x, blocks[i].y, blocks[i].z);
 	}
 	
 	//Wait for all pending physics tasks to complete
+	DEBUG_PRINTF("Waiting for region update to complete\n");
 	update_tasks.wait();
+	DEBUG_PRINTF("Region update completed\n");
 }
 
 
@@ -449,10 +453,13 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 		front_buffer = tmp;
 	}
 	
+	DEBUG_PRINTF("Writing result of physics computation back to database\n");
+	
 	//Check for chunks which changed, and update them in the map
-	parallel_for( blocked_range<int>(0, marked_chunks.size(), 128),
+	parallel_for( blocked_range<int>(0, marked_chunks.size(), 64),
 		[&]( blocked_range<int> rng )
 	{
+		DEBUG_PRINTF("Updating range: %d to %d\n", rng.begin(), rng.end());
 		for(auto i = rng.begin(); i != rng.end(); ++i)
 		{
 			if(update_times[i] < 0)
@@ -488,6 +495,8 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 			}
 		}
 	});
+	
+	DEBUG_PRINTF("Write complete\n");
 	
 	scalable_free(update_times);
 	scalable_free(front_buffer);

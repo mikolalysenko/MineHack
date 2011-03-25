@@ -299,7 +299,7 @@ void World::update_players()
 		//Send chunk updates to player
 		send_chunk_updates(session, visible_radius);
 		
-		//Send game state updates to player
+		//Send periodic game state updates to player
 		if((tick_count::now() - session->last_updated).seconds() > update_rate)
 		{
 			send_world_updates(session);
@@ -380,6 +380,54 @@ void World::set_block(Block b, uint64_t t, int x, int y, int z)
 {
 	//Push the block to the physics simulator
 	physics->set_block(b, t, x, y, z);
+	
+	/*
+	//Form the update packet
+	auto packet = new Network::ServerPacket();
+	auto update = packet->mutable_world_update();
+	update->set_ticks(ticks);
+	
+	auto blk = update->mutable_blocks(0);
+	blk->set_x(x);
+	blk->set_y(y);
+	blk->set_z(z);
+	blk->set_tick(t);
+	blk->set_block(b.int_val);
+
+	uint64_t prev_time = (t & (~15)) - 16;
+	const int delta[][3] =
+	{	
+		{ 0,-1, 0},
+		{ 0, 0,-1},
+		{-1, 0, 0},
+		{ 1, 0, 0},
+		{ 0, 0, 1},
+		{ 0, 1, 0}
+	};
+
+	for(int i=0; i<6; ++i)
+	{
+		int ox = x + delta[i][0],
+			oy = y + delta[i][1],
+			oz = z + delta[i][2];
+			
+		auto bb = update->mutable_blocks(1 + i);
+		bb->set_x(ox);
+		bb->set_y(oy);
+		bb->set_z(oz);
+		bb->set_tick(prev_time);
+		bb->set_block(game_map->get_block(ox, oy, oz).int_val);
+	}
+	
+	//FIXME: Broadcast this packet in a smarter way (cull by location, use some indexing)
+	for(auto iter = session_manager->sessions.begin(); iter != session_manager->sessions.end(); ++iter)
+	{
+		iter->second->update_socket->send_packet(new Network::ServerPacket(*packet));
+	}
+	
+	//Release the packet
+	delete packet;
+	*/
 }
 
 
