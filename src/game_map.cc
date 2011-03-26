@@ -209,16 +209,27 @@ bool GameMap::update_chunk(ChunkID const& chunk_id, uint64_t t, Block* buffer, i
 	//Mark the chunk as dirty
 	mark_dirty(chunk_id);
 	
+	const static int delta[][3] =
+	{
+		{ 0,-1, 0},
+		{ 0, 0,-1},
+		{-1, 0, 0},
+		{ 0, 0, 0},
+		{ 1, 0, 0},
+		{ 0, 0, 1},
+		{ 0, 1, 0} 
+	};
+	
+	
+	
 	//Invalidate surface chunk (if it exists)
-	for(int dy=-1; dy<=1; ++dy)
-	for(int dz=-1; dz<=1; ++dz)
-	for(int dx=-1; dx<=1; ++dx)
+	for(int i=0; i<7; ++i)
 	{
 		accessor surface_acc;
 		if(surface_chunks.find(surface_acc, ChunkID(
-			chunk_id.x + dx,
-			chunk_id.y + dy,
-			chunk_id.z + dz) ) )
+			chunk_id.x + delta[i][0],
+			chunk_id.y + delta[i][1],
+			chunk_id.z + delta[i][2]) ) )
 		{
 			surface_acc->second->set_valid(false);
 			surface_acc.release();
