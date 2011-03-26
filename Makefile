@@ -10,10 +10,16 @@
 EXE = a.out
 
 # C++ compiler
-CXX = g++ -std=c++0x
+CXX = icpc -std=c++0x
 
 # C compiler
-CC = gcc
+CC = icpc
+
+#Protocol buffer compiler
+PROTOC = protoc
+
+#Javascript protocol buffer compiler
+PROTOJS		= tools/pbj
 
 #URL for the server
 URL = http://127.0.0.1:8081/index.html
@@ -21,19 +27,18 @@ URL = http://127.0.0.1:8081/index.html
 #Chrome path
 BROWSER = $(CHROME) --enable-webgl
 
-# source files directory
+# Directories
 srcdir = src
-
-# build directory
+wwwdir = www
 builddir = obj
-
 datadir = data
+protodir = proto
 
 # preprocessor options to find all included files
-INC_PATH = -I$(srcdir) -I/usr/local/include -I$(CUDA_INSTALL_PATH)/include
+INC_PATH = -I$(srcdir) -I/usr/local/include
 
 # libraries link options ('-lm' is common to link with the math library)
-LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lz -lbz2 -lrt -pthread -ldl -lm -lc
+LNK_LIBS = -L/usr/local/lib -ltokyocabinet -lprotobuf -lz -lbz2 -lrt -ltbb -ltbbmalloc -pthread -ldl -lm -lc 
 
 # other compilation options
 COMPILE_OPTS = -pthread -msse2 -Wno-deprecated
@@ -78,6 +83,7 @@ else
 
   # specific options for profiling
   GOAL_OPTS = -pg
+   
   # compilation verification options
   WARN_OPTS = $(BWARN_OPTS)
   # optimization options
@@ -95,9 +101,9 @@ else
    # compilation verification options
    WARN_OPTS = $(BWARN_OPTS)
    # optimization options
-   OPTIMISE_OPTS = -O3 -fomit-frame-pointer
+   OPTIMISE_OPTS = -O3
    # dependencies must be up to date
-   CHECK_DEPS = yes
+   CHECK_DEPS = yes   
 
   else
 
@@ -118,7 +124,18 @@ CXXOPTS = $(GOAL_OPTS) $(COMPILE_OPTS) $(WARN_OPTS) $(OPTIMISE_OPTS)
 LDOPTS = $(GOAL_OPTS) $(LNK_LIBS) -fPIC
 
 # source files in this project
-cppsources := $(wildcard $(srcdir)/*.cc)
+protosources := $(notdir $(wildcard $(protodir)/*.proto))
+
+protocpp := $(addprefix $(srcdir)/, $(protosources))
+protocpp := $(protocpp:.proto=.pb.cc)
+
+protoh := $(addprefix $(srcdir)/, $(protosources))
+protoh := $(protocpp:.proto=.pb.h)
+
+protojs := $(addprefix $(wwwdir)/, $(protosources))
+protojs := $(protojs:.proto=.pb.js)
+
+cppsources := $(wildcard $(srcdir)/*.cc) $(protocpp)
 csources := $(wildcard $(srcdir)/*.c)
 sources := $(cppsources) $(csources)
 
@@ -172,7 +189,7 @@ usage:
 # If source files exist then build the EXE file.
 .PHONY:	$(GOAL_EXE)
 ifneq "$(strip $(sources))" ""
-$(GOAL_EXE):	$(exe)
+$(GOAL_EXE):	$(exe) $(protojs)
 else
 $(GOAL_EXE):
 	@echo "No source file found."
@@ -180,10 +197,10 @@ endif
 
 # GOAL_DEBUG and GOAL_PROF targets use the same rules than GOAL_EXE.
 .PHONY:	$(GOAL_DEBUG)
-$(GOAL_DEBUG):	$(GOAL_EXE)
+$(GOAL_DEBUG):	$(GOAL_EXE) $(protojs)
 
 .PHONY:	$(GOAL_PROF)
-$(GOAL_PROF):	$(GOAL_EXE)
+$(GOAL_PROF):	$(GOAL_EXE) $(protojs)
 
 ###############################################################################
 # BUILDING
@@ -191,25 +208,30 @@ $(GOAL_PROF):	$(GOAL_EXE)
 # user at make invocation.
 ###############################################################################
 
-valgrind: $(exe) $(datadir)
+valgrind: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
-	valgrind --log-file=valgrind.log ./$(exe)
+	valgrind -v --track-origins=yes --leak-check=full ./$(exe)
 
-test: $(exe) $(datadir)
+helgrind: $(exe) $(datadir)  $(protojs)
+	(sleep 2; $(BROWSER) $(URL)) &
+	valgrind -v --tool=helgrind --log-file=helgrind.log ./$(exe)
+
+
+test: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)
 
 
-fftest: $(exe) $(datadir)
+fftest: $(exe) $(datadir)  $(protojs)
 	(sleep 2; /home/mikola/Apps/firefox/firefox-bin $(URL)) &
 	./$(exe)
 
 	
-gdb: $(exe) $(datadir)
+gdb: $(exe) $(datadir)  $(protojs)
 	(sleep 2; $(BROWSER) $(URL)) &
-	gdb ./$(exe)
+	idbc ./$(exe)
 
-testmap: $(exe) $(datadir)
+testmap: $(exe) $(datadir)  $(protojs)
 	rm -f data/* *.log
 	(sleep 2; $(BROWSER) $(URL)) &
 	./$(exe)
@@ -221,8 +243,18 @@ $(builddir):
 	mkdir $(builddir)
 
 # linking
-$(exe):	$(objs) 
+$(exe):	$(objs)
 	$(CXX) $^ -o $@ $(LDOPTS) $(LDFLAGS)
+
+
+$(srcdir)/%.pb.cc: $(protodir)/%.proto
+	$(PROTOC) --proto_path=$(protodir) --cpp_out=$(srcdir) $<
+
+$(srcdir)/%.pb.h: $(protodir)/%.proto
+	$(PROTOC) --proto_path=$(protodir) --cpp_out=$(srcdir) $<
+
+$(wwwdir)/%.pb.js: $(protodir)/%.proto
+	$(PROTOJS) $< $@
 
 # explicit definition of the implicit rule used to compile source files
 $(builddir)/%.o:	src/%.cc
@@ -241,13 +273,13 @@ $(builddir)/%.o:	src/%.c
 # The goal_flag_file is determined at run time because it must be the current
 # goal and not the goal in use when the dependencies makefile was created.
 $(builddir)/%.$(deps_suffix):	src/%.cc $(goal_flag_file)
-	$(SHELL) -ec '$(CXX) -MM $(CPPOPTS) $(CPPFLAGS) $< |\
+	$(SHELL) -ec 'g++ -std=c++0x -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 
 
 $(builddir)/%.$(deps_suffix):	src/%.c $(goal_flag_file)
-	$(SHELL) -ec '$(CC) -std=c99 -MM $(CPPOPTS) $(CPPFLAGS) $< |\
+	$(SHELL) -ec 'gcc -std=c99 -MM $(CPPOPTS) $(CPPFLAGS) $< |\
 	sed '\''s@\($*\)\.o[ :]*@$(builddir)/\1.o $@: $$(goal_flag_file) @g'\'' > $@;\
 	[ -s $@ ] || rm -f $@'
 
@@ -278,4 +310,4 @@ list:
 # Remove all files that are normally created by building the program.
 .PHONY:	clean
 clean:
-	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps) data/* *.log
+	rm -f $(exe) $(goal_flag_file_prefix)* $(objs) $(deps) data/* *.log $(protojs) $(protocpp) $(protoh) 

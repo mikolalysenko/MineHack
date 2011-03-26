@@ -2,9 +2,9 @@
 
 var Shadows = {}
 
-Shadows.init = function(gl)
+Shadows.init = function()
 {
-	var res = getProgram(gl, "shaders/shadow.fs", "shaders/shadow.vs");
+	var gl = Game.gl, res = getProgram("shaders/shadow.fs", "shaders/shadow.vs");
 	if(res[0] != "Ok")
 	{
 		return res[1];
@@ -27,7 +27,7 @@ Shadows.init = function(gl)
 
 	
 	Shadows.shadow_maps = [ 
-		new ShadowMap(gl, 512, 512, 256, 2, 300)
+		new ShadowMap(512, 512, 256, 2, 300)
 		];
 	
 	
@@ -50,7 +50,7 @@ Shadows.init = function(gl)
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ind, gl.STATIC_DRAW);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 	
-	res = getProgram(gl, "shaders/shadow_init.fs", "shaders/shadow_init.vs");
+	res = getProgram("shaders/shadow_init.fs", "shaders/shadow_init.vs");
 	
 	if(res[0] != "Ok")
 		return res[1];
@@ -96,8 +96,10 @@ Shadows.init_map = function()
 
 
 //A shadow map
-var ShadowMap = function(gl, width, height, z_center, radius, side)
+var ShadowMap = function(width, height, z_center, radius, side)
 {
+	var gl = Game.gl;
+
 	this.width		= width;
 	this.height		= height;
 	this.z_center	= z_center;
@@ -166,7 +168,7 @@ void main(void) \n\
 
 ShadowMap.prototype.calc_light_matrix = function()
 {
-	var pose = Player.entity.pose_matrix(),
+	var pose = Player.view_matrix(),
 		P = hgmult(m4inv(pose), [0, 0, -this.z_center]),
 	
 		basis = Sky.get_basis(),
@@ -192,8 +194,10 @@ ShadowMap.prototype.calc_light_matrix = function()
 }
 
 
-ShadowMap.prototype.begin = function(gl)
+ShadowMap.prototype.begin = function()
 {
+
+	var gl = Game.gl;
 
 	//Calculate light matrix
 	this.light_matrix = this.calc_light_matrix();
@@ -232,15 +236,16 @@ ShadowMap.prototype.begin = function(gl)
 	this.light_matrix[13] += 0.5;
 }
 
-ShadowMap.prototype.end = function(gl)
+ShadowMap.prototype.end = function()
 {
-	gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);	
+	var gl = Game.gl;
+
+	//gl.disableVertexAttribArray(Shadows.shadow_shader.pos_attr);	
 	gl.disable(gl.POLYGON_OFFSET_FILL);
 	
 	gl.disable(gl.CULL_FACE);
 	gl.disable(gl.DEPTH_TEST);
 	gl.enable(gl.TEXTURE_2D);
-	
 	
 	if(this.radius > 0)
 	{
@@ -269,7 +274,7 @@ ShadowMap.prototype.end = function(gl)
 
 		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 	}
-	
+		
 	//Unbind fbo
 	gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 	gl.bindTexture(gl.TEXTURE_2D, this.shadow_tex);
@@ -277,7 +282,7 @@ ShadowMap.prototype.end = function(gl)
 	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 }
 
-ShadowMap.prototype.draw_debug = function(gl)
+ShadowMap.prototype.draw_debug = function()
 {
 	Debug.draw_tex(this.shadow_tex);
 }

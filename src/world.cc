@@ -1,826 +1,432 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <pthread.h>
-
-#include <utility>
-#include <cstring>
-#include <cassert>
-#include <utility>
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <cmath>
 #include <string>
+#include <cstdio>
 
-#include <tcutil.h>
-#include <tctdb.h>
+#include <stdint.h>
+
+#include <tbb/atomic.h>
+#include <tbb/task.h>
+#include <tbb/blocked_range.h>
+#include <tbb/blocked_range3d.h>
+#include <tbb/parallel_for.h>
+#include <tbb/task_group.h>
+
+#include "network.pb.h"
 
 #include "constants.h"
 #include "misc.h"
-#include "chunk.h"
-#include "entity.h"
-#include "action.h"
-#include "entity_db.h"
-#include "mailbox.h"
+#include "config.h"
+#include "session.h"
+#include "game_map.h"
+#include "physics.h"
 #include "world.h"
-#include "heartbeat.h"
 
-
+using namespace tbb;
 using namespace std;
 using namespace Game;
+
+//Uncomment this line to get dense logging for the web server
+#define WORLD_DEBUG 1
+
+#ifndef WORLD_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
+
 
 namespace Game
 {
 
 
-//---------------------------------------------------------------
-// Constructors
-//---------------------------------------------------------------
-
 //The world instance, handles game logic stuff
-World::World()
+World::World(Config* cfg) : config(cfg)
 {
-	running = true;
+	running = false;
 	
-	//Initialize subsystems
-	config = new Config("data/mapconfig.tc");
-	world_gen = new WorldGen(config);
-	game_map = new Map(world_gen, "data/map.tc");
-	entity_db = new EntityDB("data/entities.tc", config);
-	mailbox = new Mailbox();
-	
-	//Set event handlers
-	create_handler = new CreateHandler(this);
-	update_handler = new UpdateHandler(this);
-	delete_handler = new DeleteHandler(this);
-	
-	entity_db->set_create_handler(create_handler);
-	entity_db->set_update_handler(update_handler);
-	entity_db->set_delete_handler(delete_handler);
-
 	//Restore tick count
-	tick_count = config->readInt("tick_count");
+	ticks = config->readInt("ticks");
+	
+	session_manager = new SessionManager();
+	game_map = new GameMap(config);
+	physics = new Physics(config, game_map);
 }
 
 //Clean up/saving stuff
 World::~World()
 {
-	//Save tick count
-	config->storeInt(tick_count, "tick_count");
-
-	delete mailbox;
-	delete entity_db;
+	delete physics;
 	delete game_map;
-	delete world_gen;
-	delete config;
-	
-	delete create_handler;
-	delete update_handler;
-	delete delete_handler;
+	delete session_manager;
 }
-
-
-//---------------------------------------------------------------
-// Player management
-//---------------------------------------------------------------
 
 //Creates a player
-bool World::player_create(string const& player_name, EntityID& player_id)
+bool World::player_create(string const& player_name)
 {
-	if(player_name.size() > PLAYER_NAME_MAX_LEN)
+	if(!running)
 		return false;
-
-	//Initialize player entity
-	Entity player;
-	player.base.type	= EntityType::Player;
-	player.base.flags	= EntityFlags::Inactive;
-	player.base.x		= PLAYER_START_X;
-	player.base.y		= PLAYER_START_Y;
-	player.base.z		= PLAYER_START_Z;
-	player.base.pitch	= 0;
-	player.base.yaw		= 0;
-	player.base.roll	= 0;
-	
-	//Set initial network data
-	player.player.net_last_tick = tick_count;
-	player.player.net_x 		= player.base.x;
-	player.player.net_y 		= player.base.y;
-	player.player.net_z 		= player.base.z;
-	player.player.net_pitch 	= player.base.pitch;
-	player.player.net_yaw		= player.base.yaw;
-	player.player.net_roll		= player.base.roll;
-	player.player.net_input 	= 0;
-	
-	//Set base player state
-	player.player.state			= PlayerState::Neutral;
-	
-	//Set player name
-	assert(player_name.size() <= PLAYER_NAME_MAX_LEN);
-	memset(player.player.player_name, 0, PLAYER_NAME_MAX_LEN + 1);
-	memcpy(player.player.player_name, player_name.data(), player_name.size());
-	player.player.player_name[player_name.size()] = 0;
-	
-	return entity_db->create_entity(player, player_id);
-}
-
-//Retrieves a player entity
-bool World::get_player_entity(string const& player_name, EntityID& player_id)
-{
-	return entity_db->get_player(player_name, player_id);
+	return true;
 }
 
 //Called to delete a player
-void World::player_delete(EntityID const& player_id)
+bool World::player_delete(string const& player_name)
 {
-	cout << "DESTROYING PLAYER: " << player_id.id << endl;
-	entity_db->destroy_entity(player_id);
+	if(!running)
+		return false;
+	return true;
 }
 
 //Attempt to add player to the game
-bool World::player_join(EntityID const& player_id)
+bool World::player_join(string const& player_name, SessionID& session_id)
 {
-	struct Visitor
-	{
-		uint64_t tick_count;
-		bool success;
-		Entity player;
-	
-		static EntityUpdateControl call(Entity& entity, void* data)
-		{
-			Visitor* V = (Visitor*)data;
-			if( !(entity.base.flags & EntityFlags::Inactive) )
-			{	
-				return EntityUpdateControl::Continue;
-			}
-			
-			//Set flags
-			entity.base.flags = EntityFlags::Poll | EntityFlags::Persist;
-			
-			//Set initial network data
-			entity.player.net_last_tick = V->tick_count;
-			entity.player.net_x = entity.base.x;
-			entity.player.net_y = entity.base.y;
-			entity.player.net_z = entity.base.z;
-			entity.player.net_pitch = entity.base.pitch;
-			entity.player.net_yaw	= entity.base.yaw;
-			entity.player.net_roll	= entity.base.roll;
-			entity.player.net_input = 0;
-
-			//Set return values
-			V->player = entity;
-			V->success = true;
-			
-			return EntityUpdateControl::Update;
-		}
-	};
-	
-	//Initialize player
-	Visitor V;
-	V.success		= false;
-	V.tick_count	= tick_count;
-	if(!entity_db->update_entity(player_id, Visitor::call, &V) || !V.success)
+	if(!running)
 		return false;
-	
-	//Register player mail box
-	mailbox->add_player(player_id, 
-		(int)V.player.base.x, 
-		(int)V.player.base.y, 
-		(int)V.player.base.z);
-		
-	return true;
+	return session_manager->create_session(player_name, session_id);
 }
-
 
 //Handle a player leave event
-bool World::player_leave(EntityID const& player_id)
+bool World::player_leave(SessionID const& session_id)
 {
-	struct Visitor
-	{
-		double x, y, z;
-	
-		static EntityUpdateControl visit(Entity& entity, void* data)
-		{
-			if( entity.base.flags & EntityFlags::Inactive )
-				return EntityUpdateControl::Continue;
-			
-			Visitor *V = (Visitor*)data;
-			
-			entity.base.flags = EntityFlags::Inactive;
-			
-			V->x = entity.base.x;
-			V->y = entity.base.y;
-			V->z = entity.base.z;
-			
-			return EntityUpdateControl::Update;
-		}
-	};
-	
-	mailbox->del_player(player_id);
-	
-	Visitor V;
-	if(!entity_db->update_entity(player_id, Visitor::visit, &V))
-		return false;
-	
-	return true;
-}
-
-
-//---------------------------------------------------------------
-// Input handlers
-//---------------------------------------------------------------
-
-//Does a sanity check on a player object
-bool World::valid_player(EntityID const& player_id)
-{
-	Entity entity;
-	if( !entity_db->get_entity(player_id, entity) ||
-		(entity.base.flags & EntityFlags::Inactive) ||
-		entity.base.type != EntityType::Player )
+	if(!running)
 		return false;
 	return true;
 }
 
-void World::handle_player_tick(EntityID const& player_id, 
-	PlayerEvent const& input,
-	uint64_t& prev_tick)
+//Attach an update socket
+bool World::player_attach_update_socket(SessionID const& session_id, WebSocket* socket)
 {
-	struct Visitor
-	{
-		const PlayerEvent* input;
-		uint64_t tick_count;
-		bool out_of_sync;
-		uint64_t prev_tick;
-		
-		static EntityUpdateControl call(Entity& entity, void* data)	
-		{
-			//Sanity check player object
-			if( (entity.base.flags & EntityFlags::Inactive) ||
-				 entity.base.type != EntityType::Player )
-				return EntityUpdateControl::Continue;
-		
-			Visitor* V					= (Visitor*)data;
-			PlayerEntity* player 		= &entity.player;
-			const PlayerEvent* input	= V->input;
-
-			//Set player controls			
-			player->net_input		= input->input_state;
-			
-			//Do a sanity check on the player position
-			if(	abs(entity.base.x - input->x) > POSITION_RESYNC_RADIUS ||
-				abs(entity.base.y - input->y) > POSITION_RESYNC_RADIUS ||
-				abs(entity.base.z - input->z) > POSITION_RESYNC_RADIUS ||
-				input->tick > V->tick_count )
-			{
-				//Resynchronize player
-				V->out_of_sync = true;
-				return EntityUpdateControl::Continue;
-			}
-			
-			//Return the tick count
-			V->prev_tick = player->net_last_tick;
-			
-			//Upate player network state
-			player->net_last_tick	= input->tick;
-			player->net_x			= input->x;
-			player->net_y			= input->y;
-			player->net_z			= input->z;
-			player->net_pitch		= input->pitch;
-			player->net_yaw			= input->yaw;
-			player->net_roll		= input->roll;
-			
-			return EntityUpdateControl::Update;
-		}
-	};
-	
-	
-	Visitor V = { &input, tick_count, false, 0 };
-	entity_db->update_entity(player_id, Visitor::call, &V);
-	
-	//Player is desynchronized
-	if(V.out_of_sync)
-	{
-		mailbox->forget_entity(player_id, player_id);
-	}
-	
-	prev_tick = V.prev_tick;
-}
-
-
-void World::handle_chat(EntityID const& player_id, std::string const& msg)
-{
-	//Sanity check chat message
-	Entity entity;
-	if( !entity_db->get_entity(player_id, entity) ||
-		(entity.base.flags & EntityFlags::Inactive) ||
-		entity.base.type != EntityType::Player )
-		return;
-	
-	//Construct chat string
-	stringstream ss;
-	ss << entity.player.player_name << ": " << msg;
-	
-	//Construct region
-	Region r(	entity.base.x - CHAT_RADIUS,
-				entity.base.y - CHAT_RADIUS,
-				entity.base.z - CHAT_RADIUS,
-				entity.base.x + CHAT_RADIUS,
-				entity.base.y + CHAT_RADIUS,
-				entity.base.z + CHAT_RADIUS  );
-				
-	//Broadcast to players
-	mailbox->broadcast_chat(r, ss.str(), true);
-}
-
-//Forgets about an entity
-void World::handle_forget(EntityID const& player_id, EntityID const& forgotten)
-{
-	mailbox->forget_entity(player_id, forgotten);
-}
-
-//Handles a time critical user event
-void World::handle_action(EntityID const& player_id, Action const& action)
-{
-	struct Visitor
-	{
-		Action action;
-		World* world;
-		
-		static EntityUpdateControl visit(Entity& entity, void* data)
-		{
-			Visitor* V = (Visitor*)data;
-			
-			//Check action type
-			switch(V->action.type)
-			{
-			case ActionType::DigStart:
-			{
-				if( abs(entity.base.x - V->action.target_block.x) > DIG_RADIUS || 
-					abs(entity.base.y - V->action.target_block.y) > DIG_RADIUS || 
-					abs(entity.base.z - V->action.target_block.z) > DIG_RADIUS )
-				{
-					return EntityUpdateControl::Continue;
-				}
-				
-				if( entity.player.state == PlayerState::Neutral ||
-					entity.player.state == PlayerState::Digging )
-				{
-					entity.player.state				= PlayerState::Digging;
-					entity.player.dig_state.start	= V->action.tick;
-					entity.player.dig_state.x 		= V->action.target_block.x;	
-					entity.player.dig_state.y 		= V->action.target_block.y;
-					entity.player.dig_state.z 		= V->action.target_block.z;
-			
-					return EntityUpdateControl::Update;
-				}
-			}
-			break;
-			
-			case ActionType::DigStop:
-			{
-				if(entity.player.state != PlayerState::Digging)
-					return EntityUpdateControl::Continue;
-
-				entity.player.state = PlayerState::Neutral;
-				return EntityUpdateControl::Update;
-			}
-			break;
-			}
-			
-			
-			return EntityUpdateControl::Continue;
-		}
-	};
-	
-	Visitor V = { action, this };
-	entity_db->update_entity(player_id, Visitor::visit, &V);
-}
-
-
-//---------------------------------------------------------------
-// Chunk retrieval
-//---------------------------------------------------------------
-
-//Retrieves a compressed chunk from the server
-int World::get_compressed_chunk(
-	EntityID const& player_id,
-	ChunkID const& chunk_id,
-	uint8_t* buf,
-	int buf_len)
-{
-	//Do sanity check on chunk request
-	Entity entity;
-	if( !entity_db->get_entity(player_id, entity) ||
-		entity.base.type != EntityType::Player ||
-		(entity.base.flags & EntityFlags::Inactive) || 
-		abs(entity.base.x - (chunk_id.x + .5) * CHUNK_X) > CHUNK_RADIUS ||
-		abs(entity.base.y - (chunk_id.y + .5) * CHUNK_Y) > CHUNK_RADIUS ||
-		abs(entity.base.z - (chunk_id.z + .5) * CHUNK_Z) > CHUNK_RADIUS )
-	{
-		return 0;
-	}
-	
-	//Refresh all existing entities in the chunk region for the client
-	struct Visitor
-	{
-		EntityID player_id;
-		Mailbox* mailbox;
-		
-		static EntityUpdateControl call(Entity& entity, void* data)
-		{
-			Visitor* v = (Visitor*)data;
-			v->mailbox->send_entity(v->player_id, entity);
-			return EntityUpdateControl::Continue;
-		}
-	};
-	
-	Visitor V = { player_id, mailbox };
-	entity_db->foreach(Visitor::call, &V, Region(chunk_id), vector<EntityType>(), true);
-	
-
-	//Read the chunk from the map
-	Chunk chunk;
-	game_map->get_surface_chunk(chunk_id, &chunk);
-	return chunk.compress((void*)buf, buf_len);
-}
-
-
-//Retrieves all visibile chunks around player
-bool World::get_vis_chunks(
-	EntityID const& player_id,
-	int socket)
-{
-	//Do sanity check on chunk request
-	Entity entity;
-	if( !entity_db->get_entity(player_id, entity) ||
-		entity.base.type != EntityType::Player ||
-		(entity.base.flags & EntityFlags::Inactive) )
-	{
+	if(!running)
 		return false;
-	}
-	
-	//Find next visible chunk region for player
-	int r = 0;
-	uint64_t vis_id;
-	while(r == 0)
+	return session_manager->attach_update_socket(session_id, socket);
+}
+
+//Attach a map socket
+bool World::player_attach_map_socket(SessionID const& session_id, WebSocket* socket)
+{
+	if(!running)
+		return false;
+	return session_manager->attach_map_socket(session_id, socket);
+}
+
+
+//Starts the world thread
+bool World::start()
+{
+	//The world task
+	struct WorldTask : task
 	{
-		vis_id = mailbox->get_next_vis_set(player_id);
-		if(vis_id == 0)
-			return false;     
-	
-		r = game_map->send_vis_buffer(vis_id, socket);
+		World* instance;
 		
-		printf("r = %d\n", r);
+		WorldTask(World* inst) : instance(inst) {}
 	
-		if(r < 0)
-			return false;
-			
-		if(r == 0)
+		task* execute()
 		{
-			mailbox->mark_vis_set(player_id, vis_id);		
+			instance->main_loop();
+			return NULL;
 		}
+	};
+	
+	//Create the thread group
+	running = true;
+	world_task = new (tbb::task::allocate_root()) tbb::empty_task;
+	world_task->set_ref_count(2);
+	auto worker = new(world_task->allocate_child()) WorldTask(this);
+	world_task->spawn(*worker);
+	
+	return true;
+}
+
+//Stops the world
+void World::stop()
+{
+	running = false;
+	world_task->wait_for_all();
+
+	prev_tick = tick_count::now();
+	lag = 0.0;
+		
+	DEBUG_PRINTF("World instance stopped\n");
+}
+
+//Synchronize world state
+void World::sync()
+{
+}
+
+void World::main_loop()
+{
+	//FIXME: Spawn the map precache worker
+	DEBUG_PRINTF("Starting world instance\n");
+	while(running)
+	{
+		task_group game_tasks;
+		
+		//Update the tick counter
+		auto t = tick_count::now();
+		lag += (t - prev_tick).seconds();
+		prev_tick = t;
+		double r = config->readFloat("tick_rate");
+	
+		//Check if enough time has elapsed
+		if(lag > r)
+		{
+			//Increment the global tick count
+			ticks ++;
+			config->storeInt("ticks", ticks);
+			lag -= r;
+		
+			//Only run the physics once every 16 updates
+			if((ticks % 16) == 0)
+			{
+				physics->update(ticks - 16);
+			}
+			
+			//Run any per tick tasks
+		}
+		
+		//Spawn the update player tasks
+		game_tasks.run([&](){ update_players(); });
+		game_tasks.wait();
+		
+		//Process all pending deletes
+		session_manager->process_pending_deletes();
 	}
 	
-	//If successful, mark chunk and replicate entities
-	mailbox->mark_vis_set(player_id, vis_id);
+	session_manager->clear_all_sessions();
+}
+
+
+
+void World::update_players()
+{
+	//Iterate over the player set
+	double session_timeout = config->readFloat("session_timeout"),
+			update_rate = config->readFloat("update_rate");
+	int visible_radius = config->readInt("visible_radius");
+	parallel_for(session_manager->sessions.range(), 
+		[&](concurrent_unordered_map<SessionID, Session*>::range_type sessions)
+	{
+		auto session = sessions.begin()->second;
+
+		//Check state
+		if(session->state == SessionState_Dead)
+		{
+			return;
+		}
+		else if(session->state == SessionState_Pending)
+		{
+		
+			if(session->map_socket != NULL && session->update_socket != NULL)
+			{
+				session->state = SessionState_Active;
+			}
+			else
+			{
+				if((tick_count::now() - session->last_activity).seconds() > session_timeout)
+				{
+					printf("Pending session timeout, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
+					session_manager->remove_session(session->session_id);
+					return;
+				}
+			
+				return;
+			}
+		}
+		
+		//Check if the sockets died
+		if(!session->update_socket->alive() || !session->map_socket->alive())
+		{
+			printf("Client lost connection, session id = %ld, player name = %s\n", session->session_id, session->player_name.c_str());
+			session_manager->remove_session(session->session_id);
+			return;
+		}
+		
+		//Handle input
+		bool active = false;
+		Network::ClientPacket *input_packet;
+		while(session->update_socket->recv_packet(input_packet))
+		{
+			if(input_packet->has_player_update())
+			{
+				//Unpack update and set the new coordinate for the player
+				if(input_packet->player_update().has_x())
+					session->player_coord.x = input_packet->player_update().x();
+				if(input_packet->player_update().has_y())
+					session->player_coord.y = input_packet->player_update().y();
+				if(input_packet->player_update().has_z())
+					session->player_coord.z = input_packet->player_update().z();
+			}
+			else if(input_packet->has_chat_message())
+			{
+				//Broadcast chat message
+				DEBUG_PRINTF("Got a chat message\n");
+				ScopeFree escape_str(tcxmlescape(input_packet->chat_message().c_str()));
+				string chat_string = "<font color='yellow'>" + session->player_name + " :</font> <font color='white'>" + string((char*)escape_str.ptr) + "</font><br/>";
+				broadcast_message(chat_string);
+			}
+			else if(input_packet->has_block_update() &&
+				input_packet->block_update().has_x() &&
+				input_packet->block_update().has_y() &&
+				input_packet->block_update().has_z() &&
+				input_packet->block_update().has_block() )
+			{
+				DEBUG_PRINTF("Updating block\n");
+				set_block(
+					Block(input_packet->block_update().block()),
+					ticks,
+					input_packet->block_update().x(),
+					input_packet->block_update().y(),
+					input_packet->block_update().z());
+			}
+			
+			active = true;
+			delete input_packet;
+		}
+		
+		//Update the activity flag
+		if(active)
+		{
+			session->last_activity = tick_count::now();
+		}
+		
+		//Check for time out condition
+		if((tick_count::now() - session->last_activity).seconds() > session_timeout)
+		{
+			printf("Session timeout, session id = %ld, player name = %s", session->session_id, session->player_name.c_str());
+			session_manager->remove_session(session->session_id);
+			return;
+		}
+		
+		//Send chunk updates to player
+		send_chunk_updates(session, visible_radius);
+		
+		//Send periodic game state updates to player
+		if((tick_count::now() - session->last_updated).seconds() > update_rate)
+		{
+			send_world_updates(session);
+			session->last_updated = tick_count::now();
+		}
+	});
+}
+
+//Send a list of session updates to the user in parallel
+void World::send_chunk_updates(Session* session, int r)
+{
+	//Figure out which chunks are visible
+	ChunkID chunk(session->player_coord);
+	
+	auto coord = session->player_coord;
 	
 	/*
-	//Refresh all existing entities in the chunk region for the client
-	struct Visitor
-	{
-		EntityID player_id;
-		Mailbox* mailbox;
-		
-		static EntityUpdateControl call(Entity& entity, void* data)
-		{
-			Visitor* v = (Visitor*)data;
-			v->mailbox->send_entity(v->player_id, entity);
-			return EntityUpdateControl::Continue;
-		}
-	};
-	
-	ChunkID base_chunk(
-		(vis_id&((1<<20)-1)) * VIS_BUFFER_X,
-		((vis_id>>20)&((1<<20)-1)) * VIS_BUFFER_Y,
-		((vis_id>>40)&((1<<20)-1)) * VIS_BUFFER_Z);
-		
-	Region r(
-		base_chunk.x*CHUNK_X, 
-		base_chunk.y*CHUNK_Y, 
-		base_chunk.z*CHUNK_Z,
-		(base_chunk.x+VIS_BUFFER_X)*CHUNK_X, 
-		(base_chunk.y+VIS_BUFFER_Y)*CHUNK_Y, 
-		(base_chunk.z+VIS_BUFFER_Z)*CHUNK_Z,
-	
-	Visitor V = { player_id, mailbox };
-	entity_db->foreach(Visitor::call, &V, r, vector<EntityType>(), true);
+	DEBUG_PRINTF("Player chunk = %d, %d, %d; position = %d,%d,%d\n", chunk.x, chunk.y, chunk.z,
+		(int)coord.x, (int)coord.y, (int)coord.z);
 	*/
 	
-	return true;
-}
-
-
-//---------------------------------------------------------------
-// Heartbeat
-//---------------------------------------------------------------
-
-//Implementation of heartbeat function
-bool heartbeat_impl(Mailbox* mailbox, EntityDB* entity_db, EntityID const& player_id, int tick_count, int socket)
-{
-	//Sanity check player
-	Entity player;
-	if( !entity_db->get_entity(player_id, player) ||
-		player.base.type != EntityType::Player ||
-		(player.base.flags & EntityFlags::Inactive) )
+	//Scan all chunks in visible radius
+	parallel_for(blocked_range3d<int,int,int>(
+		chunk.x-r, chunk.x+r,
+		chunk.z-r, chunk.z+r,
+		chunk.y-r, chunk.y+r), [&](blocked_range3d<int,int,int> rng)
 	{
-		cout << "Invalid player" << endl;
-		return false;
-	}
-	
-	
-	//We need to make a local copy of the player packet and clear out the old one
-	Mailbox::PlayerRecord data;
-	{
-		Mailbox::PlayerLock P(mailbox, player_id);
-		Mailbox::PlayerRecord* ndata = P.data();
-		if(ndata == NULL)
-			return false;
-
-		mailbox->update_index(ndata, player.base.x, player.base.y, player.base.z);
-		data.swap(*ndata);
-	}
-	
-	//Set tick count
-	data.tick_count = tick_count;
-	
-	//grab a list of all entities in the range of the player
-	vector<uint64_t> new_entities;
-	{
-		ScopeTCQuery Q(entity_db->entity_db);
-	
-		Region r(	player.base.x - UPDATE_RADIUS, 
-					player.base.y - UPDATE_RADIUS,
-					player.base.z - UPDATE_RADIUS,
-					player.base.x + UPDATE_RADIUS,
-					player.base.y + UPDATE_RADIUS,
-					player.base.z + UPDATE_RADIUS );
-		entity_db->add_range_query(Q.query, r);
-	
-		tctdbqryaddcond(Q.query, "poll", TDBQCSTREQ, "1");
-	
-		ScopeTCList L(tctdbqrysearch(Q.query));
-		
-		if(L.list != NULL)
-		while(true)
+		for(auto iy = rng.cols().begin();  iy!=rng.cols().end();  ++iy)
+		for(auto iz = rng.rows().begin();  iz!=rng.rows().end();  ++iz)
+		for(auto ix = rng.pages().begin(); ix!=rng.pages().end(); ++ix)
 		{
-			int sz;
-			ScopeFree G(tclistpop(L.list, &sz));
-		
-			if(G.ptr == NULL || sz != sizeof(EntityID))
-				break;
-
-			//Recover entity			
-			EntityID entity_id = *(EntityID*)G.ptr;
-			Entity entity;
-			entity_db->get_entity(entity_id, entity);
+			ChunkID chunk_id(ix, iy, iz);
 			
-			//Check for known entity
-			if(	data.known_entities.count(entity_id.id) == 0 && 
-				(entity.base.flags & EntityFlags::Persist) )
-				new_entities.push_back(entity_id.id);
-
-			//Serialize
-			data.serialize_entity(entity);
+			//Check if ID is known by player
+			auto iter = session->known_chunks.find(chunk_id);
+			uint64_t last_seen = 0;
+			if(iter != session->known_chunks.end())
+				last_seen = iter->second;
+			
+			//If not, send the packet to the player
+			auto packet = game_map->get_net_chunk(chunk_id, last_seen);
+			if(packet != NULL)
+			{
+				session->known_chunks.insert(make_pair(chunk_id, packet->chunk_response().last_modified()));
+				session->map_socket->send_packet(packet);
+			}
 		}
-	}
-		
-	//Push data to client
-	data.net_serialize(socket);
-	
-	//Finally, we need to add the newly serialized entities to the known
-	//entity set on the client
-	if(new_entities.size() > 0)
-	{
-		Mailbox::PlayerLock P(mailbox, player_id);
-		Mailbox::PlayerRecord* ndata = P.data();
-		if(ndata == NULL)
-			return true;
-		
-		ndata->known_entities.insert(new_entities.begin(), new_entities.end());
-	}
-	
-	return true;
+	});
 }
 
-//Sends queued messages to client
-//Note: This function is magical and breaks all sorts of abstractions in order to avoid
-//doing many wasteful memcpy's/locks all over the place.
-bool World::heartbeat(
-	EntityID const& player_id,
-	int socket)
+//Sends world updates to the player
+void World::send_world_updates(Session* session)
 {
-	return heartbeat_impl(mailbox, entity_db, player_id, tick_count, socket);
+	DEBUG_PRINTF("Updating player: %s\n", session->player_name.c_str());
+
+	auto packet = new Network::ServerPacket();
+	packet->mutable_world_update()->set_ticks(ticks);
+	session->update_socket->send_packet(packet);
 }
 
-
-//---------------------------------------------------------------
-// Entity event handler functions
-//---------------------------------------------------------------
-
-void World::CreateHandler::call(Entity const& entity)
+//Broadcasts a chat message to all players
+void World::broadcast_message(std::string const& str)
 {
-	if(entity.base.flags & EntityFlags::Inactive)
-		return;
-
-	Region r( entity.base.x - UPDATE_RADIUS, 
-			  entity.base.y - UPDATE_RADIUS,
-			  entity.base.z - UPDATE_RADIUS,
-			  entity.base.x + UPDATE_RADIUS, 
-			  entity.base.y + UPDATE_RADIUS,
-			  entity.base.z + UPDATE_RADIUS);
-
-	world->mailbox->broadcast_entity(r, entity);
-}
-
-void World::UpdateHandler::call(Entity const& entity)
-{
-	if( (entity.base.flags & EntityFlags::Inactive) ||
-		(entity.base.flags & EntityFlags::Temporary) )
-		return;
-
-	//Polling entities only get updated when we do a heartbeat.
-	if( !(entity.base.flags & EntityFlags::Poll) )
-	{
-		Region r( entity.base.x - UPDATE_RADIUS, 
-				  entity.base.y - UPDATE_RADIUS,
-				  entity.base.z - UPDATE_RADIUS,
-				  entity.base.x + UPDATE_RADIUS, 
-				  entity.base.y + UPDATE_RADIUS,
-				  entity.base.z + UPDATE_RADIUS);
+	printf("%s\n", str.c_str());
 	
-		world->mailbox->broadcast_entity(r, entity);		
-	}
-	
-	//Update origin for players
-	if(entity.base.type == EntityType::Player)
+	for(auto iter = session_manager->sessions.begin();
+		iter != session_manager->sessions.end();
+		++iter)
 	{
-		world->mailbox->set_origin(entity.entity_id, 
-			entity.base.x, 
-			entity.base.y, 
-			entity.base.z);
+		auto packet = new Network::ServerPacket();
+		packet->set_chat_message(str);
+		iter->second->update_socket->send_packet(packet);
 	}
 }
 
-void World::DeleteHandler::call(Entity const& entity)
+//Sets a block in the world
+void World::set_block(Block b, uint64_t t, int x, int y, int z)
 {
-	if((entity.base.flags & EntityFlags::Temporary))
-		return;
+	//Push the block to the physics simulator
+	physics->set_block(b, t, x, y, z);
 	
-	Region r( entity.base.x - UPDATE_RADIUS, 
-			  entity.base.y - UPDATE_RADIUS,
-			  entity.base.z - UPDATE_RADIUS,
-			  entity.base.x + UPDATE_RADIUS, 
-			  entity.base.y + UPDATE_RADIUS,
-			  entity.base.z + UPDATE_RADIUS);
-
-	world->mailbox->broadcast_kill(r, entity.entity_id);
-}
-
-
-//---------------------------------------------------------------
-// Misc. stuff
-//---------------------------------------------------------------
-void World::set_block(int x, int y, int z, Block b)
-{
-	game_map->set_block(x, y, z, b);
+	//Form the update packet
+	auto packet = new Network::ServerPacket();
+	auto update = packet->mutable_world_update();
+	update->set_ticks(ticks);
 	
-	
-	Region r(
-		x - UPDATE_RADIUS, y - UPDATE_RADIUS, z - UPDATE_RADIUS,
-		x + UPDATE_RADIUS, y + UPDATE_RADIUS, z + UPDATE_RADIUS );
-	
-	mailbox->broadcast_block(r, x, y, z, b);
-	
-	if(b == Block::Air)
-	{
-		mailbox->broadcast_block(r, x-1, y, z, game_map->get_block(x-1, y, z));
-		mailbox->broadcast_block(r, x+1, y, z, game_map->get_block(x+1, y, z));
-		mailbox->broadcast_block(r, x, y-1, z, game_map->get_block(x, y-1, z));
-		mailbox->broadcast_block(r, x, y+1, z, game_map->get_block(x, y+1, z));
-		mailbox->broadcast_block(r, x, y, z-1, game_map->get_block(x, y, z-1));
-		mailbox->broadcast_block(r, x, y, z+1, game_map->get_block(x, y, z+1));
-	}
-}
+	auto blk = update->add_blocks();
+	blk->set_x(x);
+	blk->set_y(y);
+	blk->set_z(z);
+	blk->set_tick(t);
+	blk->set_block(b.int_val);
 
-
-//---------------------------------------------------------------
-// World ticking / update
-//---------------------------------------------------------------
-
-//Ticks the server
-void World::tick()
-{
-	//Increment tick counter
-	mailbox->set_tick_count(++tick_count);
-	
-	
-	tick_players();
-	tick_mobs();
-	
-	//TODO: Add tick events for other major game systems here
-}
-
-//Player loop:  Updates all players in the game
-void World::tick_players()
-{
-	struct Visitor
-	{
-		static EntityUpdateControl call(Entity& entity, void* data)
-		{
-			World* world = (World*)data;
-			
-			/*
-			//Check for timed out players
-			if(world->tick_count - entity.player.net_last_tick > PLAYER_TIMEOUT)
-			{
-				//cout << "Player timeout! ID = " << entity.entity_id.id << ", Flags = " <<  entity.base.flags << endl;
-				entity.base.flags = EntityFlags::Inactive;
-				world->mailbox->del_player(entity.entity_id);
-				return EntityUpdateControl::Update;
-			}
-			*/
-			
-		
-			//Update network state
-			//TODO: Add some interpolation / sanity checking here.
-			//	Need to guard against speed hacking
-			entity.base.x = entity.player.net_x;
-			entity.base.y = entity.player.net_y;
-			entity.base.z = entity.player.net_z;
-			
-			entity.base.pitch = entity.player.net_pitch;
-			entity.base.yaw = entity.player.net_yaw;
-			entity.base.roll = 0.0;
-
-			//Handle state specific stuff
-			switch(entity.player.state)
-			{
-			
-			//Normal state
-			case PlayerState::Neutral:
-			{
-			}
-			break;
-			
-			//Digging
-			case PlayerState::Digging:
-			{
-				//Calculate finish time
-				uint64_t dig_finish_time = entity.player.dig_state.start + 5;
-				
-				//Check if we moved too far
-				if( abs(entity.base.x - entity.player.dig_state.x) > DIG_RADIUS ||
-					abs(entity.base.y - entity.player.dig_state.y) > DIG_RADIUS ||
-					abs(entity.base.z - entity.player.dig_state.z) > DIG_RADIUS )
-				{
-					cout << "Player stopped digging!" << endl;
-					entity.player.state = PlayerState::Neutral;
-				}
-				else if(dig_finish_time <= world->tick_count)
-				{
-					cout << "SETTING BLOCK!" << endl;
-					world->set_block(
-						entity.player.dig_state.x,
-						entity.player.dig_state.y,
-						entity.player.dig_state.z,
-						Block::Air);
-						
-					entity.player.state = PlayerState::Neutral;
-				}
-			}	
-			break;
-			
-			//Dead!
-			case PlayerState::Dead:
-			{
-			}
-			break;
-			}
-			
-			return EntityUpdateControl::Update;				
-		}
+	uint64_t prev_time = (t & (~15)) - 16;
+	const int delta[][3] =
+	{	
+		{ 0,-1, 0},
+		{ 0, 0,-1},
+		{-1, 0, 0},
+		{ 1, 0, 0},
+		{ 0, 0, 1},
+		{ 0, 1, 0}
 	};
+
+	for(int i=0; i<6; ++i)
+	{
+		int ox = x + delta[i][0],
+			oy = y + delta[i][1],
+			oz = z + delta[i][2];
+			
+		auto bb = update->add_blocks();
+		bb->set_x(ox);
+		bb->set_y(oy);
+		bb->set_z(oz);
+		bb->set_tick(prev_time);
+		bb->set_block(game_map->get_block(ox, oy, oz).int_val);
+	}
 	
-	entity_db->foreach(
-		Visitor::call, 
-		this,
-		Region(),
-		vector<EntityType>({ EntityType::Player }), 
-		true); 
+	//FIXME: Broadcast this packet in a smarter way (cull by location, use some indexing)
+	for(auto iter = session_manager->sessions.begin(); iter != session_manager->sessions.end(); ++iter)
+	{
+		iter->second->update_socket->send_packet(new Network::ServerPacket(*packet));
+	}
+	
+	//Release the packet
+	delete packet;
 }
 
-void World::tick_mobs()
-{
-	//Updates all mobs in the game (not yet implemented)
-}
 
 };

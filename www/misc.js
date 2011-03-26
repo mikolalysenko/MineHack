@@ -1,269 +1,199 @@
 "use strict";
 
-function print(str)
+function printf(str)
 {
-	if(typeof(console) == 'undefined')
+	if(typeof(console) == "undefined")
 	{
 		postMessage({type:EV_PRINT, 'str':str});
 	}
 	else
 	{
-		//console.log(str);
+		console.log(str);
 	}
 }
 
-
-function asyncGetBinary(url, handler, err_handler, body)
+function sendProtoBuf_async(pbuf, oncomplete, onerror, timeout_val, async)
 {
-	var XHR = new XMLHttpRequest();
+	if(typeof(timeout_val) == "undefined")
+		timeout_val = 5000;
+
+	if(typeof(async) == "undefined")
+		async = true;
+
+	//Encode protocol buffer
+	var data = new PROTO.ByteArrayStream;
+	pbuf.SerializeToStream(data);
 	
-	XHR.open("POST", url, true);
+	//Encode as binary
+	var arr = new Uint8Array(data.array_),
+		bb = new BlobBuilder,
+		XHR = new XMLHttpRequest,
+		timeout = setTimeout(function() { XHR.abort(); }, timeout_val);
+		
+	bb.append(arr.buffer);
+	
+	//Build request
+	XHR.open("POST", "/", async);
 	XHR.onreadystatechange = function()
 	{
-		print("ready state = " + XHR.readyState);
-	
 		if(XHR.readyState == 4)
 		{
-			if(XHR.status == 200)
+			clearTimeout(timeout);
+		
+			if(XHR.status == 200 && XHR.responseText.length > 1)
 			{
-				var str = XHR.responseText;
-				var arr = new Uint8Array(str.length);
-				
-				for(var i=0; i<str.length; i++)
+				var str = XHR.responseText,
+					arr = new Array(str.length - 1),
+					i;
+					
+				for(i=1; i<str.length; i++)
 				{
-					arr[i] = str.charCodeAt(i) & 0xff;
+					arr[i-1] = str.charCodeAt(i) & 0xff;
 				}
-			
-				handler(arr);
+
+				var msg = new Network.ServerPacket;
+				msg.ParseFromStream(new PROTO.ByteArrayStream(arr));
+				oncomplete(msg);
 			}
 			else
 			{
-				err_handler();
+				//Call error handler
+				onerror();
 			}
 		}
 	}
-	XHR.send(body);
-}
-
-function arr2str(arr)
-{
-	var str = "";
-	for(var i=0; i<arr.length; i++)
-	{
-		str += String.fromCharCode(arr[i] + 0xB0);
-	}
-	return str;
-}
-
-function mmult(A, B)
-{
-	var C = new Array(16);
 	
-	for(var i=0; i<4; i++)
+	//Encode blob
+	XHR.send(bb.getBlob("application/octet-stream"));
+}
+
+
+function sendProtoBuf_sync(pbuf, timeout_val)
+{
+	var result = null;
+
+	sendProtoBuf_async(pbuf, 
+		function(msg) { result = msg; },
+		function() { },
+		timeout_val,
+		false);
+		
+	return result;
+}
+
+//Converts an array to a base 128
+function base128_encode(arr)
+{
+	var	raw = "",
+		len = arr.length,
+		w = 0, i = 0, j = 0;
+
+	for(j=0; j<7; ++j)
+		arr.push(0);
+	
+	while(i < len)
 	{
-		for(var j=0; j<4; j++)
+		//Read 4
+		w = 0;
+		for(j=0; j<4; ++j)
 		{
-			var x = 0.0;
-			for(var k=0; k<4; k++)
-			{
-				x += A[i + 4*k] * B[k + 4*j];
-			}
-			C[i + 4*j] = x;
+			w += arr[i++] << (j*8);
+		}
+		
+		//Copy 4
+		for(j=0; j<4; ++j)
+		{
+			raw += String.fromCharCode(w & 0x7f);
+			w >>>= 7;
+		}
+		
+		//Read 3
+		for(j=0; j<3; ++j)
+		{
+			w += arr[i++] << (j*8 + 4);
+		}
+		
+		//Copy 4
+		for(j=0; j<4; ++j)
+		{
+			raw += String.fromCharCode(w & 0x7f);
+			w >>>= 7;
 		}
 	}
-	return C;
+	
+	//Calculate length
+	var n = Math.floor(len / 7), d = len % 7,
+		l = 8*n + (d == 0 ? 0 : d+1);
+	
+	return raw.substr(0, l);
 }
 
-function hgmult(M, X)
+function base128_decode(raw)
 {
-	var R = [0, 0, 0, 0], V = [X[0], X[1], X[2], 1.0], i, j;
-	
-	for(j=0; j<4; ++j)
-	{
-		for(i=0; i<4; ++i)
-		{
-			R[i] += M[i+4*j] * V[j]
-		}
-	}
-	
-	for(i=0; i<4; ++i)
-	{
-		R[i] /= R[3];
-	}
-	
-	return R;
-}
-
-
-function m3inv(mat)
-{
-	var k,
-	
-	M = function(i, j) { return mat[i + 3*j]; },
-	
-	R = [
-		 M(1,1)*M(2,2)-M(1,2)*M(2,1),	-M(1,0)*M(2,2)+M(1,2)*M(2,0),	 M(1,0)*M(2,1)-M(1,1)*M(2,0),
-		-M(0,1)*M(2,2)+M(0,2)*M(2,1),	 M(0,0)*M(2,2)-M(0,2)*M(2,0),	-M(0,0)*M(2,1)+M(0,1)*M(2,0),
-		 M(0,1)*M(1,2)-M(0,2)*M(1,1),	-M(0,0)*M(1,2)+M(0,2)*M(1,0),	 M(0,0)*M(1,1)-M(0,1)*M(1,0) ],
-	
-	D = M(0,0) * R[0]  + M(0,1) * R[1] + M(0,2) * R[2];
-	
-	if(Math.abs(D) < 0.0001)
-	{
+	var len = raw.length,
+		n = Math.floor(len / 8), d = len % 8;
+		
+	if(d == 1)
 		return [];
-	}
 	
-	for(k=0; k<9; ++k)
+	var w, i, j, k,
+		arr = new Array(0, (n + 1)*7 );
+
+	//Pad string
+	for(i=0; i<8; ++i)
+		raw += String.fromCharCode(0);
+
+	i = 0;
+	k = 0;
+	while(i < len)
 	{
-		R[k] /= D;
-	}
-	
-	return R;
-}
-
-function m3xform(M, x)
-{
-	var i, j, y = [0,0,0];
-	
-	for(i=0; i<3; ++i)
-	for(j=0; j<3; ++j)
-	{
-		y[i] += M[i+3*j] * x[j];
-	}
-	
-	return y;
-}
-
-function m3transp(M)
-{
-	var res = new Array(9), i, j;
-	
-	for(i=0; i<3; ++i)
-	for(j=0; j<3; ++j)
-	{
-		res[i+3*j] = M[j+3*i];
-	}
-	
-	return res;
-}
-
-function m4det(m)
-{
-	return  m[3]*m[6]*m[9]*m[12] - m[2]*m[7]*m[9]*m[12] - m[3]*m[5]*m[10]*m[12] + m[1]*m[7]*m[10]*m[12]+
-			m[2]*m[5]*m[11]*m[12] - m[1]*m[6]*m[11]*m[12] - m[3]*m[6]*m[8]*m[13] + m[2]*m[7]*m[8]*m[13]+
-			m[3]*m[4]*m[10]*m[13] - m[0]*m[7]*m[10]*m[13] - m[2]*m[4]*m[11]*m[13] + m[0]*m[6]*m[11]*m[13]+
-			m[3]*m[5]*m[8]*m[14] - m[1]*m[7]*m[8]*m[14] - m[3]*m[4]*m[9]*m[14] + m[0]*m[7]*m[9]*m[14]+
-			m[1]*m[4]*m[11]*m[14] - m[0]*m[5]*m[11]*m[14] - m[2]*m[5]*m[8]*m[15] + m[1]*m[6]*m[8]*m[15]+
-			m[2]*m[4]*m[9]*m[15] - m[0]*m[6]*m[9]*m[15] - m[1]*m[4]*m[10]*m[15] + m[0]*m[5]*m[10]*m[15];
-}
-
-function m4inv(m)
-{
-	var inv = new Array(16);
-
-	inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
-		m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
-	inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] -
-		m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
-	inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] +
-		m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
-	inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] -
-		m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
-	inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] -
-		m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
-	inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] +
-		m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
-	inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] -
-		m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
-	inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] +
-		m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
-	inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] +
-		m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
-	inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] -
-		m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
-	inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] +
-		m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
-	inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] -
-		m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
-	inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] -
-		m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
-	inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] +
-		m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
-	inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] -
-		m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
-	inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] +
-		m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
-
-	var det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
-
-	if (Math.abs(det) <= 1e-8) {
-		return inv;
-	}
-
-	det = 1.0 / det;
-
-	for (var i = 0; i < 16; ++i) {
-		inv[i] *= det;
-	}
-
-	return inv;
-}
-
-function m4transp(M)
-{
-	var res = new Array(16), i, j;
-	
-	for(i=0; i<4; ++i)
-	for(j=0; j<4; ++j)
-	{
-		res[i+4*j] = M[j+4*i];
-	}
-	
-	return res;
-}
-
-function cross(u, v)
-{
-	return [ 
-		u[1] * v[2] - u[2] * v[1],
-		u[2] * v[0] - u[0] * v[2],
-		u[0] * v[1] - u[1] * v[0] ];
-}
-
-function dot(u, v)
-{
-	return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-}
-
-function get_frustum_planes(M)
-{
-	var res = [], pl, i, j, k;
-	
-	for(i=0; i<3; ++i)
-	for(j=-1; j<=1; j+=2)
-	{
-		pl = [];
-		for(k=0; k<4; ++k)
+		//Read 4
+		w = 0;
+		for(j=0; j<4; ++j)
 		{
-			if(i == 2 && j == 1)
-			{
-				pl.push( M[4*k+2] );
-			}
-			else
-			{
-				pl.push( M[4*k+3] + j * M[4*k+i] );
-			}
+			w += (raw.charCodeAt(i++) & 0x7f) << (7*j);
 		}
 		
-		mag = Math.sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
-		
-		for(k=0; k<4; ++k)
+		//Copy 3
+		for(j=0; j<3; ++j)
 		{
-			pl[k] /= mag;
+			arr[k++] = w & 0xff;
+			w >>>= 8;
 		}
 		
-		res.push(pl);
+		//Read 4
+		for(j=0; j<4; ++j)
+		{
+			w += (raw.charCodeAt(i++) & 0x7f) << (7*j + 4);
+		}
+		
+		//Copy 4
+		for(j=0; j<4; ++j)
+		{
+			arr[k++] = w & 0xff;
+			w >>>= 8;
+		}
 	}
-	return res;
+
+	return arr.slice(0, 7 * n + (d == 0 ? 0 : d - 1));
 }
+
+//Turns a protocol buffer into a utf-8 stream.  only uses lower 7 bits.
+//   AAAAHH  Why you are you stupid websockets?!? >:P
+function pbuf_to_raw(pbuf)
+{
+	var stream = new PROTO.ByteArrayStream;
+	pbuf.SerializeToStream(stream);	
+	return base128_encode(stream.array_);
+}
+
+function raw_to_pbuf(raw)
+{
+	var stream = new PROTO.ByteArrayStream(base128_decode(raw)),
+		pbuf = new Network.ServerPacket;
+		
+	pbuf.ParseFromStream(stream);
+	return pbuf;
+}
+
 

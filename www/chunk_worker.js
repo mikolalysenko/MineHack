@@ -4,27 +4,36 @@
 importScripts(
 	'constants.js', 
 	'misc.js', 
-	'chunk_common.js');
+	'protobuf.js',
+	'pbj.js',
+	'chunk_common.js',
+	'network.pb.js');
 
-var MAX_NET_CHUNKS		= 512,
-	VERT_SIZE			= 12,
+var MAX_NET_CHUNKS	= 512;
 
-	PACK_X_STRIDE		= 1,
-	PACK_Y_STRIDE		= CHUNK_X * 3,
-	PACK_Z_STRIDE		= CHUNK_X * CHUNK_Y * 9,
+var VB_GEN_RATE		 	= 30;
+var FETCH_RATE			= 100;
+var MAX_VB_UPDATES		= 5;
 
-	PACK_X_OFFSET		= CHUNK_X,
-	PACK_Y_OFFSET		= CHUNK_Y,
-	PACK_Z_OFFSET		= CHUNK_Z;
+var VERT_SIZE			= 12;
+
+var PACK_X_STRIDE		= 1;
+var PACK_Y_STRIDE		= CHUNK_X * CHUNK_Z * 9;
+var PACK_Z_STRIDE		= CHUNK_X * 3;
+
+var PACK_X_OFFSET		= CHUNK_X;
+var PACK_Y_OFFSET		= CHUNK_Y;
+var PACK_Z_OFFSET		= CHUNK_Z;
 
 var 
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
-	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
-	session_id = new Uint8Array(8),		 	 //Session ID key
+//	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
+//	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
 	fetch_interval = null,					 //Interval timer for chunk fetch events
+	socket = null,							 //The websocket
 	
 	v_ptr = 0,
 	i_ptr = 0,
@@ -71,7 +80,7 @@ function calc_light(
 	return [ao, ao, ao];
 }
 
-//Construct vertex buffer for this chunk
+//varruct vertex buffer for this chunk
 // This code makes me want to barf - Mik
 function gen_vb()
 {
@@ -248,8 +257,8 @@ function gen_vb()
 		nv += 4;
 	}
 		
-	for(z=0; z<CHUNK_Z; ++z)
 	for(y=0; y<CHUNK_Y; ++y)
+	for(z=0; z<CHUNK_Z; ++z)
 	{
 		//Set up neighborhood buffers
 		p00 = get_ptr(y-1, z-1);
@@ -410,159 +419,158 @@ function pack_buffer(cx, cy, cz)
 
 	var i, j, k, 
 		dx, dy, dz,
-		data_offset, buf_offset,
-		chunk, data;
+		step_x  = PACK_Z_STRIDE - CHUNK_X + 1,
+		step_xz = PACK_Y_STRIDE - (PACK_Z_STRIDE * (CHUNK_Z - 1) + CHUNK_X - 1)
+		
 
 	for(dz=-1; dz<=1; ++dz)
 	for(dy=-1; dy<=1; ++dy)
 	for(dx=-1; dx<=1; ++dx)
 	{
-		chunk = Map.lookup_chunk(cx+dx, cy+dy, cz+dz);
+		var chunk = Map.lookup_chunk(cx+dx, cy+dy, cz+dz),
+		
+			buf_offset  =
+				 (dx+1) * CHUNK_X +
+				((dy+1) * CHUNK_Y) * PACK_Y_STRIDE +
+				((dz+1) * CHUNK_Z) * PACK_Z_STRIDE;
+
 		if(chunk)
 		{
-			data = chunk.data;
-		}
-		else
-		{
-			data = empty_data;
-		}
-		
-		//Store result into packed buffer
-		data_offset = 0;
-		for(k=0; k<CHUNK_Z; ++k)
-		for(j=0; j<CHUNK_Y; ++j)
-		{
-			buf_offset  =
-					 (dx+1) * CHUNK_X +
-					((dy+1) * CHUNK_Y + j) * PACK_Y_STRIDE +
-					((dz+1) * CHUNK_Z + k) * PACK_Z_STRIDE;
+			var x = 0, y = 0, z = 0, data = chunk.data;
+			
+			for(i = 0; i<data.length; ++i)
+			{
+				var l = data[i][0],
+					b = data[i][1];
+	
+				for(j=0; j<l; ++j)
+				{
+					packed_buffer[buf_offset] = b;
+					if(++x < CHUNK_X)
+					{
+						++buf_offset;
+					}
+					else
+					{
+						x = 0;
+						if(++z < CHUNK_Z)
+						{
+							buf_offset += step_x;
+						}
+						else
+						{
+							z = 0;
+							++y;
+							buf_offset += step_xz;
+						}
+					}
+				}
+			}
+			
+			//Apply pending writes
+			for(i=0; i<chunk.pending_writes.length; ++i)
+			{
+				var w = chunk.pending_writes[i],
+					ox = (dx+1) * CHUNK_X + w.x,
+					oy = (dy+1) * CHUNK_Y + w.y,
+					oz = (dz+1) * CHUNK_Z + w.z;
 					
-			for(i=0; i<CHUNK_X; ++i)
-				packed_buffer[buf_offset++] = data[data_offset++];
-		}
-	}
-	
-	//print("Packed: " + packed_buffer);
-}
-
-
-
-//Decodes a run-length encoded chunk
-function decompress_chunk(arr, data)
-{
-	if(arr.length == 0)
-		return -1;
-
-	var i = 0, j, k = 0, l, c;
-	while(k<arr.length)
-	{
-		l = arr[k];
-		if(l == 0xff)
-		{
-			l = arr[k+1] + (arr[k+2] << 8);
-			c = arr[k+3];
-			k += 4;
+				packed_buffer[ox + oy * PACK_Y_STRIDE + oz * PACK_Z_STRIDE] = w.b;
+			}
 		}
 		else
 		{
-			c = arr[k+1];
-			k += 2;
-		}
-		
-		if(i + l > CHUNK_SIZE)
-		{
-			return -1;
-		}
-		
-		for(j=0; j<=l; ++j)
-		{
-			data[i++] = c;
-		}
-		
-		if(i == CHUNK_SIZE)
-			return k;
-	}
-}
-
-
-function unpack_vis_buffer(arr)
-{
-	wait_chunks = false;
-	if(arr.length == 0)
-		return;
-		
-	var cx = (arr[0] + (arr[1]<<8) + ((arr[2] & 15)<<16))*8,
-		cy = ((arr[2]>>4) + (arr[3]<<4) + ((arr[4]&63)<<12))*4,
-		cz = (arr[5] + (arr[6]<<8) + (arr[7]<<16))*8,
-		count = arr[8],
-		chunk_ids = arr.subarray(9),
-		chunk_data = arr.subarray(9+count);
-		
-	
-	print("Base chunk = " + cx + ',' + cy + ',' + cz);
-	
-	for(var i=0; i<count; ++i)
-	{
-		var offs = chunk_ids[i],
-			ox = cx + (offs&7),
-			oy = cy + ((offs>>3)&3),
-			oz = cz + (offs>>5),
+			//Zero out packed buffer
+			var x = 0, y = 0, z = 0;
+			
+			for(i=0; i<CHUNK_SIZE; ++i)
+			{
+				packed_buffer[buf_offset] = 0;
 				
-			chunk = Map.add_chunk(ox, oy, oz),
-			res = -1;
-			
-			
-		//print("Got chunk: " + ox + "," + oy + "," + oz);
-			
-		if(chunk_data.length > 0)
-			res = decompress_chunk(chunk_data, chunk.data);
-			
-		if(res < 0)
-		{
-			print("Failure!  Could not read chunk");
-			return;
+				if(++x < CHUNK_X)
+				{
+					++buf_offset;
+				}
+				else
+				{
+					x = 0;
+					if(++z < CHUNK_Z)
+					{
+						buf_offset += step_x;
+					}
+					else
+					{
+						z = 0;
+						++y;
+						buf_offset += step_xz;
+					}
+				}
+			}
 		}
-			
-		//Handle any pending writes
-		chunk.pending = false;
-		chunk.is_air = false;
-
-		//Resize array
-		chunk_data = chunk_data.subarray(res);
-
-		//Set dirty flags on neighboring chunks
-		set_dirty(chunk.x, chunk.y, chunk.z);
-		set_dirty(chunk.x-1, chunk.y, chunk.z);
-		set_dirty(chunk.x+1, chunk.y, chunk.z);
-		set_dirty(chunk.x, chunk.y-1, chunk.z);
-		set_dirty(chunk.x, chunk.y+1, chunk.z);
-		set_dirty(chunk.x, chunk.y, chunk.z-1);
-		set_dirty(chunk.x, chunk.y, chunk.z+1);
-
-		//Send result to main thread
-		send_chunk(chunk);
 	}
 }
 
-function grab_vis_buffer()
-{
-	if(wait_chunks)
-		return;
 
-	print("Grabbing visible chunks");
-	
-	
-	var bb = new BlobBuilder();
-	bb.append(session_id.buffer);
-	wait_chunks = true;
-	
-	asyncGetBinary("v", unpack_vis_buffer,
-	function()
+//Decodes a protocol buffer into an ordered list of runs
+function decode_pbuffer(buffer)
+{
+	var i=0, j, l, c, b, res = [];
+	while(i < buffer.length)
 	{
-		wait_chunks = false;
-		print("Error retreiving vis buffer");
-	},
-	bb.getBlob("application/octet-stream"));
+		//Decode size
+		l = 0;
+		for(j=0; j<32; j+=7)
+		{
+			c = buffer[i++];
+			l += (c & 0x7f) << j;
+			if(c < 0x80)
+				break;
+		}
+		
+		//Decode block
+		b = buffer[i++];
+		
+		res.push( [l, b] );
+	}
+	return res;
+}
+
+//Unpacks an incoming protocol buffer
+function unpack_chunk_buffer(pbuf)
+{
+	var t = pbuf.last_modified.lsw,
+		ox = pbuf.x,
+		oy = pbuf.y,
+		oz = pbuf.z,
+		chunk = Map.lookup_chunk(ox, oy, oz);
+		
+	if(!chunk)
+	{
+		chunk = Map.add_chunk(t, ox, oy, oz);
+	}	
+	
+	chunk.t = t;
+
+	//Update pending writes
+	chunk.pending_writes.sort(function(a,b) { return a.t > b.t; });
+	while(chunk.pending_writes.length > 0 &&
+		chunk.pending_writes[chunk.pending_writes.length-1].t <= t)
+	{
+		chunk.pending_writes.pop();
+	}
+	chunk.pending_writes.reverse();
+	
+	//Update the chunk data
+	chunk.data = decode_pbuffer(pbuf.data);
+	
+	//Set dirty flags on neighboring chunks
+	set_dirty(chunk.x, chunk.y, chunk.z, false);
+	set_dirty(chunk.x-1, chunk.y, chunk.z, false);
+	set_dirty(chunk.x+1, chunk.y, chunk.z, false);
+	set_dirty(chunk.x, chunk.y-1, chunk.z, false);
+	set_dirty(chunk.x, chunk.y+1, chunk.z, false);
+	set_dirty(chunk.x, chunk.y, chunk.z-1, false);
+	set_dirty(chunk.x, chunk.y, chunk.z+1, false);
 }
 
 //Marks a chunk as dirty
@@ -572,19 +580,11 @@ function set_dirty(x, y, z, priority)
 
 	if(chunk)
 	{
-		if(chunk.pending)
-		{
-			return;
-		}
-		else if(chunk.is_air)
-		{
-			send_vb(chunk.x, chunk.y, chunk.z, [[], [], []]);
-		}
-		else if(priority)
+		if(priority)
 		{
 			if(chunk.dirty)
 			{
-				//Find chunk in list of pending chunks and move to front
+				//FIXME: Find chunk in list of pending chunks and move to front
 			}
 			else
 			{
@@ -611,7 +611,7 @@ function generate_vbs()
 	{
 		chunk = vb_pending_chunks[i];
 		pack_buffer(chunk.x, chunk.y, chunk.z);
-		vbs.push({'x':chunk.x, 'y':chunk.y, 'z':chunk.z, 'd':gen_vb()});
+		vbs.push({'t': chunk.t, 'x':chunk.x, 'y':chunk.y, 'z':chunk.z, 'd':gen_vb()});
 		chunk.dirty = false;
 	}	
 	send_vb(vbs);
@@ -619,9 +619,9 @@ function generate_vbs()
 }
 
 //Sets a block
-function set_block(x, y, z, b)
+function set_block(t, x, y, z, b)
 {
-	print("setting block: " + x + "," + y + "," + z + " <- " + b);
+	printf("setting block: @" + t + ":" + x + "," + y + "," + z + " <- " + b);
 
 	var cx = (x >> CHUNK_X_S), 
 		cy = (y >> CHUNK_Y_S), 
@@ -631,66 +631,68 @@ function set_block(x, y, z, b)
 		bz = (z & CHUNK_Z_MASK),
 		flags, i, j, k, idx,
 		c = Map.lookup_chunk(cx, cy, cz);		
-	if(!c)
+	if(!c || c.t >= t)
 		return -1;
 
+	c.pending_writes.push(new PendingWrite(t, bx, by, bz, b));
 
-	if(c.pending)
+	set_dirty(cx, cy, cz, true);
+
+	flags = [ [ bx==0, true, bx==(CHUNK_X-1)],
+			  [ by==0, true, by==(CHUNK_Y-1)],
+			  [ bz==0, true, bz==(CHUNK_Z-1)] ];
+
+	for(i=0; i<3; ++i)
+	for(j=0; j<3; ++j)
+	for(k=0; k<3; ++k)
 	{
-		c.pending_blocks.push([bx,by,bz,b]);
-	}
-	else
-	{
-		idx = bx + (by<<CHUNK_X_S) + (bz<<CHUNK_XY_S);
-		if(c.data[idx] == b)
-			return;
-
-		c.data[idx] = b;
-		c.is_air = false;
-		c.set_block(bx, by, bz, b);
-
-		set_dirty(cx, cy, cz, true);
-
-		flags = [ [ bx==0, true, bx==(CHUNK_X-1)],
-				  [ by==0, true, by==(CHUNK_Y-1)],
-				  [ bz==0, true, bz==(CHUNK_Z-1)] ];
-
-		for(i=0; i<3; ++i)
-		for(j=0; j<3; ++j)
-		for(k=0; k<3; ++k)
+		if(flags[0][i] && flags[1][j] && flags[2][k])
 		{
-			if(flags[0][i] && flags[1][j] && flags[2][k])
-			{
-				set_dirty(cx + i-1, cy + j-1, cz + k-1, true);
-			}
+			set_dirty(cx + i-1, cy + j-1, cz + k-1, true);
 		}
 	}
 }
 
-//Starts the worker
-function worker_start(key)
+
+function on_recv(event)
 {
-	print("starting worker");
-
-	session_id.set(key);
-
-	print("key = " 
-		+ session_id[0] + "," 
-		+ session_id[1] + "," 
-		+ session_id[2] + "," 
-		+ session_id[3] + "," 
-		+ session_id[4] + "," 
-		+ session_id[5] + "," 
-		+ session_id[6] + "," 
-		+ session_id[7]);
-
-	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
-	fetch_interval = setInterval(grab_vis_buffer, 800);
-
-	for(var i=0; i<CHUNK_SIZE; ++i)
+	var pbuf = raw_to_pbuf(event.data);
+	if(pbuf == null)
 	{
-		empty_data[i] = 0;
+		printf("Error parsing packet");
+		return;
 	}
+	
+	if(pbuf.chunk_response)
+	{
+		unpack_chunk_buffer(pbuf.chunk_response);
+	}
+}
+
+function on_socket_error(err)
+{
+	postMessage({type:EV_CRASH});
+}
+
+//Starts the worker
+function worker_start(lsw, msw)
+{
+	function pad_hex(w)
+	{
+		var r = Number(w).toString(16);
+		while(r.length < 8)
+		{
+			r = "0" + r;
+		}
+		return r;
+	}
+
+	socket = new WebSocket("ws://"+DOMAIN_NAME+"/map/"+pad_hex(msw)+pad_hex(lsw));
+	socket.onmessage = on_recv;
+	socket.onerror = on_socket_error;
+	socket.onclose = on_socket_error;
+	
+	vb_interval = setInterval(generate_vbs, VB_GEN_RATE);
 }
 
 
@@ -702,11 +704,16 @@ self.onmessage = function(ev)
 	switch(ev.data.type)
 	{
 		case EV_START:
-			worker_start(ev.data.key);
+			worker_start(ev.data.lsw, ev.data.msw);
 		break;
 
 		case EV_SET_BLOCK:
-			set_block(ev.data.x, ev.data.y, ev.data.z, ev.data.b);
+			var writes = ev.data.w;
+			
+			for(var i=0; i<writes.length; ++i)
+			{
+				set_block(writes[i].t, writes[i].x, writes[i].y, writes[i].z, writes[i].b);
+			}
 		break;
 	}
 
@@ -718,33 +725,3 @@ function send_vb(vbs)
 	postMessage({ type: EV_VB_UPDATE, 'vbs':vbs });
 }
 
-//Sends a new chunk to the client
-function send_chunk(chunk)
-{
-	//Convert data to an array (bleh)
-	var tmp_data = new Array(CHUNK_SIZE), i;
-	for(i=0; i<CHUNK_SIZE; ++i)
-		tmp_data[i] = chunk.data[i];
-
-	postMessage({
-		type: EV_CHUNK_UPDATE,
-		x:chunk.x, y:chunk.y, z:chunk.z,
-		data: tmp_data });
-}
-
-//Removes a chunk from the database
-function forget_chunk(chunk)
-{
-	var str = chunk.x + ":" + chunk.y + ":" + chunk.z;
-	if(str in Map.index)
-	{
-		print("Forgetting chunk: " + str);
-
-		delete Map.index[str];
-
-		postMessage({
-			type: EV_FORGET_CHUNK,
-			idx: str});
-			return;
-	}	
-}

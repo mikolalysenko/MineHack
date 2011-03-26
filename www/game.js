@@ -2,8 +2,10 @@
 
 var Game = 
 {
+	//State variables
 	crashed : false,
 	running : false,
+	ready : false,
 	
 	//Clock stuff:
 	// Each tick is approximately 40ms (this is not very precise due to scheduling issues)
@@ -25,262 +27,334 @@ var Game =
 	//This is the amount of time we are behind the network counter (in ticks)
 	ping : 0,
 	
-	TICKS_PER_HEARTBEAT : 20,
-	FINE_TICKS_PER_HEARTBEAT : 2,
-	
-	update_rate : 40,
-
+	//Camera parameters
 	znear : 1.0,
 	zfar  : 512.0,
 	fov   : Math.PI / 4.0,
-	
-	wait_for_heartbeat : false,
-	
-	show_shadows : false,
-};
-
-Game.resize = function()
-{
-	Game.canvas.width = window.innerWidth;
-	Game.canvas.height = window.innerHeight;
-	
-	Game.width = Game.canvas.width;
-	Game.height = Game.canvas.height;
-	
-	//Set the dimensions for the UI stuff
-	var appPanel = document.getElementById("appElem");
-	appPanel.width = Game.canvas.width;
-	appPanel.height = Game.canvas.height;
-	
-	//Set UI position
-	var uiPanel = document.getElementById("uiPanel");
-}
-
-Game.init = function(canvas)
-{
-	Game.canvas = canvas;
-
-	var gl;
-	try
-	{
-		gl = canvas.getContext("experimental-webgl");
-	}
-	catch(e)
-	{
-		return 'Browser does not support WebGL,';
-	}
-	
-	if(!gl)
-	{
-		return 'Invalid WebGL object';
-	}
-	
-	//Get extensions
-	Game.EXT_FPTex = gl.getExtension("OES_texture_float");
-	Game.EXT_StdDeriv = gl.getExtension("OES_standard_derivatives");
-	Game.EXT_VertexArray = gl.getExtension("OES_vertex_array_object");	
-	
-	if(!Game.EXT_FPTex)
-	{
-		return "WebGL implementation does not support floating point textures";
-	}
-	
-	
-	Game.gl = gl;
-
-	Game.width = canvas.width;
-	Game.height = canvas.height;
-	
-	var res = Debug.init();
-	if(res != "Ok")
-	{
-		return res;
-	}
-	
-	res = Shadows.init(Game.gl);
-	if(res != "Ok")
-	{
-		return res;
-	}
-	
-	//Initialize the map
-	res = Map.init(gl);
-	if(res != "Ok")
-	{
-		return res;
-	}
-	
-	res = Player.init();
-	if(res != "Ok")
-	{
-		return res;
-	}
-	
-	
-	//Initialize screen
-	window.onresize = function(event)
-	{
-		if(Game.running)
-		{
-			Game.resize();
-		}
-	}
-	Game.resize();
-	
-	//Start running the game
-	Game.running = true;	
-	Game.interval = setInterval(Game.tick, Game.update_rate);
-	
-	return 'Ok';
-}
-
-//Create projection matrix
-Game.proj_matrix = function(w, h, fov, zfar, znear)
-{
-	var aspect = w / h;
-	
-	var ymax = znear * Math.tan(0.5 * fov);
-	var ymin = -ymax;
-	var xmin = ymin * aspect;
-	var xmax = ymax * aspect;
-	
-	var X = 2.0 * znear / (xmax - xmin);
-	var Y = 2.0 * znear / (ymax - ymin);
-	var A = (xmax + xmin) / (xmax - xmin);
-	var B = (ymax + ymin) / (ymax - ymin);
-	var C = -(zfar + znear) / (zfar - znear);
-	var D = -2.0 * zfar*znear / (zfar - znear);
-	
-	return [X, 0, 0, 0,
-			 0, Y, 0, 0,
-		 	 A, B, C, -1,
-			 0, 0, D, 0];
-	
-}
-
-//Creates the total cmera matrix
-Game.camera_matrix = function(width, height, fov, zfar, znear)
-{
-	if(!width)
-	{
-		width = Game.width;
-		height = Game.height;
-		fov = Game.fov;
-	}
-	
-	if(!zfar)
-	{
-		zfar = Game.zfar;
-		znear = Game.znear;
-	}
-	
-	return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.entity.pose_matrix());
-}
-
-Game.update_shadows = function()
-{
-	var gl = Game.gl, i;
-
-	for(i=0; i<Shadows.shadow_maps.length; ++i)
-	{
-		Shadows.shadow_maps[i].begin(gl);
-		Map.draw_shadows(gl, Shadows.shadow_maps[i]);	
-		Shadows.shadow_maps[i].end(gl);
-	}
-}
-
-Game.draw = function()
-{
-	var gl = Game.gl,
-		cam = Game.camera_matrix();
 		
-	Game.update_shadows();
+	//Our local event loops
+	tick_interval : null,
+	draw_interval : null,
+	shadow_interval : null,
+	net_update_interval : null,
 	
-	gl.viewport(0, 0, Game.width, Game.height);
+	//Update socket
+	update_socket : null,
+		
+	pchunk : [0, 0, 0],
 	
-	gl.clear(gl.DEPTH_BUFFER_BIT);
+	//Used for debugging
+	show_shadows : false,
 	
-	if(Game.wait_for_initial_chunks)
+	//Starts preloading the game
+	preload : function()
 	{
-		//Draw loading stuff
-	}
-	else
+		Game.canvas = document.getElementById("gameCanvas");
+		var gl;
+		try
+		{
+			gl = Game.canvas.getContext("experimental-webgl");
+		}
+		catch(e)
+		{
+			App.crash('Browser does not support WebGL');
+			return false;
+		}
+	
+		if(!gl)
+		{
+			App.crash('Invalid WebGL object');
+			return false;
+		}
+	
+		//Get extensions
+		Game.EXT_FPTex = gl.getExtension("OES_texture_float");
+		Game.EXT_StdDeriv = gl.getExtension("OES_standard_derivatives");
+		Game.EXT_VertexArray = gl.getExtension("OES_vertex_array_object");	
+	
+		if(!Game.EXT_FPTex)
+		{
+			App.crash("WebGL implementation does not support floating point textures");
+			return false;
+		}
+	
+		Game.gl = gl;
+		
+		//Start preloading the map
+		Map.preload();
+		
+		//Start the update worker
+		function pad_hex(w)
+		{
+			var r = Number(w).toString(16);
+			while(r.length < 8)
+			{
+				r = "0" + r;
+			}
+			return r;
+		}
+
+		Game.update_socket = new WebSocket("ws://"+DOMAIN_NAME+"/update/"+
+			pad_hex(Session.session_id.msw)+
+			pad_hex(Session.session_id.lsw));
+		Game.update_socket.onmessage = Game.recvProtoBuf;
+		Game.update_socket.onclose = Game.update_socket.onerror = function() {App.crash("Lost connection to server"); };
+		
+		return true;
+	},
+	
+	//Start the actual game, initializes graphics stuff
+	init : function()
 	{
+		Game.local_ticks = 0;
+		Game.crashed = false;
+		Game.ready = false;
+
+		var res = Debug.init();
+		if(res != "Ok")
+		{
+			App.crash(res);
+			return;
+		}
+			
+		res = Shadows.init();
+		if(res != "Ok")
+		{
+			App.crash(res);
+			return;
+		}
+	
+		res = Map.init();
+		if(res != "Ok")
+		{
+			App.crash(res);
+			return;
+		}
+	
+		document.getElementById('gamePane').style.display = 'block';
+	
+		//Initialize screen
+		window.onresize = function(event)
+		{
+			if(Game.running)
+			{
+				Game.resize();
+			}
+		}
+		Game.resize();
+	
+		//Start running the game
+		Game.running = true;
+		Game.tick_interval = setInterval(Game.tick, GAME_TICK_RATE);
+		Game.draw_interval = setInterval(Game.draw, GAME_DRAW_RATE);
+		Game.shadow_interval = setInterval(Game.update_shadows, GAME_SHADOW_RATE);
+		Game.net_update_interval = setInterval(Game.net_update, GAME_NET_UPDATE_RATE);
+		
+		//Set player input handlers
+		Player.init();
+	},
+
+	//Stop all intervals
+	shutdown : function()
+	{
+		document.getElementById('gamePane').style.display = 'none';
+	
+		Game.running = false;
+		if(Game.tick_interval)		clearInterval(Game.tick_interval);
+		if(Game.draw_interval)		clearInterval(Game.draw_interval);
+		if(Game.shadow_interval)	clearInterval(Game.shadow_interval);
+		if(Game.net_update_interval)clearInterval(Game.net_update_interval);
+		
+		window.onresize = null;
+		
+		Game.update_worker.terminate();
+		
+		Map.shutdown();
+		Debug.shutdown();
+		Player.shutdown();
+	},
+
+	resize : function()
+	{
+		Game.canvas.width = window.innerWidth;
+		Game.canvas.height = window.innerHeight;
+	
+		Game.width = Game.canvas.width;
+		Game.height = Game.canvas.height;
+	
+		//Set the dimensions for the UI stuff
+		var appPanel = document.getElementById("gamePane");
+		appPanel.width = Game.canvas.width;
+		appPanel.height = Game.canvas.height;
+	},
+	
+	
+	sendProtoBuf : function(pbuf)
+	{
+		Game.update_socket.send(pbuf_to_raw(pbuf));
+	},
+	
+	recvProtoBuf : function(ev)
+	{
+		var pbuf = raw_to_pbuf(ev.data);
+		if(pbuf == null)
+			return;
+		
+		if(pbuf.chat_message)
+		{
+			document.getElementById("chatLog").innerHTML += pbuf.chat_message;
+		}
+		else if(pbuf.world_update)
+		{
+			Game.net_ticks = pbuf.world_update.ticks.lsw;
+			
+			if(pbuf.world_update.blocks)
+			{
+				var blocks = pbuf.world_update.blocks,
+					writes = [];
+				for(var i=0; i<blocks.length; ++i)
+				{
+					writes.push(new PendingWrite(blocks[i].tick.lsw, blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].block));
+				}
+				if(writes.length > 0)
+				{
+					Map.apply_writes(writes);
+				}
+			}
+		}
+	},
+	
+	
+	proj_matrix : function(w, h, fov, zfar, znear)
+	{
+		var aspect = w / h;
+	
+		var ymax = znear * Math.tan(0.5 * fov);
+		var ymin = -ymax;
+		var xmin = ymin * aspect;
+		var xmax = ymax * aspect;
+	
+		var X = 2.0 * znear / (xmax - xmin);
+		var Y = 2.0 * znear / (ymax - ymin);
+		var A = (xmax + xmin) / (xmax - xmin);
+		var B = (ymax + ymin) / (ymax - ymin);
+		var C = -(zfar + znear) / (zfar - znear);
+		var D = -2.0 * zfar*znear / (zfar - znear);
+	
+		return [X, 0, 0, 0,
+				 0, Y, 0, 0,
+			 	 A, B, C, -1,
+				 0, 0, D, 0];
+	
+	},
+
+	//Returns the camera matrix for the game
+	camera_matrix : function(width, height, fov, zfar, znear)
+	{
+		if(!width)
+		{
+			width = Game.width;
+			height = Game.height;
+			fov = Game.fov;
+		}
+	
+		if(!zfar)
+		{
+			zfar = Game.zfar;
+			znear = Game.znear;
+		}
+	
+		return mmult(Game.proj_matrix(width, height, fov, zfar, znear), Player.view_matrix());
+	},
+
+	//Tick the game
+	tick : function()
+	{
+		//Update network clock/local clock
+		++Game.local_ticks;
+	
+		//Goal: Try to interpolate local clock so that  = remote_clock - ping 
+		if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
+		{
+			Game.game_ticks = Math.floor(0.5 * (Game.net_ticks - Game.ping) + 0.5 * Game.game_ticks);
+		}
+		else if(Game.game_ticks >= Math.floor(Game.net_ticks - Game.ping))
+		{
+			//Whoops!  Too far ahead, do nothing for a few frames to catch up
+		}
+		else
+		{	
+			++Game.game_ticks;
+		}
+	
+		//Update player input
+		Player.tick();
+		
+	},
+	
+	net_update : function()
+	{
+		//Send input packet to server				
+		var pbuf = new Network.ClientPacket,
+			pos = Player.position(),
+			orient = Player.orientation(),
+			p_upd = new Network.PlayerUpdate;
+		
+		p_upd.SetField("x", Math.round(pos[0]));
+		p_upd.SetField("y", Math.round(pos[1]));
+		p_upd.SetField("z", Math.round(pos[2]));
+		
+		pbuf.SetField("player_update", p_upd);
+		
+		Game.sendProtoBuf(pbuf);
+	},
+
+	//Draw the game
+	draw : function()
+	{
+		var gl = Game.gl;
+		
+		var chunk = Player.chunk();
+		
+		//Check if we need to force a shadow map update
+		//FIXME: The correct way to fix this should be to have the light map shader store the chunk...
+		if( Game.pchunk[0] != chunk[0] || 
+			Game.pchunk[1] != chunk[1] ||
+			Game.pchunk[2] != chunk[2] )
+		{
+			Map.update_active_chunks();
+			Game.pchunk = chunk;
+			Game.update_shadows();
+		}
+		
+		gl.viewport(0, 0, Game.width, Game.height);
+		gl.clear(gl.DEPTH_BUFFER_BIT);
+	
 		Sky.draw_bg();
-	
+
 		gl.enable(gl.DEPTH_TEST);
-	
+
 		gl.frontFace(gl.CW);
 		gl.cullFace(gl.BACK);
 		gl.enable(gl.CULL_FACE);
 
-		//Draw map
-		Map.draw(gl);
-	
-		//Draw entities
-		EntityDB.draw(gl, cam);
+		Map.draw();
 		
 		if(Game.show_shadows)
 			Shadows.shadow_maps[0].draw_debug();
-	}
+		
+		gl.flush();
+	},
 	
-	gl.flush();
-}
-
-Game.shutdown = function()
-{
-	Game.running = false;
-	clearInterval(Game.interval);
-	Map.shutdown();
-}
-
-//Polls the server for events
-Game.heartbeat = function()
-{
-	Game.wait_for_heartbeat = true;
-	
-	//Sends a binary message to the server
-	asyncGetBinary("/h?k="+Session.session_id, 
-		UpdateHandler.handle_update_packet, 
-		function() { alert("heartbeat failed"); },
-		InputHandler.serialize());
-}
-
-Game.tick = function()
-{
-	if(	!Game.wait_for_heartbeat && 
-		(Game.local_ticks % Game.TICKS_PER_HEARTBEAT == 0 ||
-		(InputHandler.has_events && (Game.local_ticks % Game.FINE_TICKS_PER_HEARTBEAT == 0)) ) )
-		Game.heartbeat();
-
-	//Update network clock/local clock
-	++Game.local_ticks;
-
-	//Wait for player entity packet before starting game
-	if(!Player.entity)
-		return;
-	
-	
-	//Goal: Try to interpolate local clock so that  = remote_clock - ping 
-	if(Game.game_ticks < Game.net_ticks - 2.0 * Game.ping)
+	//Update the shadow maps
+	update_shadows : function()
 	{
-		Game.game_ticks = Math.floor(0.5 * (Game.net_ticks - Game.ping) + 0.5 * Game.game_ticks);
+		for(var i=0; i<Shadows.shadow_maps.length; ++i)
+		{
+			Shadows.shadow_maps[i].begin();
+			Map.draw_shadows(Shadows.shadow_maps[i]);	
+			Shadows.shadow_maps[i].end();
+		}
 	}
-	else if(Game.game_ticks >= Math.floor(Game.net_ticks - Game.ping))
-	{
-		//Whoops!  Too far ahead, do nothing for a few frames to catch up
-	}
-	else
-	{	
-		++Game.game_ticks;
-	}
-	
-	//Tick entities
-	EntityDB.tick();
+};
 
-	//Update game state
-	Player.tick();
-	
-	//Redraw
-	Game.draw();
-}

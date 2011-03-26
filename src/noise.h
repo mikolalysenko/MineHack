@@ -1,10 +1,9 @@
 #ifndef NOISE_H
 #define NOISE_H
 
-#include <cstdint>
+#include <stdint.h>
 
 void setNoiseSeed(int64_t);
-
 
 float simplexNoise1D(float xin, int64_t octaves);
 float simplexNoise2D(float xin, float yin, int64_t octaves);

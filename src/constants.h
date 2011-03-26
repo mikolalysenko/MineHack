@@ -3,34 +3,38 @@
 
 //Application wide constants go here
 
-//Constants for different buffer sizes
-#define PASSWORD_HASH_LEN		64
-#define USER_NAME_MAX_LEN		20
-#define USER_NAME_MIN_LEN		3
+//Server stuff
+#define NUM_HTTP_WORKERS		4
+#define MAX_EPOLL_EVENTS		10
+#define MAX_CONNECTIONS			10000
+#define LISTEN_BACKLOG			3
+#define RECV_BUFFER_SIZE		0x10000
+#define SEND_BUFFER_SIZE		0x100000
+#define EPOLL_TIMEOUT			400
 
-//Player name info
-#define PLAYER_NAME_MAX_LEN		20
 
 //Chunk dimensions
 #define CHUNK_X_S				4
 #define CHUNK_Y_S				4
 #define CHUNK_Z_S				4
 
-#define CHUNK_XY_S				(CHUNK_X_S + CHUNK_Y_S)
-
 #define CHUNK_X					(1<<CHUNK_X_S)
 #define CHUNK_Y					(1<<CHUNK_Y_S)
 #define CHUNK_Z					(1<<CHUNK_Z_S)
 
-#define CHUNK_X_MASK			(CHUNK_X-1)
-#define CHUNK_Y_MASK			(CHUNK_Y-1)
-#define CHUNK_Z_MASK			(CHUNK_Z-1)
+#define CHUNK_SIZE				(CHUNK_X*CHUNK_Y*CHUNK_Z)
 
-//Index within a chunk
-#define CHUNK_OFFSET(X,Y,Z)		((X)+((Y)<<CHUNK_X_S)+((Z)<<(CHUNK_X_S+CHUNK_Y_S)))
 
-//Maximum length for a compressed chunk
-#define MAX_CHUNK_BUFFER_LEN	(CHUNK_X*CHUNK_Y*CHUNK_Z*16)
+//Coordinate origin
+#define ORIGIN_X				(1<<19)
+#define ORIGIN_Y				(1<<19)
+#define ORIGIN_Z				(1<<19)
+
+
+
+
+
+
 
 //Number of bits for a chunk index
 #define CHUNK_IDX_S				19ULL
@@ -86,9 +90,9 @@
 #define DIG_RADIUS				5
 
 //Player start coordinates
-#define PLAYER_START_X			(1 << 20)
-#define PLAYER_START_Y			((1 << 20)+32)
-#define PLAYER_START_Z			(1 << 20)
+#define PLAYER_START_X			(1 << 19)
+#define PLAYER_START_Y			((1 << 19)+32)
+#define PLAYER_START_Z			(1 << 19)
 
 //Player time out (in ticks) default is approx. 2 minutes
 #define PLAYER_TIMEOUT			3000

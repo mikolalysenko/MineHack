@@ -1,35 +1,30 @@
-#ifndef WORLD_H
-#define WORLD_H
+#ifndef WORLDGGEN_H
+#define WORLDGEN_H
 
-#include <cstdint>
-#include "chunk.h"
+#include <stdint.h>
+
+#include "constants.h"
 #include "config.h"
-#include "cave.h"
-
-//padding around the current block to generate surface data
-#define SURFACE_GEN_PADDING     3
+#include "chunk.h"
 
 namespace Game
 {
-	struct SurfaceCell
-	{
-		int height;
-		bool nearWater;
-	};
-	
-	
+
 	//The world implements a set of rules for generating chunks
 	struct WorldGen
 	{
-		WorldGen(Config* mapconfig);
+		WorldGen(Config* cfg);
+		~WorldGen();
 		
-		void generate_chunk(ChunkID const&, Chunk*);
+		//Generates a chunk in place
+		//Interface was changed to accommodate new cellular automata physics system
+		// and to allow in place chunk generation.
+		//This method must be reentrant and thread safe.  (and hopefully fast)
+		//It gets called *frequently*.
+		void generate_chunk(ChunkID const&, Block* data, int stride_x, int stride_xz);
 		
-		Block generate_block(int64_t x, int64_t y, int64_t z, SurfaceCell surface, CaveSystem s);
-		
-		private:
-			SurfaceCell generate_surface_data(int64_t, int64_t);
-			bool near_water(int64_t x, int64_t y, SurfaceCell surface[CHUNK_Z + (SURFACE_GEN_PADDING << 1)][CHUNK_X + (SURFACE_GEN_PADDING << 1)]);
+	private:
+		Config *config;
 	};
 };
 

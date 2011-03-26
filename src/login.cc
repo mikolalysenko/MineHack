@@ -1,251 +1,148 @@
-#include <cstring>
+#include <stdint.h>
+#include <cstdio>
 #include <string>
-#include <map>
-#include <iostream>
-#include <cctype>
-#include <cstdlib>
-#include <cstdint>
 
-//Tokyo cabinet
-#include <tcutil.h>
 #include <tchdb.h>
 
+#include "login.pb.h"
+
+#include "constants.h"
+#include "config.h"
 #include "misc.h"
 #include "login.h"
 
 using namespace std;
+using namespace Game;
 
-namespace Server
+//Constructs the login server
+LoginDB::LoginDB(Config* config_) : config(config_)
 {
-
-TCHDB *login_db = NULL;
-
-
-//Initializes the login table
-void init_login()
-{
-	//Create login database
 	login_db = tchdbnew();
-	
-	//Set options
-	//TODO: Set other tuning options here
 	tchdbsetmutex(login_db);
 	
-	//Open it
-	tchdbopen(login_db, "data/login.tc", HDBOWRITER | HDBOCREAT);
 }
 
-//Shuts down the login server
-void shutdown_login()
+//Deallocate the login database
+LoginDB::~LoginDB()
 {
-	tchdbclose(login_db);
 	tchdbdel(login_db);
 }
 
-//Check if a user name is valid
-bool is_valid_user_name(const string& user_name)
+//Start login database
+bool LoginDB::start()
 {
-	if(	user_name.size() < USER_NAME_MIN_LEN ||
-		user_name.size() > USER_NAME_MAX_LEN)
-	{
-		return false;
-	}
-	
-	for(size_t i=0; i<user_name.size(); i++)
-	{
-		if(!isalnum(user_name[i]))
-			return false;
-	}
-	
-	return true;
+	string login_db_path = config->readString("login_db_path");
+	return tchdbopen(login_db, login_db_path.c_str(), HDBOWRITER | HDBOCREAT);
 }
 
-//Check if a password hash is valid
-bool is_valid_password_hash(const string& pass)
+//Stop login database
+void LoginDB::stop()
 {
-	if(pass.size() != PASSWORD_HASH_LEN)
-	{
-		return false;
-	}
-	for(int i=0; i<PASSWORD_HASH_LEN; i++)
-	{
-		if(!(isalnum(pass[i]) || pass[i] == '/' || pass[i] == '+'))
-			return false;
-	}
-	return true;
+	tchdbclose(login_db);
 }
 
-
-//Checks if a player name is valid
-bool is_valid_player_name(const string& player_name)
+//Saves the login database
+void LoginDB::sync()
 {
-	if(	player_name.size() > PLAYER_NAME_MAX_LEN )
-	{
-		return false;
-	}
-	
-	for(size_t i=0; i<player_name.size(); i++)
-	{
-		if(!isalnum(player_name[i]))
-			return false;
-	}
-	
-	return true;
-
-}
-
-
-//Verifies a user_name/password combo
-bool verify_user_name(const string& user_name, const string& password_hash)
-{
-	if( !is_valid_password_hash(password_hash) || 
-		!is_valid_user_name(user_name))
-	{
-		return false;
-	}
-	
-	int len;
-	ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
-		
-	if(G.ptr == NULL || len < sizeof(LoginRecord))
-	{
-		return false;
-	}
-	
-	//Read in the login record
-	LoginRecord* account = (LoginRecord*)G.ptr;
-	return (strncmp(account->password_hash, password_hash.c_str(), PASSWORD_HASH_LEN) == 0);
-}
-
-
-bool get_login_record(const string& user_name, LoginRecord& result)
-{
-	int len;
-	ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
-		
-	if(G.ptr == NULL || len < sizeof(LoginRecord))
-	{
-		return false;
-	}
-	
-	
-	result = *(LoginRecord*)G.ptr;
-	return true;
+	tchdbsync(login_db);
 }
 
 //Creates an account
-bool create_account(const string& user_name, const string& password_hash)
+bool LoginDB::create_account(std::string const& user_name, std::string const& password_hash)
 {
-	//Validate name and password
-	if(	!is_valid_user_name(user_name) || 
-		!is_valid_password_hash(password_hash))
-	{
-		return false;
-	}
+	//Create protocol buffer
+	Login::Account account;
+	account.set_user_name(user_name);
+	account.set_password_hash(password_hash);
+	
+	//Allocate buffer
+	int sz = account.ByteSize();
+	ScopeFree buf(malloc(sz));
+	
+	//Serialize
+	account.SerializeToArray(buf.ptr, sz);
 
+	//Store in database
 	return tchdbputkeep(login_db, 
 		(const void*)user_name.c_str(), user_name.size(), 
-		(const void*)password_hash.c_str(), password_hash.size());
+		buf.ptr, sz);
 }
 
-//Checks if a user name exists
-bool user_name_exists(std::string const& user_name)
+//Deletes an account
+void LoginDB::delete_account(std::string const& user_name)
 {
-	int len = tchdbvsiz(login_db, (const void*)user_name.c_str(), user_name.size());
-	return len >= sizeof(LoginRecord);
+	tchdbout(login_db, (const void*)user_name.c_str(), user_name.size());
 }
 
-//Adds a player name to the list
-bool add_player_name(std::string const& user_name, std::string const& player_name)
+//Retrieves an account
+bool LoginDB::get_account(string const& user_name, string const& password_hash, Login::Account& account)
 {
-	if( !user_name_exists(user_name) || 
-		!is_valid_player_name(player_name) )
-	{
+	int sz;
+	ScopeFree buf(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &sz));
+	if(buf.ptr == NULL)
 		return false;
-	}
-	
-	return tchdbputcat(login_db,
-		(const void*)user_name.c_str(), user_name.size(),
-		(const void*)player_name.c_str(), player_name.size() + 1);
-}
-
-//Retrieves player names
-bool get_player_names(string const& user_name, vector<string>& player_names)
-{
-	player_names.clear();
-
-	int len;
-	ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
-	
-	if(G.ptr == NULL || len < sizeof(LoginRecord))
+	if(!account.ParseFromArray(buf.ptr, sz))
 		return false;
-	
-	char* ptr = ((char*)G.ptr) + sizeof(LoginRecord);
-	for(int i=sizeof(LoginRecord); i<len; ++i)
-	{
-		if( ((char*)G.ptr)[i] == '\0' )
-		{
-			player_names.push_back(ptr);
-			ptr = ((char*)G.ptr) + i + 1;
-		}
-	}
-	
-	return true;
+	return account.password_hash() == password_hash;
 }
 
-//Removes a player name from an account	
-bool remove_player_name(string const& user_name, string const& player_name)
+//Updates an account
+bool LoginDB::update_account(
+	string const& user_name, 
+	Login::Account const& prev, 
+	Login::Account const& next)
 {
+	//Serialize previous buffer
+	int prev_len = prev.ByteSize();
+	ScopeFree prev_buf(malloc(prev_len));
+	prev.SerializeToArray(prev_buf.ptr, prev_len);
+	
+	//Serialize updated buffer
+	int next_len = next.ByteSize();
+	ScopeFree next_buf(malloc(next_len));
+	next.SerializeToArray(next_buf.ptr, next_len);
+
 	while(true)
 	{
+		//Start transaction
 		if(!tchdbtranbegin(login_db))
 		{
 			return false;
 		}
-
+		
+		//Retrieve current pointer
 		int len;
-		ScopeFree G(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
-		if(G.ptr == NULL || len < sizeof(LoginRecord))
+		ScopeFree buf(tchdbget(login_db, (const void*)user_name.c_str(), user_name.size(), &len));
+		if(buf.ptr == NULL ||
+			prev_len != len)
 		{
 			tchdbtranabort(login_db);
 			return false;
 		}
-	
-	
-		bool found_item = false;
-		char* ptr = ((char*)G.ptr) + sizeof(LoginRecord);
-		for(int i=sizeof(LoginRecord); i<len; )
-		{
-			cout << "Checking record: " << ptr << endl;
 		
-			int l = strlen(ptr) + 1;
-			i += l;
-			if(strcmp(ptr, player_name.c_str()) == 0)
+		//Check that the buffer has not changed
+		for(int i=0; i<len; ++i)
+		{
+			if(((uint8_t*)prev_buf.ptr)[i] != ((uint8_t*)buf.ptr)[i])
 			{
-				memmove(ptr, ((char*)G.ptr) + i, len - i);
-			
-				tchdbput(login_db,
-					(const void*)user_name.c_str(), user_name.size(),
-					G.ptr, len - l);
-					
-				found_item = true;
-				break;
+				tchdbtranabort(login_db);
+				return false;
 			}
-			ptr += l;
 		}
 		
-		if(found_item)
+		//Try writing updated record
+		if(!tchdbput(login_db, 
+			(const void*)user_name.c_str(), user_name.size(), 
+			next_buf.ptr, next_len))
 		{
-			if(tchdbtrancommit(login_db))
-				return true;
+			tchdbtranabort(login_db);
 			continue;
 		}
-	
-		tchdbtranabort(login_db);
-		return false;
+		
+		//Commit transaction
+		if(tchdbtrancommit(login_db))
+			return true;
 	}
 }
-
-};
 
 

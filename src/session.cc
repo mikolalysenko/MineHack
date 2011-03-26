@@ -1,126 +1,157 @@
-#include <iostream>
-#include <map>
 #include <string>
-#include <cstdint>
-#include <pthread.h>
+#include <stdint.h>
 
-#include "session.h"
-#include "misc.h"
+#include <tbb/tick_count.h>
+#include <tbb/spin_rw_mutex.h>
+#include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_hash_map.h>
+
+#include "constants.h"
+#include "config.h"
+#include "httpserver.h"
+#include "chunk.h"
 #include "entity.h"
+#include "session.h"
 
 using namespace std;
+using namespace tbb;
+using namespace Game;
 
-namespace Server
-{
+#define SESSION_DEBUG 1
 
-//Invariants that need to be enforced:
-//  1. Each session id is associated to exactly one user name
-//  2. Each user name has at most one session id (no multiple logins)
-//	3. The selection of session ids is completely random
+#ifndef SESSION_DEBUG
+#define DEBUG_PRINTF(...)
+#else
+#define DEBUG_PRINTF(...)  fprintf(stderr,__VA_ARGS__)
+#endif
 
-//Lock for the session table
-static pthread_rwlock_t session_lock = PTHREAD_RWLOCK_INITIALIZER;
-
-//Indexes
-static map<string, SessionID>	user_table;
-static map<Game::EntityID, SessionID>	player_table;
-static map<SessionID, Session>	session_table;
-
-void init_sessions()
+Session::Session(SessionID const& id, string const& name) :
+	session_id(id),
+	state(SessionState_Pending),
+	last_activity(tick_count::now()),
+	last_updated(tick_count::now()),
+	player_name(name),
+	update_socket(NULL),
+	map_socket(NULL)
 {
 }
 
-bool valid_session_id(const SessionID& session_id)
+Session::~Session()
 {
-	ReadLock L(&session_lock);
-	return session_table.find(session_id) != session_table.end();
+	if(update_socket != NULL)
+		delete update_socket;
+	if(map_socket != NULL)
+		delete map_socket;
 }
 
-bool logged_in(const string& name)
+//Session manager constructor
+SessionManager::SessionManager()
 {
-	ReadLock L(&session_lock);
-	return user_table.find(name) != user_table.end();
 }
 
-bool create_session(const string& user_name, SessionID& session_id)
+//Destructor
+SessionManager::~SessionManager()
 {
-	if( user_name.size() > USER_NAME_MAX_LEN )
-		return false;
-	
-	//Initialize session variable
-	Session s;
-	s.state			= SessionState::PreJoinGame;
-	s.user_name		= user_name;
-	s.player_id.clear();
-	
-	{	WriteLock L(&session_lock);
-	
-		//Generate session id
-		session_id.id = ((uint64_t)rand()) | (((uint64_t)rand())<<32ULL);
-		
-		if(user_table.find(user_name) != user_table.end())
-			return false;
-		
-		if(session_table.find(session_id) != session_table.end())
-			return false;
-		
-		session_table[session_id] = s;
-		user_table[user_name] = session_id;
-	}
-	
-	return true;
+	clear_all_sessions();
 }
 
-void delete_session(const SessionID& session_id)
+//Creates a new session
+bool SessionManager::create_session(string const& player_name, SessionID& session_id)
 {
-	WriteLock L(&session_lock);
+	session_id = generate_session_id();
 	
-	auto iter = session_table.find(session_id);
+	DEBUG_PRINTF("Created session, id = %ld\n", session_id);
 	
-	if(iter != session_table.end())
+	//Lock database
+	queuing_rw_mutex::scoped_lock L(session_lock, false);
+	if(sessions.find(session_id) != sessions.end())
 	{
-		auto session = (*iter).second;
+		//Just a sanity check, but this should be true
+		return false;
+	}
+
+	sessions.insert(make_pair(session_id, new Session(session_id, player_name)));
 	
-		auto u_iter = user_table.find(session.user_name);
-		if(u_iter != user_table.end())
-			user_table.erase(u_iter);
-		
-		auto p_iter = player_table.find(session.player_id);
-		if(p_iter != player_table.end())
-			player_table.erase(p_iter);
+	return true;
+}
+
+//Socket attachment
+bool SessionManager::attach_update_socket(SessionID const& session_id, WebSocket* socket)
+{
+	queuing_rw_mutex::scoped_lock L(session_lock, false);
 	
-		session_table.erase(iter);
+	auto iter = sessions.find(session_id);
+	
+	if(	iter == sessions.end() ||
+		iter->second->update_socket != NULL )
+		return false;
+
+	DEBUG_PRINTF("Attached update socket, id = %ld\n", session_id);
+
+	iter->second->last_activity = tick_count::now();
+	iter->second->update_socket = socket;
+	
+	return true;
+}
+
+bool SessionManager::attach_map_socket(SessionID const& session_id, WebSocket* socket)
+{
+	queuing_rw_mutex::scoped_lock L(session_lock, false);
+	
+	auto iter = sessions.find(session_id);
+	
+	if(	iter == sessions.end() ||
+		iter->second->map_socket != NULL )
+		return false;
+
+	DEBUG_PRINTF("Attached update socket, id = %ld\n", session_id);
+
+	iter->second->last_activity = tick_count::now();
+	iter->second->map_socket = socket;
+	
+	return true;	
+}
+
+//Session removal
+void SessionManager::remove_session(SessionID const& session_id)
+{
+	auto iter = sessions.find(session_id);
+	if(iter == sessions.end())
+		return;
+	iter->second->state = SessionState_Dead;
+	pending_erase.push(session_id);
+}
+
+//Must be called when no other task is accessing the session set, applies all
+//pending deletes to the session data set
+void SessionManager::process_pending_deletes()
+{
+	SessionID session_id;
+	queuing_rw_mutex::scoped_lock L(session_lock, true);
+	while(pending_erase.try_pop(session_id))
+	{
+		auto iter = sessions.find(session_id);
+		delete iter->second;
+		sessions.unsafe_erase(iter);
 	}
 }
 
-bool set_session_player(SessionID const& session_id, Game::EntityID const& player_id)
+//Clears all pending sessions
+void SessionManager::clear_all_sessions()
 {
-	WriteLock L(&session_lock);
-	
-	auto iter = session_table.find(session_id);
-	if(	iter == session_table.end() ||
-		(*iter).second.state != SessionState::PreJoinGame ||
-		player_table.find(player_id) != player_table.end() )
-		return false;
-
-	player_table[player_id] 	= session_id;
-	(*iter).second.player_id	= player_id;
-	(*iter).second.state		= SessionState::InGame;
-	
-	return true;
+	queuing_rw_mutex::scoped_lock L(session_lock, true);
+	for(auto iter = sessions.begin(); iter!=sessions.end(); ++iter)
+	{
+		delete iter->second;
+	}
+	sessions.clear();
 }
-	
-bool get_session_data(SessionID const& session_id, Session& result)
-{
-	ReadLock L(&session_lock);
-	
-	auto iter = session_table.find(session_id);
-	if(iter == session_table.end())
-		return false;
 		
-	result = (*iter).second;
-	return true;
+
+//FIXME:  This is not thread safe and is stupid
+SessionID SessionManager::generate_session_id()
+{
+	return ((uint64_t)rand()) | ((uint64_t)rand()<<32ULL);
 }
 
-
-};

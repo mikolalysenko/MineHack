@@ -3,4 +3,7 @@ a.out
 obj/*
 data/*
 *.log
+*.pb.cc
+*.pb.h
+*.pb.js
 

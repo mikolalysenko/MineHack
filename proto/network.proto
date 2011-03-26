@@ -1,0 +1,109 @@
+package Network;
+
+
+//--------------------------------------------------------
+// Chunk information
+//--------------------------------------------------------
+
+message Chunk {
+	optional int32 	x = 1;
+	optional int32 	y = 2;
+	optional int32 	z = 3;
+	optional int64		last_modified = 4;
+	optional bytes		data = 5;
+}
+
+//--------------------------------------------------------
+// Player update packets
+//--------------------------------------------------------
+
+message PlayerUpdate {
+	optional int32		x = 1;
+	optional int32		y = 2;
+	optional int32		z = 3;
+	
+	optional float		pitch	= 4;
+	optional float		yaw		= 5;
+	optional float		roll	= 6;
+}
+
+message BlockUpdate {
+	optional int32		x = 1;
+	optional int32		y = 2;
+	optional int32		z = 3;
+	optional int64		tick = 4;
+	optional int32		block = 5;
+}
+
+//--------------------------------------------------------
+// Server update packet
+//--------------------------------------------------------
+
+message WorldUpdate {
+	optional int64			ticks = 1;
+	repeated BlockUpdate	blocks = 2;
+}
+
+//--------------------------------------------------------
+// An error response
+//--------------------------------------------------------
+message ErrorResponse {
+	optional string error_message = 1;
+}
+
+//--------------------------------------------------------
+// Login messages (these occur without any session id)
+//--------------------------------------------------------
+message LoginResponse {
+	optional bool 		success = 1;
+	optional fixed64	session_id = 2;
+	repeated string 	character_names = 3;
+}
+
+message LoginRequest {
+	optional string user_name = 1;
+	optional string password_hash = 2;  // SHA256 hash of user password
+	
+	enum LoginAction {
+		Login = 1;
+		CreateAccount = 2;
+		DeleteAccount = 3;
+		CreateCharacter = 4;
+		DeleteCharacter = 5;
+		Join = 6;
+	}
+	
+	optional LoginAction action = 3;
+	optional string character_name = 4;
+}
+
+//--------------------------------------------------------
+// Server Response Packet
+//--------------------------------------------------------
+message ServerPacket {
+
+	optional LoginResponse login_response = 1;
+
+	optional Chunk	chunk_response = 2;
+	
+	optional string chat_message = 3;
+	
+	optional WorldUpdate world_update = 4;
+	
+	optional ErrorResponse error_response = 100;
+}
+
+//--------------------------------------------------------
+// Client Request Packet
+//--------------------------------------------------------
+message ClientPacket {
+
+	optional LoginRequest login_packet = 1;
+	
+	optional PlayerUpdate player_update = 2;
+	
+	optional string chat_message = 3;
+	
+	optional BlockUpdate block_update = 4;
+}
+

@@ -1,125 +1,76 @@
-#ifndef GAME_H
-#define GAME_H
+#ifndef WORLD_H
+#define WORLD_H
 
 #include <pthread.h>
 
-#include <utility>
 #include <string>
-#include <map>
-#include <cstdint>
-#include <cstdlib>
+#include <stdint.h>
 
 #include <tcutil.h>
 
+#include <tbb/atomic.h>
+#include <tbb/task.h>
+
 #include "constants.h"
-#include "chunk.h"
-#include "entity.h"
-#include "action.h"
-#include "entity_db.h"
-#include "mailbox.h"
-#include "worldgen.h"
-#include "map.h"
 #include "config.h"
+#include "chunk.h"
+#include "session.h"
+#include "game_map.h"
+#include "physics.h"
 
 namespace Game
 {
-
-	//Client state packet
-	struct PlayerEvent
-	{
-		uint64_t	tick;
-		double 		x, y, z;
-		double 		pitch, yaw, roll;
-		int 		input_state;
-	};
-
 	class World
 	{
 	public:
-		//World data
-		bool		running;
-		
-		//The game's current tick count
-		uint64_t		tick_count;
 						
 		//Ctor
-		World();
+		World(Config* config);
 		~World();
 		
+		//Event loop management
+		bool start();
+		void stop();
+		void sync();
+		
 		//Player management functions
-		bool player_create(std::string const& player_name, EntityID& player_id);
-		bool get_player_entity(std::string const& player_name, EntityID& player_id);
-		void player_delete(EntityID const& player_id);
-		bool player_join(EntityID const& player_id);
-		bool player_leave(EntityID const& player_id);
+		bool player_create(std::string const& player_name);
+		bool player_delete(std::string const& player_name);
+		bool player_join(std::string const& player_name, SessionID& session_id);
+		bool player_leave(SessionID const& session_id);
+		bool player_attach_update_socket(SessionID const& session_id, WebSocket*);
+		bool player_attach_map_socket(SessionID const& session_id, WebSocket*);
 		
-		//Input handlers
-		bool valid_player(EntityID const& player_id);
-		void handle_player_action(EntityID const& player_id, Action const& action);
-		void handle_player_tick(EntityID const& player_id, PlayerEvent const& input, uint64_t& prev_tick);
-		void handle_chat(EntityID const& player_id, std::string const& msg);
-		void handle_forget(EntityID const& player_id, EntityID const& forget_id);
-		void handle_action(EntityID const& player_id, Action const& action);
+		//Block management functions
+		void set_block(Block b, uint64_t t, int x, int y, int z);
 		
-		//Retrieves a compressed chunk from the server
-		int get_compressed_chunk(
-			EntityID const&,
-			ChunkID const&,
-			uint8_t* buf,
-			int buf_len);
-			
-		//Retrieves all visible chunks around player
-		bool get_vis_chunks(EntityID const&, int socket);
-		
-		//Processes queued messages for a particular client, main network IO event
-		bool heartbeat(
-			EntityID const&,
-			int socket);
-		
-		//Ticks the server
-		void tick();
-		
-		//Misc. functions
-		void set_block(int x, int y, int z, Block b);
+		//Task function
+		void main_loop();
 		
 	private:
-	
-		//Various systems
-		WorldGen		*world_gen;		//World generator
-		Map    			*game_map;		//The game map
-		EntityDB		*entity_db;		//Entity database
-		Mailbox			*mailbox;		//Mailbox for player updates
-		Config			*config;		//Configuration stuff
-		
-		//Event handlers
-		struct CreateHandler : EntityEventHandler
-		{
-			World *world;
-			CreateHandler(World* w) : world(w) {}
-			virtual void call(Entity const& ev);
-		};
 
-		struct UpdateHandler : EntityEventHandler
-		{
-			World *world;			
-			UpdateHandler(World* w) : world(w) {}
-			virtual void call(Entity const& ev);
-		};
-
-		struct DeleteHandler : EntityEventHandler
-		{
-			World *world;			
-			DeleteHandler(World* w) : world(w) {}
-			virtual void call(Entity const& ev);
-		};
+		//State variables
+		tbb::atomic<bool>	running;
+		uint64_t		ticks;
+		tbb::tick_count	prev_tick;
+		double			lag;
 	
-		CreateHandler	*create_handler;
-		UpdateHandler	*update_handler;
-		DeleteHandler	*delete_handler;
+		//The world update task
+		tbb::task*		world_task;
+	
+		//Subsystems
+		Config			*config;
+		SessionManager	*session_manager;
+		GameMap			*game_map;
+		Physics			*physics;
 		
-		//The update loops
-		void tick_players();
-		void tick_mobs();
+		//Player update stuff
+		void update_players();
+		void send_chunk_updates(Session* session, int);
+		void send_world_updates(Session* session);
+		
+		//Broadcasts a console message
+		void broadcast_message(std::string const& str);
 	};
 };
 

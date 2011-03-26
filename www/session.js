@@ -3,170 +3,128 @@
 var Session = 
 {
 	logged_in: false,
-	session_id: "",
-	player_name: ""
-};
-
-Session.hash_password = function(username, password)
-{
-	return Sha256.hash(username + password + "qytrh1nz");
-}
-
-Session.get_session_id_arr = function()
-{
-	var arr = new Uint8Array(8);
-	var x 	= parseInt(Session.session_id.substr(8, 8), 16);
-	var y 	= parseInt(Session.session_id.substr(0, 8), 16);
-		
-	arr[0] = (x)	 	& 0xff;
-	arr[1] = (x >> 8) 	& 0xff;
-	arr[2] = (x >> 16) 	& 0xff;
-	arr[3] = (x >> 24) 	& 0xff;
-	arr[4] = (y) 		& 0xff;
-	arr[5] = (y >> 8) 	& 0xff;
-	arr[6] = (y >> 16) 	& 0xff;
-	arr[7] = (y >> 24) 	& 0xff;
-
-	return arr;
-}
-
-Session.handle_login = function(XHR)
-{
-	XHR.send(null);
-	var response = XHR.responseText,
-		lines = response.split('\n');
-	if(lines.length == 2 && lines[0] == 'Ok')
+	session_id: null,
+	user_name: "",
+	password_hash : "",
+	player_name : "",
+	character_names : [],
+	
+	hash_password : function(user_name, password)
 	{
-		Session.logged_in = true;
-		Session.session_id = lines[1];
-		return 'ok';
-	}
-	else if(lines.length == 2)
+		return Sha256.hash(user_name + password + "qytrh1nz");
+	},
+	
+	server_action : function(type, character_name)
 	{
-		return lines[1];
+		var pbuf = new Network.ClientPacket;
+		pbuf.login_packet = new Network.LoginRequest;
+		pbuf.login_packet.user_name = Session.user_name;
+		pbuf.login_packet.password_hash = Session.password_hash;
+		pbuf.login_packet.action = type;
+
+		if(typeof(character_name) != "undefined")
+		{
+			pbuf.login_packet.character_name = character_name;
+		}
+		
+		var response = sendProtoBuf_sync(pbuf);
+		if(response == null)
+		{
+			return "Could not reach server";
+		}
+		
+		if(response.error_response)
+		{
+			return response.error_response.error_message;
+		}
+		
+		if(typeof(response.login_response) == "undefined" ||
+			!(response.login_response.success))
+		{
+			return "Request failed for some unspecified reason";
+		}
+		
+		if(typeof(response.login_response.session_id) != "undefined")
+		{
+			Session.session_id = response.login_response.session_id;
+			Session.logged_in = true;
+		}
+		
+		if(typeof(response.login_response.character_names) != "undefined")
+		{
+			Session.character_names = new Array(response.login_response.character_names.length);
+			for(var i=0; i<Session.character_names.length; ++i)
+			{
+				Session.character_names[i] = response.login_response.character_names[i];
+			}
+		}
+		
+		return "Ok";
+	},
+
+	create_account : function(user_name, password)
+	{
+		if(!Session.valid_user_name(user_name))
+			return "Invalid user name";
+		if(!Session.valid_password(password))
+			return 'Password is too short';
+		Session.user_name = user_name;
+		Session.password_hash = Session.hash_password(user_name, password);
+		return Session.server_action(Network.LoginRequest.LoginAction.CreateAccount);
+	},
+	
+	delete_account : function(user_name, password)
+	{	
+		Session.user_name = user_name;
+		Session.password_hash = Session.hash_password(user_name, password);
+		return Session.server_action(Network.LoginRequest.LoginAction.DeleteAccount);
+	},
+
+	login : function(user_name, password)
+	{
+		Session.user_name = user_name;
+		Session.password_hash = Session.hash_password(user_name, password);
+		return Session.server_action(Network.LoginRequest.LoginAction.Login);
+	},
+	
+	create_character : function(character_name)
+	{
+		return Session.server_action(Network.LoginRequest.LoginAction.CreateCharacter, character_name);
+	},
+	
+	delete_character : function(character_name)
+	{
+		return Session.server_action(Network.LoginRequest.LoginAction.DeleteCharacter, character_name);	
+	},
+	
+	join_game : function(character_name)
+	{
+		var res = Session.server_action(Network.LoginRequest.LoginAction.Join, character_name);
+		
+		if(res == "Ok")
+		{
+			Session.user_name = "";
+			Session.password_hash = "";
+		}
+		
+		return res;
+	},
+
+	logout : function()
+	{
+		//FIXME: Implement this
+	},
+
+	valid_user_name : function(user_name)
+	{
+		return 	user_name.length >= 3 && 
+				user_name.length <= 20 &&
+				/^\w+$/i.test(user_name)
+	},
+
+	valid_password : function(password)
+	{
+		return password.length > 6;
 	}
-	return "Unknown error";
 }
-
-
-Session.register = function(username, password)
-{
-	if(!Session.valid_username(username))
-		return 'Invalid user name';
-		
-	if(!Session.valid_password(password))
-		return 'Password is too short';
-
-	var password_hash = Session.hash_password(username, password);
-	var XHR = new XMLHttpRequest();
-	XHR.open("GET", "r?n="+username+"&p="+password_hash, false);
-
-	return Session.handle_login(XHR);
-}
-
-Session.login = function(username, password)
-{
-	if(!Session.valid_username(username))
-		return 'Invalid user name';
-
-	var password_hash = Session.hash_password(username, password);
-	var XHR = new XMLHttpRequest();
-	XHR.open("GET", "l?n="+username+"&p="+password_hash, false);
-	
-	return Session.handle_login(XHR);
-}
-
-Session.logout = function()
-{
-	if(Session.logged_in)
-	{		
-		var XHR = new XMLHttpRequest();
-		XHR.open("GET", "q?k="+session_id, false);
-		XHR.send(null);
-		
-		Session.logged_in = false;
-		Session.session_id = "";	
-		Session.player_name = "";
-	}
-}
-
-Session.valid_username = function(username)
-{
-	return 	username.length >= 3 && 
-			username.length <= 20 &&
-			/^\w+$/i.test(username)
-}
-
-Session.valid_password = function(password)
-{
-	return password.length > 6;
-}
-
-Session.valid_player_name = function(player_name)
-{
-	return 	player_name.length <= 20 &&
-			/^\w+$/i.test(player_name)
-}
-
-Session.do_action = function(url)
-{
-	var XHR = new XMLHttpRequest();
-	XHR.open("GET", url, false);
-	XHR.send();
-	
-	return XHR.responseText.split("\n");
-}
-
-
-Session.get_players = function()
-{
-	if(!Session.logged_in || Session.player_name != "")
-		return [];
-	
-	var response = Session.do_action("t?k="+Session.session_id);
-	
-	if(response[0] != "Ok")
-		return [];
-		
-	return response.slice(1, response.length-1);
-}
-
-Session.add_player = function(player_name)
-{
-	if(player_name == "")
-		return ["Fail", "Must enter player name first"];
-		
-	if(!Session.valid_player_name(player_name))
-		return ["Fail", "Invalid player name"];
-
-	if(!Session.logged_in || Session.player_name != "")
-		return ["Fail", "Not logged in"];
-		
-	return Session.do_action("c?k="+Session.session_id+"&player_name="+player_name);
-}
-
-Session.remove_player = function(player_name)
-{
-	if(!Session.logged_in || Session.player_name != "")
-		return ["Fail", "Not logged in"];
-	
-	return Session.do_action("d?k="+Session.session_id+"&player_name="+player_name);
-}
-
-Session.join_game = function(player_name)
-{
-	if(!Session.logged_in || Session.player_name != "")
-		return ["Fail", "Not logged in"];
-		
-	var response = Session.do_action("j?k="+Session.session_id+"&player_name="+player_name);
-	
-	if(response[0] != "Ok")
-		return ["Fail", response[1]];
-		
-	Session.player_name = player_name;
-	Player.set_entity_id(response[2]);
-	
-	return ["Ok", "Successfully joined game"];
-}
-
 

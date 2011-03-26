@@ -1,0 +1,21 @@
+Chromium nightly:
+http://build.chromium.org/f/chromium/continuous/linux64/LATEST/
+
+Intel c compiler set up:
+http://software.intel.com/en-us/articles/using-intel-compilers-for-linux-with-ubuntu/
+
+Intel c compiler download:
+http://software.intel.com/en-us/articles/non-commercial-software-development/
+
+ProtoJS :
+https://github.com/sirikata/protojs
+
+Protocol buffers:
+http://code.google.com/p/protobuf/
+
+V8 :
+http://code.google.com/p/v8/
+
+Tokyo Cabinet:
+http://fallabs.com/tokyocabinet/
+

@@ -1,57 +1,18 @@
 "use strict";
 
-
-//Draws a chunk
-//
-// Convention:
-//
-//	Attrib 0 = position
-//	Attrib 1 = normal
-//	Attrib 2 = tex coord
-//	Attrib 3 = light map value
-//
-Chunk.prototype.draw = function(gl, cam, base_chunk, shader, transp)
+//Start preloading the map
+Map.preload = function()
 {
-	if(	this.pending || 
-		(transp && this.num_transparent_elements == 0) ||
-		(!transp && this.num_elements == 0) ||
-		!frustum_test(cam, this.x - base_chunk[0], this.y - base_chunk[1], this.z - base_chunk[2]) )
-		return;
-
-
-	gl.uniform3f(shader.chunk_offset, 
-		(this.x-base_chunk[0])<<CHUNK_X_S, 
-		(this.y-base_chunk[1])<<CHUNK_Y_S, 
-		(this.z-base_chunk[2])<<CHUNK_Z_S);
-
-	//Bind buffers
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.vb);
-	if('pos_attr' in shader)
-		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
-	if('tc_attr' in shader)
-		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
-	if('norm_attr' in shader)
-		gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
-	if('light_attr' in shader)
-		gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
-
-	if(transp)
-	{
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.tib);
-		gl.drawElements(gl.TRIANGLES, this.num_transparent_elements, gl.UNSIGNED_SHORT, 0);
-	}
-	else
-	{
-		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ib);
-		gl.drawElements(gl.TRIANGLES, this.num_elements, gl.UNSIGNED_SHORT, 0);
-	}
+	Map.init_worker();
 }
 
+
 //Initialize the map
-Map.init = function(gl)
+Map.init = function()
 {
 	//Initialize chunk shader
-	var res = getProgram(gl, "shaders/chunk.fs", "shaders/chunk.vs"), i;
+	var gl = Game.gl,
+		res = getProgram("shaders/chunk.fs", "shaders/chunk.vs"), i;
 	if(res[0] != "Ok")
 	{
 		return res[1];
@@ -100,26 +61,23 @@ Map.init = function(gl)
 
 
 	//Create terrain texture
-	res = getTexture(gl, "img/terrain.png");
+	res = getTexture("img/terrain.png");
 	if(res[0] != "Ok")
 	{
 		return res[1];
 	}
 	Map.terrain_tex = res[1];
 	
-	//Start worker
-	Map.init_worker();
 
 	return "Ok";
 }
 
 //Draws the map
-// Input:
-//  gl - the open gl rendering context
-//  camera - the current camera matrix
-Map.draw = function(gl)
+Map.draw = function()
 {
-	var c, chunk, base_chunk = Player.chunk(), 
+	var gl = Game.gl,
+		offset_uni = Map.chunk_shader.chunk_offset,
+		c, chunk, base_chunk = Player.chunk(), 
 		sun_dir = Sky.get_sun_dir(), 
 		sun_color = Sky.get_sun_color(),
 		i, camera;
@@ -154,22 +112,63 @@ Map.draw = function(gl)
 	gl.uniformMatrix4fv(Map.chunk_shader.proj_mat, false, camera);	
 
 	//Draw chunks
-	for(c in Map.index)
+	var trans_chunks = [];
+	for(i=0; i<Map.active_chunks.length; ++i)
 	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, false);
+		chunk = Map.index[Map.active_chunks[i]];
+		
+		if( frustum_test(camera, 
+					chunk.x - base_chunk[0], 
+					chunk.y - base_chunk[1], 
+					chunk.z - base_chunk[2]) )
+		{
+			if(chunk.num_elements > 0)
+			{
+				gl.uniform3f(offset_uni, 
+					(chunk.x-base_chunk[0])*CHUNK_X, 
+					(chunk.y-base_chunk[1])*CHUNK_Y, 
+					(chunk.z-base_chunk[2])*CHUNK_Z);
+
+				gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);
+				gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
+				gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
+				gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
+				gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
+
+				gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
+				gl.drawElements(gl.TRIANGLES, chunk.num_elements, gl.UNSIGNED_SHORT, 0);
+			}
+				
+			if(chunk.num_transparent_elements > 0)
+			{
+				trans_cunks.push(chunk);
+			}
+		}
 	}
 
-	//Draw transparent chunks	
+	//Draw transparent chunks
+	//FIXME:  Sort transparent chunks back to front maybe
 	gl.enable(gl.BLEND);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.depthMask(0);
-	for(c in Map.index)
+	for(i=0; i<trans_chunks.length; ++i)
 	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, camera, base_chunk, Map.chunk_shader, true);
+		chunk = trans_chunks[i];
+		
+		gl.uniform3f(offset_uni, 
+			(chunk.x-base_chunk[0])*CHUNK_X, 
+			(chunk.y-base_chunk[1])*CHUNK_Y, 
+			(chunk.z-base_chunk[2])*CHUNK_Z);
+
+		gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);
+		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);	
+		gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 48, 12);
+		gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 48, 20);
+		gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 48, 32);
+
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.tib);
+		gl.drawElements(gl.TRIANGLES, chunk.num_transparent_elements, gl.UNSIGNED_SHORT, 0);
+
 	}
 	gl.depthMask(1);
 
@@ -180,12 +179,6 @@ Map.draw = function(gl)
 		gl.bindTexture(gl.TEXTURE_2D, null);
 	}	
 
-	//Disable attributes
-	gl.disableVertexAttribArray(Map.chunk_shader.pos_attr);
-	gl.disableVertexAttribArray(Map.chunk_shader.tc_attr);
-	gl.disableVertexAttribArray(Map.chunk_shader.norm_attr);
-	gl.disableVertexAttribArray(Map.chunk_shader.light_attr);
-
 	//Optional: draw debug information for visibility query
 	if(Map.show_debug)
 	{
@@ -194,55 +187,63 @@ Map.draw = function(gl)
 }
 
 //Draws the map for a shadow shader
-Map.draw_shadows = function(gl, shadow_map)
+Map.draw_shadows = function(shadow_map)
 {
-	var c, chunk, base_chunk = Player.chunk();
+	var gl = Game.gl, i, base_chunk = Player.chunk(), chunk, 
+		offset_uni = Shadows.shadow_shader.chunk_offset;
 
 	//Draw regular chunks
-	for(c in Map.index)
+	for(i=0; i<Map.active_chunks.length; ++i)
 	{
-		chunk = Map.index[c];
-		if(chunk instanceof Chunk)
-			chunk.draw(gl, shadow_map.light_matrix, base_chunk, Shadows.shadow_shader, false);
+		chunk = Map.index[Map.active_chunks[i]];
+		if(	chunk.num_elements > 0 &&
+			frustum_test(shadow_map.light_matrix, 
+					chunk.x - base_chunk[0], 
+					chunk.y - base_chunk[1], 
+					chunk.z - base_chunk[2]) )
+		{
+			gl.uniform3f(offset_uni, 
+				(chunk.x-base_chunk[0])*CHUNK_X, 
+				(chunk.y-base_chunk[1])*CHUNK_Y, 
+				(chunk.z-base_chunk[2])*CHUNK_Z);
+
+			gl.bindBuffer(gl.ARRAY_BUFFER, chunk.vb);
+			gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 48, 0);
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunk.ib);
+			gl.drawElements(gl.TRIANGLES, chunk.num_elements, gl.UNSIGNED_SHORT, 0);
+		}
 	}
 }
 
-//Sets a block in the map to the given type
-Map.set_block = function(x, y, z, b)
+//Applies a list of writes
+Map.apply_writes = function(write_list)
 {
-	var cx = (x >> CHUNK_X_S), 
-		cy = (y >> CHUNK_Y_S), 
-		cz = (z >> CHUNK_Z_S);
-	var c = Map.lookup_chunk(cx, cy, cz);		
-	if(!c)
-		return -1;
-
-	//Post message to worker
-	Map.vb_worker.postMessage({type: EV_SET_BLOCK,
-		'x':x, 'y':y, 'z':z, 'b':b});
-
-	var bx = (x & CHUNK_X_MASK), 
-		by = (y & CHUNK_Y_MASK), 
-		bz = (z & CHUNK_Z_MASK);
-	return c.set_block(bx, by, bz, b);
+	Map.vb_worker.postMessage({ 'type':EV_SET_BLOCK, 'w':write_list });
 }
 
 //Updates the vertex buffer for a chunk
-Map.update_vb = function(x, y, z, verts, ind, tind)
+Map.update_vb = function(t, x, y, z, verts, ind, tind)
 {
 	var chunk = Map.lookup_chunk(x, y, z),
 		gl = Game.gl;
 
-	//Check if chunk vertex buffer is pending
-	if(chunk.pending)
+	//Add chunk if missing
+	if(!chunk)
 	{
-		chunk.pending = false;
-		Map.num_pending_chunks--;
+		chunk = Map.add_chunk(t, x, y, z);
+		
+		if( Math.abs(chunk.x - Game.pchunk[0]) <= 16 &&
+			Math.abs(chunk.y - Game.pchunk[1]) <= 16 &&
+			Math.abs(chunk.z - Game.pchunk[2]) <= 16 )
+		{
+			Map.active_chunks.push(x + ":" + y + ":" + z);
+		}
+		
 	}
-
+	
 	chunk.num_elements = ind.length;
 	chunk.num_transparent_elements = tind.length;
-
+	chunk.t = t;
 
 	if(verts.length > 0)
 	{
@@ -270,35 +271,20 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	}
 }
 
-//Updates the chunk data
-Map.update_chunk = function(x, y, z, data)
+Map.update_active_chunks = function()
 {
-	var chunk = Map.lookup_chunk(x, y, z);
-	
-	if(!chunk)
+	var c, chunk;
+	Map.active_chunks = [];
+	for(c in Map.index)
 	{
-		chunk = Map.add_chunk(x, y, z);
-	}
-	
-	chunk.data = data;
-}
-
-//Kills off a chunk
-Map.forget_chunk = function(str)
-{
-	var chunk = Map.index[str], gl = Game.gl;
-	if(chunk)
-	{
-		if(chunk.pending)
+		chunk = Map.index[c];
+		if((chunk instanceof Chunk) &&
+			Math.abs(chunk.x - Game.pchunk[0]) <= 16 &&
+			Math.abs(chunk.y - Game.pchunk[1]) <= 16 &&
+			Math.abs(chunk.z - Game.pchunk[2]) <= 16)
 		{
-			Map.num_pending_chunks--;
+			Map.active_chunks.push(c);
 		}
-
-		if(chunk.vb)	gl.deleteBuffer(chunk.vb);
-		if(chunk.ib)	gl.deleteBuffer(chunk.ib);
-		if(chunk.tib)	gl.deleteBuffer(chunk.tib);
-
-		delete Map.index[str];
 	}
 }
 
@@ -318,28 +304,25 @@ Map.init_worker = function()
 				for(i=0; i<ev.data.vbs.length; ++i)
 				{
 					vb = ev.data.vbs[i];
-					Map.update_vb(vb.x, vb.y, vb.z, vb.d[0], vb.d[1], vb.d[2]);
+					Map.update_vb(vb.t, vb.x, vb.y, vb.z, vb.d[0], vb.d[1], vb.d[2]);
 				}
-			break;
-
-			case EV_CHUNK_UPDATE:
-				Map.update_chunk(
-					ev.data.x, ev.data.y, ev.data.z, 
-					ev.data.data);
 			break;
 
 			case EV_PRINT:
 				console.log(ev.data.str);				
 			break;
-
-			case EV_FORGET_CHUNK:
-				Map.forget_chunk(ev.data.idx);
+			
+			case EV_CRASH:
+				App.crash("Map socket died");
 			break;
 		}
 	};
 
 	//Start the worker	
-	Map.vb_worker.postMessage({ type: EV_START, key: Session.get_session_id_arr() });
+	Map.vb_worker.postMessage({ 
+		type: EV_START, 
+		lsw: Session.session_id.lsw, 
+		msw: Session.session_id.msw });
 }
 
 

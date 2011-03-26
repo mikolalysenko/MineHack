@@ -1,5 +1,6 @@
 "use strict";
 
+//Preloads game data in the background
 var Loader = 
 {
 	shaders :
@@ -27,72 +28,69 @@ var Loader =
 	max_loaded : 0,
 	pct_loaded : 0,
 	finished : false,
-	failed : false
-};
+	failed : false,
 
-
-
-Loader.start = function(prog_callback, err_callback)
-{
-	Loader.max_loaded = Loader.shaders.length + Loader.images.length;
-
-	Loader.onProgress = function(url)
+	start : function(prog_callback, err_callback)
 	{
-		++Loader.num_loaded;
-		Loader.pct_loaded = Loader.num_loaded / Loader.max_loaded;
-		Loader.finished = Loader.num_loaded >= Loader.max_loaded;
-		prog_callback(url);
-	}
+		Loader.max_loaded = Loader.shaders.length + Loader.images.length;
 
-	Loader.onError = function(data)
-	{
-		Loader.failed = true;
-		err_callback("Error loading file: " + data);
-	}
-
-	for(var i=0; i<Loader.shaders.length; i++)
-	{
-		Loader.fetch_shader(Loader.shaders[i]);
-	}	
-	
-	for(var i=0; i<Loader.images.length; i++)
-	{
-		Loader.fetch_image(Loader.images[i]);
-	}
-}
-
-Loader.fetch_shader = function(url)
-{
-	var XHR = new XMLHttpRequest();
-	XHR.open("GET", url, true);
-	
-	XHR.onreadystatechange = function()
-	{
-		if(XHR.readyState == 4)
+		Loader.onProgress = function(url)
 		{
-			if(XHR.status == 200 || XHR.status == 304)
+			++Loader.num_loaded;
+			Loader.pct_loaded = Loader.num_loaded / Loader.max_loaded;
+			Loader.finished = Loader.num_loaded >= Loader.max_loaded;
+			prog_callback(url);
+		}
+
+		Loader.onError = function(data)
+		{
+			Loader.failed = true;
+			err_callback("Error loading file: " + data);
+		}
+
+		for(var i=0; i<Loader.shaders.length; i++)
+		{
+			Loader.fetch_shader(Loader.shaders[i]);
+		}	
+	
+		for(var i=0; i<Loader.images.length; i++)
+		{
+			Loader.fetch_image(Loader.images[i]);
+		}
+	},
+
+	fetch_shader : function(url)
+	{
+		var XHR = new XMLHttpRequest();
+		XHR.open("GET", url, true);
+	
+		XHR.onreadystatechange = function()
+		{
+			if(XHR.readyState == 4)
 			{
-				Loader.data[url] = XHR.responseText;
-				Loader.onProgress(url);
-			}
-			else
-			{
-				Loader.onError(url);
+				if(XHR.status == 200 || XHR.status == 304)
+				{
+					Loader.data[url] = XHR.responseText;
+					Loader.onProgress(url);
+				}
+				else
+				{
+					Loader.onError(url);
+				}
 			}
 		}
-	}
 	
-	XHR.send(null);
-}
+		XHR.send(null);
+	},
 
-
-Loader.fetch_image = function(url)
-{
-	var img = new Image();
-	img.onload = function()
+	fetch_image : function(url)
 	{
-		Loader.data[url] = img;
-		Loader.onProgress(url);
+		var img = new Image();
+		img.onload = function()
+		{
+			Loader.data[url] = img;
+			Loader.onProgress(url);
+		}
+		img.src = url;
 	}
-	img.src = url;
 }
