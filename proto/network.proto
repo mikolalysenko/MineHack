@@ -31,7 +31,7 @@ message BlockUpdate {
 	optional int32		x = 1;
 	optional int32		y = 2;
 	optional int32		z = 3;
-	optional int32		tick = 4;
+	optional int64		tick = 4;
 	optional int32		block = 5;
 }
 

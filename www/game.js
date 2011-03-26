@@ -208,6 +208,20 @@ var Game =
 		else if(pbuf.world_update)
 		{
 			Game.net_ticks = pbuf.world_update.ticks.lsw;
+			
+			if(pbuf.world_update.blocks)
+			{
+				var blocks = pbuf.world_update.blocks,
+					writes = [];
+				for(var i=0; i<blocks.length; ++i)
+				{
+					writes.push(new PendingWrite(blocks[i].tick.lsw, blocks[i].x, blocks[i].y, blocks[i].z, blocks[i].block));
+				}
+				if(writes.length > 0)
+				{
+					Map.apply_writes(writes);
+				}
+			}
 		}
 	},
 	

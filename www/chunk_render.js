@@ -215,28 +215,14 @@ Map.draw_shadows = function(shadow_map)
 	}
 }
 
-//Sets a block in the map to the given type
-Map.set_block = function(x, y, z, b)
+//Applies a list of writes
+Map.apply_writes = function(write_list)
 {
-	var cx = (x >> CHUNK_X_S), 
-		cy = (y >> CHUNK_Y_S), 
-		cz = (z >> CHUNK_Z_S);
-	var c = Map.lookup_chunk(cx, cy, cz);		
-	if(!c)
-		return -1;
-
-	//Post message to worker
-	Map.vb_worker.postMessage({type: EV_SET_BLOCK,
-		'x':x, 'y':y, 'z':z, 'b':b});
-
-	var bx = (x & CHUNK_X_MASK), 
-		by = (y & CHUNK_Y_MASK), 
-		bz = (z & CHUNK_Z_MASK);
-	return c.set_block(bx, by, bz, b);
+	Map.vb_worker.postMessage({ 'type':EV_SET_BLOCK, 'w':write_list });
 }
 
 //Updates the vertex buffer for a chunk
-Map.update_vb = function(x, y, z, verts, ind, tind)
+Map.update_vb = function(t, x, y, z, verts, ind, tind)
 {
 	var chunk = Map.lookup_chunk(x, y, z),
 		gl = Game.gl;
@@ -244,7 +230,7 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 	//Add chunk if missing
 	if(!chunk)
 	{
-		chunk = Map.add_chunk(x, y, z);
+		chunk = Map.add_chunk(t, x, y, z);
 		
 		if( Math.abs(chunk.x - Game.pchunk[0]) <= 16 &&
 			Math.abs(chunk.y - Game.pchunk[1]) <= 16 &&
@@ -255,10 +241,9 @@ Map.update_vb = function(x, y, z, verts, ind, tind)
 		
 	}
 	
-	chunk.pending = false;
 	chunk.num_elements = ind.length;
 	chunk.num_transparent_elements = tind.length;
-
+	chunk.t = t;
 
 	if(verts.length > 0)
 	{
@@ -294,47 +279,12 @@ Map.update_active_chunks = function()
 	{
 		chunk = Map.index[c];
 		if((chunk instanceof Chunk) &&
-			!chunk.pending &&
 			Math.abs(chunk.x - Game.pchunk[0]) <= 16 &&
 			Math.abs(chunk.y - Game.pchunk[1]) <= 16 &&
 			Math.abs(chunk.z - Game.pchunk[2]) <= 16)
 		{
 			Map.active_chunks.push(c);
 		}
-	}
-}
-
-/*
-//Updates the chunk data
-Map.update_chunk = function(x, y, z, data)
-{
-	var chunk = Map.lookup_chunk(x, y, z);
-	
-	if(!chunk)
-	{
-		chunk = Map.add_chunk(x, y, z);
-	}
-	
-	chunk.data = data;
-}
-*/
-
-//Kills off a chunk
-Map.forget_chunk = function(str)
-{
-	var chunk = Map.index[str], gl = Game.gl;
-	if(chunk)
-	{
-		if(chunk.pending)
-		{
-			Map.num_pending_chunks--;
-		}
-
-		if(chunk.vb)	gl.deleteBuffer(chunk.vb);
-		if(chunk.ib)	gl.deleteBuffer(chunk.ib);
-		if(chunk.tib)	gl.deleteBuffer(chunk.tib);
-
-		delete Map.index[str];
 	}
 }
 
@@ -354,24 +304,12 @@ Map.init_worker = function()
 				for(i=0; i<ev.data.vbs.length; ++i)
 				{
 					vb = ev.data.vbs[i];
-					Map.update_vb(vb.x, vb.y, vb.z, vb.d[0], vb.d[1], vb.d[2]);
+					Map.update_vb(vb.t, vb.x, vb.y, vb.z, vb.d[0], vb.d[1], vb.d[2]);
 				}
 			break;
 
-/*
-			case EV_CHUNK_UPDATE:
-				Map.update_chunk(
-					ev.data.x, ev.data.y, ev.data.z, 
-					ev.data.data);
-			break;
-*/
-
 			case EV_PRINT:
 				console.log(ev.data.str);				
-			break;
-
-			case EV_FORGET_CHUNK:
-				Map.forget_chunk(ev.data.idx);
 			break;
 			
 			case EV_CRASH:

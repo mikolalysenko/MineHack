@@ -466,6 +466,17 @@ function pack_buffer(cx, cy, cz)
 					}
 				}
 			}
+			
+			//Apply pending writes
+			for(i=0; i<chunk.pending_writes.length; ++i)
+			{
+				var w = chunk.pending_writes[i],
+					ox = (dx+1) * CHUNK_X + w.x,
+					oy = (dy+1) * CHUNK_Y + w.y,
+					oz = (dz+1) * CHUNK_Z + w.z;
+					
+				packed_buffer[ox + oy * PACK_Y_STRIDE + oz * PACK_Z_STRIDE] = w.b;
+			}
 		}
 		else
 		{
@@ -527,25 +538,39 @@ function decode_pbuffer(buffer)
 //Unpacks an incoming protocol buffer
 function unpack_chunk_buffer(pbuf)
 {
-	var ox = pbuf.x,
+	var t = pbuf.last_modified.lsw,
+		ox = pbuf.x,
 		oy = pbuf.y,
-		oz = pbuf.z,	
-		chunk = Map.add_chunk(ox, oy, oz),
-		res = -1;
+		oz = pbuf.z,
+		chunk = Map.lookup_chunk(ox, oy, oz);
 		
-	chunk.data = decode_pbuffer(pbuf.data);
-		
-	//Handle any pending writes
-	chunk.pending = false;
+	if(!chunk)
+	{
+		chunk = Map.add_chunk(t, ox, oy, oz);
+	}	
+	
+	chunk.t = t;
 
+	//Update pending writes
+	chunk.pending_writes.sort(function(a,b) { return a.t > b.t; });
+	while(chunk.pending_writes.length > 0 &&
+		chunk.pending_writes[chunk.pending_writes.length-1].t <= t)
+	{
+		chunk.pending_writes.pop();
+	}
+	chunk.pending_writes.reverse();
+	
+	//Update the chunk data
+	chunk.data = decode_pbuffer(pbuf.data);
+	
 	//Set dirty flags on neighboring chunks
-	set_dirty(chunk.x, chunk.y, chunk.z);
-	set_dirty(chunk.x-1, chunk.y, chunk.z);
-	set_dirty(chunk.x+1, chunk.y, chunk.z);
-	set_dirty(chunk.x, chunk.y-1, chunk.z);
-	set_dirty(chunk.x, chunk.y+1, chunk.z);
-	set_dirty(chunk.x, chunk.y, chunk.z-1);
-	set_dirty(chunk.x, chunk.y, chunk.z+1);
+	set_dirty(chunk.x, chunk.y, chunk.z, false);
+	set_dirty(chunk.x-1, chunk.y, chunk.z, false);
+	set_dirty(chunk.x+1, chunk.y, chunk.z, false);
+	set_dirty(chunk.x, chunk.y-1, chunk.z, false);
+	set_dirty(chunk.x, chunk.y+1, chunk.z, false);
+	set_dirty(chunk.x, chunk.y, chunk.z-1, false);
+	set_dirty(chunk.x, chunk.y, chunk.z+1, false);
 }
 
 //Marks a chunk as dirty
@@ -555,15 +580,11 @@ function set_dirty(x, y, z, priority)
 
 	if(chunk)
 	{
-		if(chunk.pending)
-		{
-			return;
-		}
-		else if(priority)
+		if(priority)
 		{
 			if(chunk.dirty)
 			{
-				//Find chunk in list of pending chunks and move to front
+				//FIXME: Find chunk in list of pending chunks and move to front
 			}
 			else
 			{
@@ -590,7 +611,7 @@ function generate_vbs()
 	{
 		chunk = vb_pending_chunks[i];
 		pack_buffer(chunk.x, chunk.y, chunk.z);
-		vbs.push({'x':chunk.x, 'y':chunk.y, 'z':chunk.z, 'd':gen_vb()});
+		vbs.push({'t': chunk.t, 'x':chunk.x, 'y':chunk.y, 'z':chunk.z, 'd':gen_vb()});
 		chunk.dirty = false;
 	}	
 	send_vb(vbs);
@@ -598,9 +619,9 @@ function generate_vbs()
 }
 
 //Sets a block
-function set_block(x, y, z, b)
+function set_block(t, x, y, z, b)
 {
-	printf("setting block: " + x + "," + y + "," + z + " <- " + b);
+	printf("setting block: @" + t + ":" + x + "," + y + "," + z + " <- " + b);
 
 	var cx = (x >> CHUNK_X_S), 
 		cy = (y >> CHUNK_Y_S), 
@@ -610,37 +631,24 @@ function set_block(x, y, z, b)
 		bz = (z & CHUNK_Z_MASK),
 		flags, i, j, k, idx,
 		c = Map.lookup_chunk(cx, cy, cz);		
-	if(!c)
+	if(!c || c.t >= t)
 		return -1;
 
+	c.pending_writes.push(new PendingWrite(t, bx, by, bz, b));
 
-	if(c.pending)
+	set_dirty(cx, cy, cz, true);
+
+	flags = [ [ bx==0, true, bx==(CHUNK_X-1)],
+			  [ by==0, true, by==(CHUNK_Y-1)],
+			  [ bz==0, true, bz==(CHUNK_Z-1)] ];
+
+	for(i=0; i<3; ++i)
+	for(j=0; j<3; ++j)
+	for(k=0; k<3; ++k)
 	{
-		c.pending_blocks.push([bx,by,bz,b]);
-	}
-	else
-	{
-		idx = bx + (by<<CHUNK_X_S) + (bz<<CHUNK_XY_S);
-		if(c.data[idx] == b)
-			return;
-
-		c.data[idx] = b;
-		c.set_block(bx, by, bz, b);
-
-		set_dirty(cx, cy, cz, true);
-
-		flags = [ [ bx==0, true, bx==(CHUNK_X-1)],
-				  [ by==0, true, by==(CHUNK_Y-1)],
-				  [ bz==0, true, bz==(CHUNK_Z-1)] ];
-
-		for(i=0; i<3; ++i)
-		for(j=0; j<3; ++j)
-		for(k=0; k<3; ++k)
+		if(flags[0][i] && flags[1][j] && flags[2][k])
 		{
-			if(flags[0][i] && flags[1][j] && flags[2][k])
-			{
-				set_dirty(cx + i-1, cy + j-1, cz + k-1, true);
-			}
+			set_dirty(cx + i-1, cy + j-1, cz + k-1, true);
 		}
 	}
 }
@@ -659,10 +667,6 @@ function on_recv(event)
 	{
 		unpack_chunk_buffer(pbuf.chunk_response);
 	}
-}
-
-function on_send(pbuf)
-{
 }
 
 function on_socket_error(err)
@@ -704,7 +708,12 @@ self.onmessage = function(ev)
 		break;
 
 		case EV_SET_BLOCK:
-			set_block(ev.data.x, ev.data.y, ev.data.z, ev.data.b);
+			var writes = ev.data.w;
+			
+			for(var i=0; i<writes.length; ++i)
+			{
+				set_block(writes[i].t, writes[i].x, writes[i].y, writes[i].z, writes[i].b);
+			}
 		break;
 	}
 
@@ -716,19 +725,3 @@ function send_vb(vbs)
 	postMessage({ type: EV_VB_UPDATE, 'vbs':vbs });
 }
 
-//Removes a chunk from the database
-function forget_chunk(chunk)
-{
-	var str = chunk.x + ":" + chunk.y + ":" + chunk.z;
-	if(str in Map.index)
-	{
-		print("Forgetting chunk: " + str);
-
-		delete Map.index[str];
-
-		postMessage({
-			type: EV_FORGET_CHUNK,
-			idx: str});
-			return;
-	}	
-}

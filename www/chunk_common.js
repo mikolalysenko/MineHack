@@ -45,19 +45,29 @@ var Transparent =
 	false,	//Sand
 ];
 
+//A pending block write
+function PendingWrite(t, x, y, z, b)
+{
+	this.t = t;
+	this.x = x;
+	this.y = y;
+	this.z = z;
+	this.b = b;
+}
 
 //The chunk data type
-function Chunk(x, y, z)
+function Chunk(t, x, y, z)
 {
 	//Set chunk data
 	this.data = [];
+	this.pending_writes = [];
 	
 	//Set position
+	this.t = t;
 	this.x = x;
 	this.y = y;
 	this.z = z;
 	
-	this.pending = true;
 	this.dirty = false;
 	
 	this.vb = null;
@@ -107,13 +117,6 @@ function frustum_test(m, cx, cy, cz)
 	return false;
 }
 
-
-//Sets the block type and updates vertex buffers as needed
-Chunk.prototype.set_block = function(x, y, z, b)
-{
-	this.data[x + (y<<CHUNK_X_S) + (z<<CHUNK_XY_S)] = b;
-}
-
 //The map data structure
 var Map =
 {
@@ -135,7 +138,7 @@ var Map =
 	},
 	
 	//Adds a new chunk
-	add_chunk : function(x, y, z)
+	add_chunk : function(t, x, y, z)
 	{
 		var str = x + ":" + y + ":" + z,
 			chunk = Map.index[str];
@@ -146,7 +149,7 @@ var Map =
 		}
 	
 		++Map.chunk_count;
-		chunk = new Chunk(x, y, z);
+		chunk = new Chunk(t, x, y, z);
 		Map.index[str] = chunk
 		return chunk;
 	},

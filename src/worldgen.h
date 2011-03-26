@@ -21,7 +21,7 @@ namespace Game
 		// and to allow in place chunk generation.
 		//This method must be reentrant and thread safe.  (and hopefully fast)
 		//It gets called *frequently*.
-		void generate_chunk(ChunkID const&, Block* data, int stride_x, int stride_xy);
+		void generate_chunk(ChunkID const&, Block* data, int stride_x, int stride_xz);
 		
 	private:
 		Config *config;
