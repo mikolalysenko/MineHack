@@ -901,7 +901,16 @@ void HttpServer::process_header(Socket* socket)
 		
 		//Create the handshake packet
 		socket->outp.init_buffer(SEND_BUFFER_SIZE);
-		if(!http_websocket_handshake(socket->request, socket->outp.buf_start, &socket->outp.pending, config->readString("origin")))
+		
+		
+		auto origin = config->readString("origin");
+		auto iter = socket->request.headers.find("Host");
+		if(iter != socket->request.headers.end())
+		{
+			origin = iter->second;
+		}
+		
+		if(!http_websocket_handshake(socket->request, socket->outp.buf_start, &socket->outp.pending, origin))
 		{
 			DEBUG_PRINTF("Bad WebSocket handshake\n");
 			dispose_socket(socket);

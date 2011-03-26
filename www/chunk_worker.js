@@ -29,8 +29,6 @@ var
 	vb_pending_chunks = [],					 //Chunks which are waiting for a vertex buffer update
 	wait_chunks = false,					 //If set, we are waiting for more chunks
 	packed_buffer = new Array(27*CHUNK_SIZE), //A packed buffer
-//	empty_data = new Array(CHUNK_SIZE), 	 //Allocate an empty buffer for unloaded chunks
-//	session_id = new Uint8Array(8),		 	 //Session ID key
 	vb_interval = null,						 //Interval timer for vertex buffer generation
 	fetch_interval = null,					 //Interval timer for chunk fetch events
 	socket = null,							 //The websocket

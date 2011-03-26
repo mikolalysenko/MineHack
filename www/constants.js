@@ -5,7 +5,7 @@ const GAME_SHADOW_RATE		= 100;
 const GAME_NET_UPDATE_RATE	= 100;
 
 
-const DOMAIN_NAME = "127.0.0.1:8081"
+const DOMAIN_NAME = location.host;
 
 //Chunk parameters
 const CHUNK_X_S		= 4;

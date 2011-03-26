@@ -55,9 +55,6 @@ const char DEFAULT_WEBSOCKET_HEADER[] =
 	"Sec-WebSocket-Location: ws://%s/%s\r\n"
 	"\r\n";
 
-//FIXME: This should get read from the config
-const char ORIGIN[] = "127.0.0.1:8081";
-
 void parse_http_request(char* ptr, char* end_ptr, HttpRequest& result)
 {
 	result.type = HttpRequestType_Bad;
