@@ -373,12 +373,12 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 		DEBUG_PRINTF("Update, t = %d\n", t);
 		
 		//Compute physics for this region
-		parallel_for( blocked_range<int>(0, chunks.size(), 32),
+		parallel_for( blocked_range<int>(0, marked_chunks.size(), 64),
 			[&]( blocked_range<int> rng )
 		{
 			for(auto i = rng.begin(); i != rng.end(); ++i)
 			{
-				auto c = chunks[i];
+				auto c = marked_chunks[i];
 		
 				int ox = c.x - x_min,
 					oy = c.y - y_min,
@@ -400,9 +400,6 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 					{
 						int idx = pos - marked_chunks.begin();
 						update_times[idx] = t;
-					
-						DEBUG_PRINTF("Updated chunk: %d at t=%d", idx, t);
-					
 					}
 				}
 			}
@@ -456,7 +453,7 @@ void Physics::update_region(chunk_list_t const& marked_chunks, block_list_t cons
 	DEBUG_PRINTF("Writing result of physics computation back to database\n");
 	
 	//Check for chunks which changed, and update them in the map
-	parallel_for( blocked_range<int>(0, marked_chunks.size(), 64),
+	parallel_for( blocked_range<int>(0, marked_chunks.size(), 128),
 		[&]( blocked_range<int> rng )
 	{
 		DEBUG_PRINTF("Updating range: %d to %d\n", rng.begin(), rng.end());

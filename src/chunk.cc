@@ -244,8 +244,17 @@ Block ChunkBuffer::get_block(int x, int y, int z) const
 
 	auto iter = intervals.lower_bound(o);
 	
-	if(iter->first != o)
+	//It says lower_bound, but it gives you an upper_bound.  Calling upper_bound gives you nonsense.
+	//What is this world coming too?  (I may be using this wrong...)
+	if(iter == intervals.end())
+	{
+		if(iter == intervals.begin())
+			return Block(BlockType_Air);
 		--iter;
+	}
+	else if(iter->first != o)
+		--iter;
+	
 	return iter->second;
 }
 
@@ -279,9 +288,6 @@ void ChunkBuffer::compress_chunk(Block* data, int stride_x, int stride_xz)
 				data_ptr += dy;
 		}
 	}
-
-	//Add an extra end interval
-	intervals.insert(make_pair(CHUNK_SIZE, 0));
 }
 
 //Decompresses a chunk
@@ -294,12 +300,12 @@ void ChunkBuffer::decompress_chunk(Block* data, int stride_x, int stride_xz) con
 	const int dz = stride_x - (CHUNK_X - 1);
 	
 	int i = 0;
-	for(auto iter = intervals.begin(); iter != intervals.end() && iter->first < CHUNK_SIZE; )
+	for(auto iter = intervals.begin(); iter != intervals.end(); )
 	{
 		auto block = iter->second;
-		int right = (++iter)->first;
+		int right = (++iter == intervals.end()) ? CHUNK_SIZE : iter->first;
 	
-		//DEBUG_PRINTF("Decompressing interval: %d--%d, t:%d\n", i, right, block.int_val);
+		assert(i < right);
 	
 		while(i < right)
 		{
@@ -321,15 +327,17 @@ void ChunkBuffer::cache_protocol_buffer_data()
 {
 	pbuffer_data.clear();
 	
-	for(auto iter = intervals.begin(); iter != intervals.end() && iter->first != CHUNK_SIZE; )
+	for(auto iter = intervals.begin(); iter != intervals.end(); )
 	{
 		auto left = iter->first;
 		auto block = iter->second;
-		int right = (++iter)->first;
+		int right = (++iter == intervals.end()) ? CHUNK_SIZE : iter->first;
 		
 		//Write out length bytes, encoded using varint encoding (similar to protobuf)
 		//lower 7 bits store int part, highest bit means continue
 		int len = right - left;
+		assert(len > 0);
+		
 		while(len > 0x80)
 		{
 			pbuffer_data.push_back((len & 0x7f) | 0x80);
@@ -384,17 +392,17 @@ void ChunkBuffer::parse_from_protocol_buffer(Network::Chunk const& c)
 				break;
 		}
 		
+		assert(len > 0);
+		
 		//Unpack the encoded block type
 		uint8_t type = *(ptr++);
 		Block b(type, ptr);
 		ptr += b.state_bytes();
-		
+
 		//Insert the interval and continue
 		intervals.insert(make_pair(i, b));
 		i += len;
 	}
-	
-	intervals.insert(make_pair(CHUNK_SIZE, 0));
 }
 
 //Checks if the interval trees are equivalent
