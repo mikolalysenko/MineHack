@@ -167,8 +167,6 @@ var Game =
 		
 		window.onresize = null;
 		
-		Game.update_worker.terminate();
-		
 		Map.shutdown();
 		Debug.shutdown();
 		Player.shutdown();

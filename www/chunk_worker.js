@@ -550,13 +550,11 @@ function unpack_chunk_buffer(pbuf)
 	chunk.t = t;
 
 	//Update pending writes
-	chunk.pending_writes.sort(function(a,b) { return a.t > b.t; });
 	while(chunk.pending_writes.length > 0 &&
-		chunk.pending_writes[chunk.pending_writes.length-1].t <= t)
+		chunk.pending_writes[0].t <= t)
 	{
-		chunk.pending_writes.pop();
+		chunk.pending_writes.unshift();
 	}
-	chunk.pending_writes.reverse();
 	
 	//Update the chunk data
 	chunk.data = decode_pbuffer(pbuf.data);
