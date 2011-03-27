@@ -159,10 +159,7 @@ namespace Game
 		ChunkBuffer() : is_empty(false), valid_flag(false), timestamp(1) {}
 	
 		//Block accessors
-		Block get_block(int x, int y, int z) const
-		{
-			return intervals.lower_bound(x + z * CHUNK_X + y * CHUNK_X * CHUNK_Z)->second;
-		}
+		Block get_block(int x, int y, int z) const;
 		bool set_block(Block b, int x, int y, int z, uint64_t t);
 		
 		//Buffer decoding/access

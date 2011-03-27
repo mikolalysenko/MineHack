@@ -218,7 +218,7 @@ var Game =
 				}
 				if(writes.length > 0)
 				{
-					//Map.apply_writes(writes);
+					Map.apply_writes(writes);
 				}
 			}
 		}

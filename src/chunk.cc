@@ -10,7 +10,7 @@
 using namespace std;
 using namespace tbb;
 
-//#define CHUNK_DEBUG 1
+#define CHUNK_DEBUG 1
 
 #ifndef CHUNK_DEBUG
 #define DEBUG_PRINTF(...)
@@ -237,6 +237,19 @@ bool ChunkBuffer::set_block(Block b, int x, int y, int z, uint64_t t)
 	return true;
 }
 
+
+Block ChunkBuffer::get_block(int x, int y, int z) const
+{
+	int o = x + z * CHUNK_X + y * CHUNK_X * CHUNK_Z;
+
+	auto iter = intervals.lower_bound(o);
+	
+	if(iter->first != o)
+		--iter;
+	return iter->second;
+}
+
+
 //Chunk compression
 void ChunkBuffer::compress_chunk(Block* data, int stride_x, int stride_xz)
 {
@@ -252,10 +265,8 @@ void ChunkBuffer::compress_chunk(Block* data, int stride_x, int stride_xz)
 	for(int i = 0; i<CHUNK_SIZE; )
 	{
 		Block cur = *data_ptr;
-		
+
 		intervals.insert(make_pair(i, cur));
-		
-		//DEBUG_PRINTF("Compressing interval: s:%d, t:%d\n", i, cur.int_val);
 		
 		while(i<CHUNK_SIZE && *data_ptr == cur)
 		{
@@ -268,6 +279,9 @@ void ChunkBuffer::compress_chunk(Block* data, int stride_x, int stride_xz)
 				data_ptr += dy;
 		}
 	}
+
+	//Add an extra end interval
+	intervals.insert(make_pair(CHUNK_SIZE, 0));
 }
 
 //Decompresses a chunk
@@ -280,14 +294,10 @@ void ChunkBuffer::decompress_chunk(Block* data, int stride_x, int stride_xz) con
 	const int dz = stride_x - (CHUNK_X - 1);
 	
 	int i = 0;
-	for(auto iter = intervals.begin(); iter != intervals.end(); )
+	for(auto iter = intervals.begin(); iter != intervals.end() && iter->first < CHUNK_SIZE; )
 	{
 		auto block = iter->second;
-		int right = CHUNK_SIZE;
-		if(++iter != intervals.end())
-		{
-			right = iter->first;
-		}
+		int right = (++iter)->first;
 	
 		//DEBUG_PRINTF("Decompressing interval: %d--%d, t:%d\n", i, right, block.int_val);
 	
@@ -311,15 +321,11 @@ void ChunkBuffer::cache_protocol_buffer_data()
 {
 	pbuffer_data.clear();
 	
-	for(auto iter = intervals.begin(); iter != intervals.end(); )
+	for(auto iter = intervals.begin(); iter != intervals.end() && iter->first != CHUNK_SIZE; )
 	{
 		auto left = iter->first;
 		auto block = iter->second;
-		int right = CHUNK_SIZE;
-		if(++iter != intervals.end())
-		{
-			right = iter->first;
-		}
+		int right = (++iter)->first;
 		
 		//Write out length bytes, encoded using varint encoding (similar to protobuf)
 		//lower 7 bits store int part, highest bit means continue
@@ -387,6 +393,8 @@ void ChunkBuffer::parse_from_protocol_buffer(Network::Chunk const& c)
 		intervals.insert(make_pair(i, b));
 		i += len;
 	}
+	
+	intervals.insert(make_pair(CHUNK_SIZE, 0));
 }
 
 //Checks if the interval trees are equivalent
